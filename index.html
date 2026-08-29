@@ -61,6 +61,7 @@
       align-items: center;
       position: relative;
       box-shadow: 0 0 35px rgba(255,255,255,0.15);
+      transition: 0.3s;
     }
 
     .orb::before {
@@ -97,11 +98,31 @@
       }
     }
 
-    .status {
+    .conversation {
+      width: 100%;
+      min-height: 110px;
       text-align: center;
+      color: #ddd;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .label {
+      color: #777;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    #status {
       color: #aaa;
-      min-height: 24px;
-      font-size: 14px;
+      margin-bottom: 15px;
+    }
+
+    #transcript {
+      color: white;
+      min-height: 45px;
+      padding: 0 10px;
     }
 
     .mic-button {
@@ -120,20 +141,22 @@
       transform: scale(0.94);
     }
 
-    .conversation {
-      width: 100%;
-      min-height: 80px;
-      text-align: center;
-      color: #ddd;
-      font-size: 15px;
-      line-height: 1.5;
+    .mic-button.listening {
+      animation: micPulse 1s infinite;
     }
 
-    .label {
-      color: #777;
-      font-size: 11px;
-      letter-spacing: 2px;
-      margin-bottom: 5px;
+    @keyframes micPulse {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.08);
+      }
+
+      100% {
+        transform: scale(1);
+      }
     }
   </style>
 </head>
@@ -154,11 +177,19 @@
     </section>
 
     <section class="conversation">
+
       <div class="label">STATUS</div>
       <div id="status">Ready</div>
+
+      <div class="label">YOU SAID</div>
+      <div id="transcript">Press the microphone and speak.</div>
+
     </section>
 
-    <button class="mic-button" id="micButton" aria-label="Microphone">
+    <button
+      class="mic-button"
+      id="micButton"
+      aria-label="Microphone">
       🎙️
     </button>
 
@@ -168,36 +199,124 @@
     const micButton = document.getElementById("micButton");
     const orb = document.getElementById("orb");
     const status = document.getElementById("status");
+    const transcript = document.getElementById("transcript");
 
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    let recognition;
     let listening = false;
 
-    micButton.addEventListener("click", async () => {
+    if (!SpeechRecognition) {
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        status.textContent = "Microphone is not supported.";
-        return;
-      }
+      status.textContent =
+        "Speech recognition is not supported in this browser.";
 
-      try {
-        await navigator.mediaDevices.getUserMedia({
-          audio: true
-        });
+      micButton.disabled = true;
 
-        listening = !listening;
+    } else {
 
-        if (listening) {
-          orb.classList.add("active");
-          status.textContent = "Listening...";
+      recognition = new SpeechRecognition();
+
+      recognition.lang = "en-US";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = function () {
+
+        listening = true;
+
+        orb.classList.add("active");
+        micButton.classList.add("listening");
+
+        status.textContent = "Listening...";
+        transcript.textContent = "Speak now...";
+
+      };
+
+      recognition.onresult = function (event) {
+
+        let finalText = "";
+        let interimText = "";
+
+        for (
+          let i = event.resultIndex;
+          i < event.results.length;
+          i++
+        ) {
+
+          const text = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            finalText += text;
+          } else {
+            interimText += text;
+          }
+
+        }
+
+        transcript.textContent =
+          finalText || interimText;
+
+      };
+
+      recognition.onerror = function (event) {
+
+        console.error("Speech recognition error:", event.error);
+
+        if (event.error === "not-allowed") {
+
+          status.textContent =
+            "Microphone permission denied.";
+
+        } else if (event.error === "no-speech") {
+
+          status.textContent =
+            "No speech detected.";
+
         } else {
-          orb.classList.remove("active");
+
+          status.textContent =
+            "Speech recognition error: " + event.error;
+
+        }
+
+      };
+
+      recognition.onend = function () {
+
+        listening = false;
+
+        orb.classList.remove("active");
+        micButton.classList.remove("listening");
+
+        if (
+          status.textContent === "Listening..."
+        ) {
           status.textContent = "Ready";
         }
 
-      } catch (error) {
-        status.textContent = "Microphone permission denied.";
-        console.error(error);
-      }
-    });
+      };
+
+      micButton.addEventListener("click", function () {
+
+        if (listening) {
+
+          recognition.stop();
+
+        } else {
+
+          transcript.textContent =
+            "Starting microphone...";
+
+          recognition.start();
+
+        }
+
+      });
+
+    }
   </script>
 
 </body>
