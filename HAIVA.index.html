@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>H.A.I.V.A.</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #050505;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 500px;
+      min-height: 100vh;
+      padding: 35px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      text-align: center;
+      margin-top: 30px;
+    }
+
+    .logo h1 {
+      margin: 0;
+      font-size: 42px;
+      letter-spacing: 6px;
+    }
+
+    .logo p {
+      margin-top: 10px;
+      color: #aaa;
+      font-size: 13px;
+      letter-spacing: 2px;
+    }
+
+    .orb {
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      border: 2px solid #777;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      box-shadow: 0 0 35px rgba(255,255,255,0.15);
+    }
+
+    .orb::before {
+      content: "";
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      border: 1px solid #555;
+      position: absolute;
+    }
+
+    .orb.active {
+      animation: pulse 1.2s infinite;
+      box-shadow: 0 0 50px rgba(255,255,255,0.45);
+    }
+
+    .orb-text {
+      z-index: 2;
+      font-size: 18px;
+      letter-spacing: 3px;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.06);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .status {
+      text-align: center;
+      color: #aaa;
+      min-height: 24px;
+      font-size: 14px;
+    }
+
+    .mic-button {
+      width: 85px;
+      height: 85px;
+      border-radius: 50%;
+      border: 2px solid white;
+      background: transparent;
+      color: white;
+      font-size: 32px;
+      cursor: pointer;
+      margin-bottom: 30px;
+    }
+
+    .mic-button:active {
+      transform: scale(0.94);
+    }
+
+    .conversation {
+      width: 100%;
+      min-height: 80px;
+      text-align: center;
+      color: #ddd;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .label {
+      color: #777;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="app">
+
+    <section class="logo">
+      <h1>H.A.I.V.A.</h1>
+      <p>HNazer Artificial Intelligence Voice Assistant</p>
+    </section>
+
+    <section>
+      <div class="orb" id="orb">
+        <div class="orb-text">HAIVA</div>
+      </div>
+    </section>
+
+    <section class="conversation">
+      <div class="label">STATUS</div>
+      <div id="status">Ready</div>
+    </section>
+
+    <button class="mic-button" id="micButton" aria-label="Microphone">
+      🎙️
+    </button>
+
+  </main>
+
+  <script>
+    const micButton = document.getElementById("micButton");
+    const orb = document.getElementById("orb");
+    const status = document.getElementById("status");
+
+    let listening = false;
+
+    micButton.addEventListener("click", async () => {
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        status.textContent = "Microphone is not supported.";
+        return;
+      }
+
+      try {
+        await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+
+        listening = !listening;
+
+        if (listening) {
+          orb.classList.add("active");
+          status.textContent = "Listening...";
+        } else {
+          orb.classList.remove("active");
+          status.textContent = "Ready";
+        }
+
+      } catch (error) {
+        status.textContent = "Microphone permission denied.";
+        console.error(error);
+      }
+    });
+  </script>
+
+</body>
+</html>
