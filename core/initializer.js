@@ -12,45 +12,65 @@ import {
 
 import * as chatSkill from "../skills/chat/index.js";
 
-import {
-  setStatus,
-  setReply,
-  setTranscript,
-  resetUI
-} from "../ui/ui.js";
+
+// -----------------------------------------
+// Load H.A.I.V.A. UI
+// -----------------------------------------
+
+async function loadUI() {
+  const app = document.getElementById("haiva-app");
+
+  if (!app) {
+    throw new Error(
+      "H.A.I.V.A. application root not found."
+    );
+  }
+
+  const response = await fetch("./ui/ui.html");
+
+  if (!response.ok) {
+    throw new Error(
+      "Failed to load H.A.I.V.A. UI."
+    );
+  }
+
+  app.innerHTML = await response.text();
+
+  const css = document.createElement("link");
+
+  css.rel = "stylesheet";
+  css.href = "./ui/ui.css";
+
+  document.head.appendChild(css);
+
+  await import("../ui/ui.js");
+}
 
 
 // -----------------------------------------
 // Initialize H.A.I.V.A.
 // -----------------------------------------
 
-export function initializeHAIVA() {
+export async function initializeHAIVA() {
 
-  console.log("Initializing H.A.I.V.A...");
+  console.log(
+    "Initializing H.A.I.V.A..."
+  );
 
-  // Reset UI to its default state
-  resetUI();
+  await loadUI();
 
   // Register Chat Skill
-  registerSkill("chat", chatSkill);
+  registerSkill(
+    "chat",
+    chatSkill
+  );
 
-  // Confirm router is available
+  // Confirm Router
   if (typeof routeRequest !== "function") {
     throw new Error(
       "H.A.I.V.A. router is not available."
     );
   }
-
-  // System ready
-  setStatus("Ready");
-
-  setTranscript(
-    'Say "Yo HAIVA" to begin.'
-  );
-
-  setReply(
-    "Standing by."
-  );
 
   console.log(
     "H.A.I.V.A. initialization complete."
