@@ -78,6 +78,11 @@
       box-shadow: 0 0 50px rgba(255,255,255,0.45);
     }
 
+    .orb.thinking {
+      animation: thinking 0.8s infinite;
+      box-shadow: 0 0 70px rgba(100,180,255,0.5);
+    }
+
     .orb-text {
       z-index: 2;
       font-size: 18px;
@@ -98,11 +103,24 @@
       }
     }
 
+    @keyframes thinking {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.04);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
     .conversation {
       width: 100%;
-      min-height: 110px;
+      min-height: 180px;
       text-align: center;
-      color: #ddd;
       font-size: 15px;
       line-height: 1.5;
     }
@@ -111,18 +129,23 @@
       color: #777;
       font-size: 11px;
       letter-spacing: 2px;
-      margin-bottom: 8px;
+      margin-bottom: 7px;
     }
 
     #status {
       color: #aaa;
+      margin-bottom: 18px;
+    }
+
+    #transcript,
+    #reply {
+      min-height: 40px;
+      padding: 0 10px;
       margin-bottom: 15px;
     }
 
-    #transcript {
-      color: white;
-      min-height: 45px;
-      padding: 0 10px;
+    #reply {
+      color: #ddd;
     }
 
     .mic-button {
@@ -143,6 +166,11 @@
 
     .mic-button.listening {
       animation: micPulse 1s infinite;
+    }
+
+    .mic-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     @keyframes micPulse {
@@ -182,7 +210,14 @@
       <div id="status">Ready</div>
 
       <div class="label">YOU SAID</div>
-      <div id="transcript">Press the microphone and speak.</div>
+      <div id="transcript">
+        Press the microphone and speak.
+      </div>
+
+      <div class="label">HAIVA</div>
+      <div id="reply">
+        Waiting for your command.
+      </div>
 
     </section>
 
@@ -200,6 +235,7 @@
     const orb = document.getElementById("orb");
     const status = document.getElementById("status");
     const transcript = document.getElementById("transcript");
+    const reply = document.getElementById("reply");
 
     const SpeechRecognition =
       window.SpeechRecognition ||
@@ -208,10 +244,63 @@
     let recognition;
     let listening = false;
 
+    async function askHAIVA(message) {
+
+      status.textContent = "Thinking...";
+      orb.classList.remove("active");
+      orb.classList.add("thinking");
+
+      try {
+
+        const response = await fetch("/api/chat", {
+
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+            message: message
+          })
+
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+          throw new Error(
+            data.error || "AI request failed"
+          );
+
+        }
+
+        reply.textContent =
+          data.reply || "No response received.";
+
+        status.textContent = "Ready";
+
+      } catch (error) {
+
+        console.error(error);
+
+        status.textContent = "AI connection error.";
+
+        reply.textContent =
+          "Sorry, I couldn't connect to my AI brain.";
+
+      } finally {
+
+        orb.classList.remove("thinking");
+
+      }
+    }
+
     if (!SpeechRecognition) {
 
       status.textContent =
-        "Speech recognition is not supported in this browser.";
+        "Speech recognition is not supported.";
 
       micButton.disabled = true;
 
@@ -246,12 +335,17 @@
           i++
         ) {
 
-          const text = event.results[i][0].transcript;
+          const text =
+            event.results[i][0].transcript;
 
           if (event.results[i].isFinal) {
+
             finalText += text;
+
           } else {
+
             interimText += text;
+
           }
 
         }
@@ -259,11 +353,20 @@
         transcript.textContent =
           finalText || interimText;
 
+        if (finalText.trim()) {
+
+          askHAIVA(finalText.trim());
+
+        }
+
       };
 
       recognition.onerror = function (event) {
 
-        console.error("Speech recognition error:", event.error);
+        console.error(
+          "Speech recognition error:",
+          event.error
+        );
 
         if (event.error === "not-allowed") {
 
@@ -278,7 +381,7 @@
         } else {
 
           status.textContent =
-            "Speech recognition error: " + event.error;
+            "Speech error: " + event.error;
 
         }
 
@@ -294,27 +397,32 @@
         if (
           status.textContent === "Listening..."
         ) {
+
           status.textContent = "Ready";
+
         }
 
       };
 
-      micButton.addEventListener("click", function () {
+      micButton.addEventListener(
+        "click",
+        function () {
 
-        if (listening) {
+          if (listening) {
 
-          recognition.stop();
+            recognition.stop();
 
-        } else {
+          } else {
 
-          transcript.textContent =
-            "Starting microphone...";
+            reply.textContent =
+              "Listening for your command...";
 
-          recognition.start();
+            recognition.start();
+
+          }
 
         }
-
-      });
+      );
 
     }
   </script>
