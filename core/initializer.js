@@ -44,6 +44,7 @@ async function loadUI() {
   document.head.appendChild(css);
 
   await import("../ui/ui.js");
+  await import("./ui-bridge.js");
 }
 
 
