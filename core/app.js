@@ -8,29 +8,33 @@ import {
 
 console.log("H.A.I.V.A. is starting...");
 
-try {
+async function startHAIVA() {
+  try {
 
-  const result = initializeHAIVA();
+    const result = await initializeHAIVA();
 
-  if (result?.ready) {
+    if (result?.ready) {
 
-    console.log(
-      "H.A.I.V.A. is ready."
-    );
+      console.log(
+        "H.A.I.V.A. is ready."
+      );
 
-  } else {
+    } else {
 
-    console.warn(
-      "H.A.I.V.A. initialization incomplete."
+      console.warn(
+        "H.A.I.V.A. initialization incomplete."
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      "H.A.I.V.A. startup failed:",
+      error
     );
 
   }
-
-} catch (error) {
-
-  console.error(
-    "H.A.I.V.A. startup failed:",
-    error
-  );
-
 }
+
+startHAIVA();
