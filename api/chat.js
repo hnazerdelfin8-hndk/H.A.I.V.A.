@@ -25,26 +25,23 @@ export default async function handler(req, res) {
     const text = message.toLowerCase().trim();
 
     /*
-      HAIVA AUTOMATIC MODEL ROUTER
+      HAIVA SPEED-FIRST ROUTER
 
-      Simple / fast:
-      Gemini 3.1 Flash-Lite
+      Simple question
+      → fastest model
 
-      VA / high-volume:
-      Gemini 3.5 Flash-Lite
+      Normal VA task
+      → lightweight Flash
 
-      Coding / technical:
-      Gemini 3.5 Flash
+      Technical
+      → stronger Flash
 
-      Complex reasoning:
-      Gemini 3.6 Flash
+      Complex reasoning
+      → Gemini 3.6 Flash
 
-      Very difficult coding / agentic work:
-      Gemini 3.7 Flash
+      Very difficult technical task
+      → Gemini 3.7 Flash
     */
-
-    let selectedModel = "gemini-3.1-flash-lite";
-    let thinkingLevel = "minimal";
 
     const codingWords = [
       "code",
@@ -64,38 +61,30 @@ export default async function handler(req, res) {
       "npm",
       "node",
       "react",
-      "next.js",
+      "database",
       "backend",
       "frontend",
-      "database",
       "debug",
       "debugging",
       "bug",
       "error",
       "programming",
-      "script",
-      "function",
-      "algorithm"
+      "script"
     ];
 
     const complexWords = [
       "solve",
-      "solution",
       "analyze",
       "analysis",
       "reason",
       "reasoning",
       "complex",
       "architecture",
-      "design",
       "strategy",
       "optimize",
       "optimization",
-      "compare",
-      "calculate",
-      "mathematical",
-      "logic",
       "diagnose",
+      "diagnostic",
       "troubleshoot",
       "troubleshooting",
       "why is",
@@ -114,13 +103,10 @@ export default async function handler(req, res) {
       "complete application",
       "complex application",
       "complex system",
-      "agent",
-      "multi-step",
-      "architecture",
       "production system",
       "large codebase",
-      "refactor entire",
-      "advanced coding"
+      "advanced coding",
+      "refactor entire"
     ];
 
     const vaWords = [
@@ -135,14 +121,12 @@ export default async function handler(req, res) {
       "facebook",
       "instagram",
       "tiktok",
-      "content",
       "caption",
       "spreadsheet",
       "data entry",
       "research",
       "virtual assistant",
       "va task",
-      "task",
       "organize",
       "summarize",
       "summary",
@@ -155,51 +139,65 @@ export default async function handler(req, res) {
     const containsAny = (words) =>
       words.some(word => text.includes(word));
 
-    const isVeryComplex = containsAny(veryComplexWords);
     const isCoding = containsAny(codingWords);
     const isComplex = containsAny(complexWords);
+    const isVeryComplex = containsAny(veryComplexWords);
     const isVA = containsAny(vaWords);
 
+    let selectedModel;
+    let thinkingLevel;
+    let maxOutputTokens;
+
     /*
-      Choose model automatically.
+      SPEED-FIRST SELECTION
     */
 
     if (isVeryComplex && isCoding) {
 
       selectedModel = "gemini-3.7-flash";
       thinkingLevel = "medium";
+      maxOutputTokens = 2048;
 
     } else if (isComplex && isCoding) {
 
       selectedModel = "gemini-3.6-flash";
       thinkingLevel = "medium";
+      maxOutputTokens = 1536;
 
     } else if (isCoding) {
 
       selectedModel = "gemini-3.5-flash";
       thinkingLevel = "low";
+      maxOutputTokens = 1024;
 
     } else if (isComplex) {
 
       selectedModel = "gemini-3.6-flash";
       thinkingLevel = "medium";
+      maxOutputTokens = 1536;
 
     } else if (isVA) {
 
       selectedModel = "gemini-3.5-flash-lite";
       thinkingLevel = "minimal";
+      maxOutputTokens = 768;
 
     } else {
 
+      /*
+        DEFAULT = FASTEST
+      */
+
       selectedModel = "gemini-3.1-flash-lite";
       thinkingLevel = "minimal";
+      maxOutputTokens = 512;
     }
 
     /*
-      Automatic fallback.
+      FALLBACK
 
       If the selected model is unavailable,
-      HAIVA tries the next appropriate model.
+      HAIVA automatically tries lighter models.
     */
 
     const fallbackModels = [
@@ -216,60 +214,44 @@ export default async function handler(req, res) {
 You are H.A.I.V.A.
 Hnazer Artificial Intelligence Voice Assistant.
 
-You are a practical AI assistant designed to help the user
-with virtual assistant work, productivity, research,
+You are a fast, intelligent and practical AI assistant
+for virtual assistant work, productivity, research,
 customer support, email management, calendar management,
-social media tasks, coding, automation, websites,
-GitHub, Vercel, Supabase and general problem solving.
+social media, coding, automation and troubleshooting.
 
-CORE BEHAVIOR:
-- Be fast.
-- Be accurate.
-- Be practical.
-- Solve problems instead of only explaining them.
-- Give the user the next useful action.
-- Avoid unnecessary repetition.
-- For simple questions, answer concisely.
-- For difficult problems, reason carefully before answering.
-- Never claim that you performed an action unless you actually did.
+IMPORTANT:
+- Prioritize speed for simple questions.
+- Answer simple questions briefly.
+- Give direct useful answers.
+- Solve problems instead of only describing them.
+- For technical problems, give exact actionable steps.
+- Do not unnecessarily repeat information.
 - Never invent passwords, API keys, credentials or results.
+- Never claim an action was performed if it was not performed.
 
 LANGUAGE:
 - The user may speak English, Tagalog or Taglish.
-- Respond naturally in the user's language.
-- For Tagalog, use natural conversational Filipino.
-- Avoid stiff or literal machine translation.
-- Sound like a natural human assistant.
-- Keep answers easy to understand when spoken aloud.
+- Reply naturally in the user's language.
+- For Tagalog, use conversational Filipino.
+- Avoid stiff machine translation.
+- Sound natural when spoken aloud.
 
 VOICE:
-Your responses may be converted into speech.
-Prefer natural sentences.
-Avoid unnecessary markdown, tables and excessive formatting
-when the answer is intended to be spoken.
+Your response will often be converted to speech.
+Use natural sentences.
+Avoid unnecessary markdown and excessive formatting.
 
 VA ASSISTANT:
-Help with:
-- Email management
-- Customer support
-- Calendar management
-- Social media management
-- Research
-- Data entry
-- Client communication
-- Writing and rewriting
-- Task management
-- Automation
-- Coding and debugging
+Help with email, customer support, calendar,
+social media, research, data entry, writing,
+coding, debugging, automation and productivity.
 
-TROUBLESHOOTING:
-When the user reports an error:
+When troubleshooting:
 1. Identify the likely cause.
-2. Explain it simply.
-3. Give the exact fix.
-4. Tell the user what to do next.
+2. Give the exact fix.
+3. Tell the user the next action.
 
-You are HAIVA, the user's practical AI VA copilot.
+Be concise unless the task requires detail.
 `;
 
     let lastError = null;
@@ -302,6 +284,7 @@ You are HAIVA, the user's practical AI VA copilot.
               contents: [
                 {
                   role: "user",
+
                   parts: [
                     {
                       text: message
@@ -314,7 +297,8 @@ You are HAIVA, the user's practical AI VA copilot.
                 thinkingConfig: {
                   thinkingLevel: thinkingLevel
                 },
-                maxOutputTokens: 2048
+
+                maxOutputTokens: maxOutputTokens
               }
             })
           }
@@ -326,7 +310,7 @@ You are HAIVA, the user's practical AI VA copilot.
 
           lastError =
             data?.error?.message ||
-            `Gemini returned HTTP ${response.status}`;
+            `Gemini returned ${response.status}`;
 
           console.error(
             "HAIVA model failed:",
@@ -354,7 +338,7 @@ You are HAIVA, the user's practical AI VA copilot.
         return res.status(200).json({
           reply,
           model,
-          router: "automatic"
+          router: "automatic-speed"
         });
 
       } catch (error) {
@@ -386,4 +370,4 @@ You are HAIVA, the user's practical AI VA copilot.
       error: "Server error"
     });
   }
-                    }
+}
