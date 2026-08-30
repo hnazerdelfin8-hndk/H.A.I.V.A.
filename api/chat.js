@@ -1,17 +1,13 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed"
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const { message } = req.body;
 
     if (!message) {
-      return res.status(400).json({
-        error: "Message is required"
-      });
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -23,8 +19,8 @@ export default async function handler(req, res) {
     }
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-      apiKey,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" +
+        apiKey,
       {
         method: "POST",
         headers: {
@@ -36,8 +32,8 @@ export default async function handler(req, res) {
               parts: [
                 {
                   text:
-                    "You are HAIVA, a helpful voice assistant. " +
-                    "Answer clearly and naturally. " +
+                    "You are HAIVA, a helpful and friendly AI voice assistant. " +
+                    "Answer the user clearly and naturally. " +
                     "The user says: " +
                     message
                 }
@@ -63,12 +59,9 @@ export default async function handler(req, res) {
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Sorry, I could not generate a response.";
 
-    return res.status(200).json({
-      reply
-    });
+    return res.status(200).json({ reply });
 
   } catch (error) {
-
     console.error(error);
 
     return res.status(500).json({
