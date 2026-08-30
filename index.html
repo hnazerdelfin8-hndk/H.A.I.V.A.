@@ -276,10 +276,31 @@
 
         }
 
-        reply.textContent =
-          data.reply || "No response received.";
+const haivaReply =
+  data.reply || "No response received.";
 
-        status.textContent = "Ready";
+reply.textContent = haivaReply;
+
+status.textContent = "Speaking...";
+
+const speech = new SpeechSynthesisUtterance(haivaReply);
+
+speech.lang = "en-US";
+speech.rate = 0.95;
+speech.pitch = 1.0;
+speech.volume = 1.0;
+
+speech.onstart = function () {
+  orb.classList.add("active");
+};
+
+speech.onend = function () {
+  orb.classList.remove("active");
+  status.textContent = "Ready";
+};
+
+window.speechSynthesis.cancel();
+window.speechSynthesis.speak(speech);
 
       } catch (error) {
 
