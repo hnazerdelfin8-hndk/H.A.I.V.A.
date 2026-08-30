@@ -1,6 +1,6 @@
 // =========================================
 // H.A.I.V.A. UI Bridge
-// Connects the UI to the H.A.I.V.A. Core
+// Connects UI → Core → Gemini → Voice
 // =========================================
 
 import { processRequest } from "./assistant.js";
@@ -28,22 +28,76 @@ let processing = false;
 
 
 // -----------------------------------------
-// Check Browser Support
+// Text-to-Speech
+// -----------------------------------------
+
+function speak(text) {
+
+  if (!text || !("speechSynthesis" in window)) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance =
+    new SpeechSynthesisUtterance(text);
+
+  utterance.lang = "fil-PH";
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  utterance.onstart = () => {
+
+    setStatus("Speaking...");
+    setOrbState("speaking");
+
+  };
+
+  utterance.onend = () => {
+
+    setStatus("Ready");
+    setOrbState(null);
+
+  };
+
+  utterance.onerror = (event) => {
+
+    console.error(
+      "H.A.I.V.A. speech synthesis error:",
+      event.error
+    );
+
+    setStatus("Ready");
+    setOrbState(null);
+
+  };
+
+  window.speechSynthesis.speak(
+    utterance
+  );
+}
+
+
+// -----------------------------------------
+// Check Speech Recognition Support
 // -----------------------------------------
 
 if (!SpeechRecognition) {
 
   console.warn(
-    "H.A.I.V.A.: Speech Recognition is not supported in this browser."
+    "H.A.I.V.A.: Speech Recognition is not supported."
   );
 
 } else {
 
-  recognition = new SpeechRecognition();
+  recognition =
+    new SpeechRecognition();
 
   recognition.lang = "en-US";
   recognition.continuous = false;
   recognition.interimResults = false;
+
 
   // ---------------------------------------
   // Speech Started
@@ -71,7 +125,8 @@ if (!SpeechRecognition) {
       return;
     }
 
-    const message = result.trim();
+    const message =
+      result.trim();
 
     if (!message) {
       return;
@@ -86,19 +141,23 @@ if (!SpeechRecognition) {
 
     try {
 
-      const response = await processRequest(
-        "chat",
-        message
-      );
+      // Send request through Core
+      const response =
+        await processRequest(
+          "chat",
+          message
+        );
 
-      setReply(
+      const spokenText =
         typeof response === "string"
           ? response
-          : "No response received."
-      );
+          : "No response received.";
 
-      setStatus("Ready");
-      setOrbState("speaking");
+      // Display Gemini response
+      setReply(spokenText);
+
+      // Speak Gemini response
+      speak(spokenText);
 
     } catch (error) {
 
@@ -107,11 +166,11 @@ if (!SpeechRecognition) {
         error
       );
 
-      setReply(
+      const errorMessage =
         error?.message ||
-        "H.A.I.V.A. could not process your request."
-      );
+        "H.A.I.V.A. could not process your request.";
 
+      setReply(errorMessage);
       setStatus("Error");
       setOrbState(null);
 
@@ -142,9 +201,13 @@ if (!SpeechRecognition) {
 
     if (event.error === "no-speech") {
 
-      setStatus("No speech detected.");
+      setStatus(
+        "No speech detected."
+      );
 
-    } else if (event.error === "not-allowed") {
+    } else if (
+      event.error === "not-allowed"
+    ) {
 
       setStatus(
         "Microphone permission denied."
@@ -155,6 +218,7 @@ if (!SpeechRecognition) {
       setStatus(
         "Voice recognition error."
       );
+
     }
   };
 
@@ -170,6 +234,7 @@ if (!SpeechRecognition) {
     if (!processing) {
       setOrbState(null);
     }
+
   };
 }
 
@@ -179,7 +244,9 @@ if (!SpeechRecognition) {
 // -----------------------------------------
 
 const micButton =
-  document.getElementById("micButton");
+  document.getElementById(
+    "micButton"
+  );
 
 
 if (micButton) {
@@ -201,7 +268,13 @@ if (micButton) {
         return;
       }
 
-      if (micButton.classList.contains("listening")) {
+
+      // Stop listening
+      if (
+        micButton.classList.contains(
+          "listening"
+        )
+      ) {
 
         recognition.stop();
 
@@ -211,6 +284,14 @@ if (micButton) {
         return;
       }
 
+
+      // Stop any existing speech
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+
+      // Start listening
       setConversationMode(true);
 
       try {
@@ -226,7 +307,10 @@ if (micButton) {
 
         setConversationMode(false);
         setListening(false);
-        setStatus("Unable to start microphone.");
+
+        setStatus(
+          "Unable to start microphone."
+        );
 
       }
     }
