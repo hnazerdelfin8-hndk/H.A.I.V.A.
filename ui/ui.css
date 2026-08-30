@@ -1,0 +1,226 @@
+/* =========================================
+   H.A.I.V.A. UI
+   Main Interface Styling
+   ========================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+  background: #050505;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.haiva-header {
+  text-align: center;
+  margin-top: 30px;
+}
+
+.haiva-header h1 {
+  margin: 0;
+  font-size: 42px;
+  letter-spacing: 6px;
+}
+
+.haiva-header p {
+  margin-top: 10px;
+  color: #aaa;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.haiva-orb-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.orb {
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  border: 2px solid #777;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 0 35px rgba(255, 255, 255, 0.15);
+  transition: 0.3s;
+}
+
+.orb::before {
+  content: "";
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 1px solid #555;
+  position: absolute;
+}
+
+.orb.active {
+  animation: pulse 1.2s infinite;
+  box-shadow: 0 0 50px rgba(255, 255, 255, 0.45);
+}
+
+.orb.thinking {
+  animation: thinking 0.8s infinite;
+  box-shadow: 0 0 70px rgba(100, 180, 255, 0.5);
+}
+
+.orb.speaking {
+  animation: speaking 0.55s infinite;
+  box-shadow: 0 0 80px rgba(100, 180, 255, 0.65);
+}
+
+.orb-text {
+  z-index: 2;
+  font-size: 18px;
+  letter-spacing: 3px;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes thinking {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes speaking {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.conversation {
+  width: 100%;
+  min-height: 180px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.label {
+  color: #777;
+  font-size: 11px;
+  letter-spacing: 2px;
+  margin-bottom: 7px;
+}
+
+#status {
+  color: #aaa;
+  margin-bottom: 18px;
+}
+
+#transcript,
+#reply {
+  min-height: 40px;
+  padding: 0 10px;
+  margin-bottom: 15px;
+}
+
+#reply {
+  color: #ddd;
+}
+
+.mic-button {
+  width: 85px;
+  height: 85px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: transparent;
+  color: white;
+  font-size: 32px;
+  cursor: pointer;
+  margin-bottom: 30px;
+}
+
+.mic-button:active {
+  transform: scale(0.94);
+}
+
+.mic-button.listening {
+  animation: micPulse 1s infinite;
+}
+
+.mic-button.active {
+  border-color: #66b6ff;
+  box-shadow: 0 0 30px rgba(100, 180, 255, 0.5);
+}
+
+@keyframes micPulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hint {
+  color: #555;
+  font-size: 10px;
+  margin-top: -15px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+@media (max-width: 500px) {
+  body {
+    align-items: stretch;
+  }
+
+  .haiva-header h1 {
+    font-size: 36px;
+  }
+
+  .orb {
+    width: 170px;
+    height: 170px;
+  }
+
+  .orb::before {
+    width: 115px;
+    height: 115px;
+  }
+}
