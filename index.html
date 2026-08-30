@@ -83,6 +83,11 @@
       box-shadow: 0 0 70px rgba(100,180,255,0.5);
     }
 
+    .orb.speaking {
+      animation: speaking 0.55s infinite;
+      box-shadow: 0 0 80px rgba(100,180,255,0.65);
+    }
+
     .orb-text {
       z-index: 2;
       font-size: 18px;
@@ -110,6 +115,20 @@
 
       50% {
         transform: scale(1.04);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes speaking {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.08);
       }
 
       100% {
@@ -168,9 +187,9 @@
       animation: micPulse 1s infinite;
     }
 
-    .mic-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .mic-button.active {
+      border-color: #66b6ff;
+      box-shadow: 0 0 30px rgba(100,180,255,0.5);
     }
 
     @keyframes micPulse {
@@ -185,6 +204,14 @@
       100% {
         transform: scale(1);
       }
+    }
+
+    .hint {
+      color: #555;
+      font-size: 10px;
+      margin-top: -15px;
+      margin-bottom: 15px;
+      text-align: center;
     }
   </style>
 </head>
@@ -211,12 +238,12 @@
 
       <div class="label">YOU SAID</div>
       <div id="transcript">
-        Press the microphone and speak.
+        Say "Yo HAIVA" to begin.
       </div>
 
       <div class="label">HAIVA</div>
       <div id="reply">
-        Waiting for your command.
+        Standing by.
       </div>
 
     </section>
@@ -224,9 +251,13 @@
     <button
       class="mic-button"
       id="micButton"
-      aria-label="Microphone">
+      aria-label="Start HAIVA">
       🎙️
     </button>
+
+    <div class="hint">
+      Tap once to activate conversation mode
+    </div>
 
   </main>
 
@@ -241,79 +272,260 @@
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
 
-    let recognition;
+    let recognition = null;
+
+    let conversationMode = false;
     let listening = false;
+    let processing = false;
+    let speaking = false;
+
+    let silenceTimer = null;
+
+    /*
+      Wake phrase.
+      User can say:
+      "Yo HAIVA"
+      "Hey HAIVA"
+      "HAIVA"
+    */
+
+    const wakeWords = [
+      "yo haiva",
+      "hey haiva",
+      "hi haiva",
+      "haiva"
+    ];
+
+    function containsWakeWord(text) {
+      const lower = text.toLowerCase();
+
+      return wakeWords.some(word =>
+        lower.includes(word)
+      );
+    }
+
+    function removeWakeWord(text) {
+      let result = text;
+
+      wakeWords.forEach(word => {
+        result = result.replace(
+          new RegExp(word, "ig"),
+          ""
+        );
+      });
+
+      return result.trim();
+    }
+
+    function startListening() {
+
+      if (!recognition) return;
+
+      if (
+        listening ||
+        processing ||
+        speaking ||
+        !conversationMode
+      ) {
+        return;
+      }
+
+      try {
+
+        recognition.start();
+
+      } catch (error) {
+
+        console.log(
+          "Recognition already running."
+        );
+
+      }
+    }
+
+    function stopListening() {
+
+      if (!recognition) return;
+
+      try {
+        recognition.stop();
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    function restartListening() {
+
+      if (!conversationMode) return;
+
+      clearTimeout(silenceTimer);
+
+      setTimeout(() => {
+
+        if (
+          conversationMode &&
+          !processing &&
+          !speaking &&
+          !listening
+        ) {
+          startListening();
+        }
+
+      }, 350);
+
+    }
 
     async function askHAIVA(message) {
 
+      processing = true;
+
       status.textContent = "Thinking...";
+
       orb.classList.remove("active");
       orb.classList.add("thinking");
 
       try {
 
-        const response = await fetch("/api/chat", {
+        const response = await fetch(
+          "/api/chat",
+          {
+            method: "POST",
 
-          method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
 
-          headers: {
-            "Content-Type": "application/json"
-          },
-
-          body: JSON.stringify({
-            message: message
-          })
-
-        });
+            body: JSON.stringify({
+              message: message
+            })
+          }
+        );
 
         const data = await response.json();
 
         if (!response.ok) {
 
           throw new Error(
-            data.error || "AI request failed"
+            data.error ||
+            "AI request failed"
           );
 
         }
 
-const haivaReply =
-  data.reply || "No response received.";
+        const haivaReply =
+          data.reply ||
+          "No response received.";
 
-reply.textContent = haivaReply;
+        reply.textContent =
+          haivaReply;
 
-status.textContent = "Speaking...";
+        /*
+          Stop recognition before HAIVA speaks.
+          This prevents HAIVA from hearing
+          its own voice.
+        */
 
-const speech = new SpeechSynthesisUtterance(haivaReply);
+        stopListening();
 
-speech.lang = "en-US";
-speech.rate = 0.95;
-speech.pitch = 1.0;
-speech.volume = 1.0;
+        speaking = true;
 
-speech.onstart = function () {
-  orb.classList.add("active");
-};
+        status.textContent =
+          "Speaking...";
 
-speech.onend = function () {
-  orb.classList.remove("active");
-  status.textContent = "Ready";
-};
+        orb.classList.remove(
+          "thinking"
+        );
 
-window.speechSynthesis.cancel();
-window.speechSynthesis.speak(speech);
+        orb.classList.add(
+          "speaking"
+        );
+
+        const speech =
+          new SpeechSynthesisUtterance(
+            haivaReply
+          );
+
+        /*
+          Filipino-friendly voice settings.
+        */
+
+        speech.lang = "fil-PH";
+        speech.rate = 0.95;
+        speech.pitch = 1.0;
+        speech.volume = 1.0;
+
+        speech.onstart = function () {
+
+          speaking = true;
+
+          status.textContent =
+            "Speaking...";
+
+        };
+
+        speech.onend = function () {
+
+          speaking = false;
+          processing = false;
+
+          orb.classList.remove(
+            "speaking"
+          );
+
+          status.textContent =
+            conversationMode
+              ? "Listening..."
+              : "Ready";
+
+          /*
+            Automatically listen again.
+          */
+
+          restartListening();
+
+        };
+
+        speech.onerror = function () {
+
+          speaking = false;
+          processing = false;
+
+          orb.classList.remove(
+            "speaking"
+          );
+
+          status.textContent =
+            conversationMode
+              ? "Listening..."
+              : "Ready";
+
+          restartListening();
+
+        };
+
+        window.speechSynthesis.cancel();
+
+        window.speechSynthesis.speak(
+          speech
+        );
 
       } catch (error) {
 
         console.error(error);
 
-        status.textContent = "AI connection error.";
+        processing = false;
+
+        status.textContent =
+          "AI connection error.";
 
         reply.textContent =
           "Sorry, I couldn't connect to my AI brain.";
 
-      } finally {
+        orb.classList.remove(
+          "thinking"
+        );
 
-        orb.classList.remove("thinking");
+        restartListening();
 
       }
     }
@@ -327,124 +539,349 @@ window.speechSynthesis.speak(speech);
 
     } else {
 
-      recognition = new SpeechRecognition();
+      recognition =
+        new SpeechRecognition();
 
-      recognition.lang = "en-US";
+      /*
+        Continuous mode helps keep
+        the conversation alive.
+
+        Some mobile browsers may still
+        restart recognition automatically.
+      */
+
       recognition.continuous = false;
       recognition.interimResults = true;
+
+      /*
+        Filipino + English.
+        The browser will recognize
+        common Taglish reasonably well.
+      */
+
+      recognition.lang = "en-US";
 
       recognition.onstart = function () {
 
         listening = true;
 
         orb.classList.add("active");
-        micButton.classList.add("listening");
 
-        status.textContent = "Listening...";
-        transcript.textContent = "Speak now...";
-
-      };
-
-      recognition.onresult = function (event) {
-
-        let finalText = "";
-        let interimText = "";
-
-        for (
-          let i = event.resultIndex;
-          i < event.results.length;
-          i++
-        ) {
-
-          const text =
-            event.results[i][0].transcript;
-
-          if (event.results[i].isFinal) {
-
-            finalText += text;
-
-          } else {
-
-            interimText += text;
-
-          }
-
-        }
-
-        transcript.textContent =
-          finalText || interimText;
-
-        if (finalText.trim()) {
-
-          askHAIVA(finalText.trim());
-
-        }
-
-      };
-
-      recognition.onerror = function (event) {
-
-        console.error(
-          "Speech recognition error:",
-          event.error
+        micButton.classList.add(
+          "listening"
         );
 
-        if (event.error === "not-allowed") {
+        micButton.classList.add(
+          "active"
+        );
 
-          status.textContent =
-            "Microphone permission denied.";
+        status.textContent =
+          "Listening...";
 
-        } else if (event.error === "no-speech") {
-
-          status.textContent =
-            "No speech detected.";
-
-        } else {
-
-          status.textContent =
-            "Speech error: " + event.error;
-
-        }
+        transcript.textContent =
+          "I'm listening...";
 
       };
 
-      recognition.onend = function () {
+      recognition.onresult =
+        function(event) {
 
-        listening = false;
+          let finalText = "";
+          let interimText = "";
 
-        orb.classList.remove("active");
-        micButton.classList.remove("listening");
+          for (
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+          ) {
 
-        if (
-          status.textContent === "Listening..."
-        ) {
+            const text =
+              event.results[i][0]
+                .transcript;
 
-          status.textContent = "Ready";
+            if (
+              event.results[i].isFinal
+            ) {
 
-        }
+              finalText += text;
 
-      };
+            } else {
+
+              interimText += text;
+
+            }
+          }
+
+          const shownText =
+            finalText ||
+            interimText;
+
+          transcript.textContent =
+            shownText;
+
+          /*
+            If the user says the wake phrase,
+            activate conversation mode.
+          */
+
+          if (
+            containsWakeWord(shownText)
+          ) {
+
+            conversationMode = true;
+
+            micButton.textContent =
+              "⏹️";
+
+            status.textContent =
+              "HAIVA activated";
+
+            /*
+              Remove wake word.
+
+              Example:
+              "Yo HAIVA what time is it?"
+              becomes:
+              "what time is it?"
+            */
+
+            const command =
+              removeWakeWord(
+                shownText
+              );
+
+            /*
+              If there is an actual command
+              after the wake phrase, send it.
+            */
+
+            if (
+              finalText &&
+              command.length > 0
+            ) {
+
+              askHAIVA(command);
+
+            } else {
+
+              reply.textContent =
+                "Yes, master?";
+
+              restartListening();
+
+            }
+
+            return;
+          }
+
+          /*
+            Once conversation mode is active,
+            every final sentence becomes
+            a command.
+          */
+
+          if (
+            conversationMode &&
+            finalText.trim()
+          ) {
+
+            askHAIVA(
+              finalText.trim()
+            );
+
+          }
+        };
+
+      recognition.onerror =
+        function(event) {
+
+          console.error(
+            "Speech recognition error:",
+            event.error
+          );
+
+          listening = false;
+
+          orb.classList.remove(
+            "active"
+          );
+
+          micButton.classList.remove(
+            "listening"
+          );
+
+          if (
+            event.error ===
+            "not-allowed"
+          ) {
+
+            status.textContent =
+              "Microphone permission denied.";
+
+            conversationMode = false;
+
+            return;
+          }
+
+          if (
+            event.error ===
+            "no-speech"
+          ) {
+
+            if (
+              conversationMode &&
+              !processing &&
+              !speaking
+            ) {
+
+              status.textContent =
+                "Listening...";
+
+              restartListening();
+
+            } else {
+
+              status.textContent =
+                "Ready";
+
+            }
+
+            return;
+          }
+
+          status.textContent =
+            "Microphone reconnecting...";
+
+          if (
+            conversationMode &&
+            !processing &&
+            !speaking
+          ) {
+
+            restartListening();
+
+          }
+        };
+
+      recognition.onend =
+        function() {
+
+          listening = false;
+
+          orb.classList.remove(
+            "active"
+          );
+
+          micButton.classList.remove(
+            "listening"
+          );
+
+          /*
+            Automatically restart the
+            microphone after recognition ends.
+          */
+
+          if (
+            conversationMode &&
+            !processing &&
+            !speaking
+          ) {
+
+            status.textContent =
+              "Listening...";
+
+            restartListening();
+
+          } else if (
+            !conversationMode
+          ) {
+
+            status.textContent =
+              "Ready";
+          }
+        };
+
+      /*
+        ONE TAP ONLY.
+
+        Tap once:
+        conversation ON
+
+        Tap again:
+        conversation OFF
+      */
 
       micButton.addEventListener(
         "click",
-        function () {
+        function() {
 
-          if (listening) {
+          if (
+            conversationMode
+          ) {
 
-            recognition.stop();
+            conversationMode =
+              false;
+
+            processing = false;
+
+            stopListening();
+
+            window.speechSynthesis.cancel();
+
+            speaking = false;
+
+            orb.classList.remove(
+              "active"
+            );
+
+            orb.classList.remove(
+              "thinking"
+            );
+
+            orb.classList.remove(
+              "speaking"
+            );
+
+            micButton.classList.remove(
+              "active"
+            );
+
+            micButton.classList.remove(
+              "listening"
+            );
+
+            micButton.textContent =
+              "🎙️";
+
+            status.textContent =
+              "Ready";
+
+            transcript.textContent =
+              'Say "Yo HAIVA" to begin.';
+
+            reply.textContent =
+              "Standing by.";
 
           } else {
 
-            reply.textContent =
-              "Listening for your command...";
+            conversationMode =
+              true;
 
-            recognition.start();
+            micButton.textContent =
+              "⏹️";
+
+            reply.textContent =
+              "Yes, master?";
+
+            status.textContent =
+              "Listening...";
+
+            startListening();
 
           }
 
         }
       );
-
     }
   </script>
 
