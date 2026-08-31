@@ -2,403 +2,290 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="theme-color" content="#030408">
-
 <title>H.A.I.V.A.</title>
 
 <style>
-* {
-  box-sizing: border-box;
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  width:100%;
+  min-height:100%;
 }
 
-html,
-body {
-  margin: 0;
-  width: 100%;
-  min-height: 100%;
+body{
+  min-height:100vh;
+  overflow:hidden;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  color:#fff;
+  font-family:Arial,Helvetica,sans-serif;
+  background:
+    radial-gradient(circle at 50% 42%,
+    #172033 0%,
+    #0a0e18 42%,
+    #030408 100%);
 }
 
-body {
-  min-height: 100vh;
-  overflow: hidden;
+#haiva-app{
+  width:100%;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:12px;
+}
 
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.haiva-card{
+  width:100%;
+  max-width:480px;
+  height:min(720px,94vh);
+  position:relative;
+  overflow:hidden;
 
-  color: white;
-  font-family: Arial, Helvetica, sans-serif;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:32px;
+  background:rgba(255,255,255,.045);
+
+  backdrop-filter:blur(28px);
+  -webkit-backdrop-filter:blur(28px);
+
+  box-shadow:0 35px 100px rgba(0,0,0,.55);
+}
+
+.logo{
+  margin-bottom:50px;
+  font-size:27px;
+  font-weight:700;
+  letter-spacing:7px;
+  text-shadow:0 0 25px rgba(255,255,255,.18);
+}
+
+.core-wrapper{
+  width:220px;
+  height:220px;
+  position:relative;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.core-ring{
+  position:absolute;
+  width:210px;
+  height:210px;
+  border-radius:50%;
+  border:1px solid rgba(150,190,255,.18);
+  animation:ringPulse 3s ease-in-out infinite;
+}
+
+.core-ring:before,
+.core-ring:after{
+  content:"";
+  position:absolute;
+  inset:15px;
+  border-radius:50%;
+  border:1px solid rgba(150,190,255,.1);
+}
+
+.core{
+  width:165px;
+  height:165px;
+  position:relative;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  border-radius:50%;
 
   background:
-    radial-gradient(
-      circle at 50% 42%,
-      #172033 0%,
-      #0a0e18 42%,
-      #030408 100%
-    );
-}
-
-#haiva-app {
-  width: 100%;
-  min-height: 100vh;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  padding: 12px;
-}
-
-.haiva-card {
-  width: 100%;
-  max-width: 480px;
-  height: min(720px, 94vh);
-
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-
-  position: relative;
-  overflow: hidden;
-
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 32px;
-
-  background: rgba(255,255,255,.045);
-
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-
-  box-shadow:
-    0 35px 100px rgba(0,0,0,.55);
-}
-
-.logo {
-  margin-bottom: 50px;
-
-  font-size: 27px;
-  font-weight: 700;
-  letter-spacing: 7px;
-
-  text-shadow:
-    0 0 25px rgba(255,255,255,.18);
-}
-
-.core-wrapper {
-  width: 220px;
-  height: 220px;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  position: relative;
-}
-
-.core-ring {
-  position: absolute;
-
-  width: 210px;
-  height: 210px;
-
-  border-radius: 50%;
-
-  border: 1px solid rgba(150,190,255,.18);
-
-  animation:
-    ringPulse 3s ease-in-out infinite;
-}
-
-.core-ring::before,
-.core-ring::after {
-  content: "";
-
-  position: absolute;
-  inset: 15px;
-
-  border-radius: 50%;
-
-  border: 1px solid rgba(150,190,255,.1);
-}
-
-.core {
-  width: 165px;
-  height: 165px;
-
-  position: relative;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      rgba(255,255,255,.98) 0%,
-      rgba(180,210,255,.75) 8%,
-      rgba(90,145,255,.28) 30%,
-      rgba(40,80,150,.08) 52%,
-      transparent 72%
-    );
+    radial-gradient(circle,
+    rgba(255,255,255,.98) 0%,
+    rgba(180,210,255,.75) 8%,
+    rgba(90,145,255,.28) 30%,
+    rgba(40,80,150,.08) 52%,
+    transparent 72%);
 
   box-shadow:
     0 0 35px rgba(120,170,255,.35),
     inset 0 0 35px rgba(255,255,255,.12);
 
-  animation:
-    corePulse 3s ease-in-out infinite;
+  animation:corePulse 3s ease-in-out infinite;
 }
 
-.core::before {
-  content: "";
-
-  width: 58px;
-  height: 58px;
-
-  border-radius: 50%;
+.core:before{
+  content:"";
+  width:58px;
+  height:58px;
+  border-radius:50%;
 
   background:
-    radial-gradient(
-      circle,
-      #fff 0%,
-      rgba(220,235,255,.95) 45%,
-      rgba(130,180,255,.35) 100%
-    );
+    radial-gradient(circle,
+    #fff 0%,
+    rgba(220,235,255,.95) 45%,
+    rgba(130,180,255,.35) 100%);
 
-  box-shadow:
-    0 0 35px rgba(255,255,255,.85);
+  box-shadow:0 0 35px rgba(255,255,255,.85);
 }
 
-#haiva-status {
-  margin-top: 40px;
+#haiva-status{
+  margin-top:40px;
+  min-height:20px;
 
-  min-height: 20px;
-
-  font-size: 13px;
-  font-weight: 700;
-
-  letter-spacing: 4px;
-  text-align: center;
-
-  opacity: .9;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:4px;
+  text-align:center;
 }
 
-#haiva-response {
-  width: 88%;
-  min-height: 25px;
+#haiva-response{
+  width:88%;
+  min-height:25px;
+  margin-top:18px;
 
-  margin-top: 18px;
-
-  text-align: center;
-
-  font-size: 14px;
-  line-height: 1.5;
-
-  opacity: .75;
+  text-align:center;
+  font-size:14px;
+  line-height:1.5;
+  opacity:.75;
 }
 
-.instruction {
-  margin-top: 28px;
-
-  width: 90%;
-
-  text-align: center;
-
-  font-size: 13px;
-
-  opacity: .55;
+.instruction{
+  margin-top:28px;
+  width:90%;
+  text-align:center;
+  font-size:13px;
+  opacity:.55;
 }
 
-#activate-voice {
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 999px;
+#activate-voice{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:999px;
+  padding:13px 23px;
 
-  padding: 13px 23px;
+  color:#fff;
+  background:rgba(255,255,255,.07);
 
-  color: white;
-  background: rgba(255,255,255,.07);
-
-  font-size: 13px;
-  font-weight: 600;
-
-  cursor: pointer;
-
-  transition:
-    transform .2s ease,
-    background .2s ease,
-    box-shadow .2s ease;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
 }
 
-#activate-voice:active {
-  transform: scale(.95);
-}
-
-#activate-voice.active {
-  background: rgba(100,160,255,.18);
-
-  box-shadow:
-    0 0 30px rgba(100,160,255,.25);
+#activate-voice.active{
+  background:rgba(100,160,255,.18);
+  box-shadow:0 0 30px rgba(100,160,255,.25);
 }
 
 /* LISTENING */
 
-body.listening .core {
-  animation:
-    listeningPulse .8s ease-in-out infinite;
-
+body.listening .core{
+  animation:listeningPulse .8s ease-in-out infinite;
   box-shadow:
     0 0 80px rgba(80,170,255,.75),
     inset 0 0 40px rgba(120,190,255,.25);
 }
 
-body.listening .core-ring {
-  animation:
-    listeningRing 1s linear infinite;
+body.listening .core-ring{
+  animation:listeningRing 1s linear infinite;
 }
 
 /* THINKING */
 
-body.thinking .core {
-  animation:
-    thinkingPulse .45s ease-in-out infinite;
-
-  box-shadow:
-    0 0 95px rgba(175,100,255,.75);
+body.thinking .core{
+  animation:thinkingPulse .45s ease-in-out infinite;
+  box-shadow:0 0 95px rgba(175,100,255,.75);
 }
 
 /* SPEAKING */
 
-body.speaking .core {
-  animation:
-    speakingPulse .35s ease-in-out infinite;
-
-  box-shadow:
-    0 0 100px rgba(255,165,90,.8);
+body.speaking .core{
+  animation:speakingPulse .35s ease-in-out infinite;
+  box-shadow:0 0 100px rgba(255,165,90,.8);
 }
 
 /* ERROR */
 
-body.error .core {
-  animation:
-    errorPulse .6s ease-in-out infinite;
-
-  box-shadow:
-    0 0 90px rgba(255,70,70,.75);
+body.error .core{
+  animation:errorPulse .6s ease-in-out infinite;
+  box-shadow:0 0 90px rgba(255,70,70,.75);
 }
 
-@keyframes corePulse {
-  0%,100% {
-    transform: scale(1);
-    opacity: .75;
-  }
-
-  50% {
-    transform: scale(1.07);
-    opacity: 1;
-  }
+@keyframes corePulse{
+  0%,100%{transform:scale(1);opacity:.75}
+  50%{transform:scale(1.07);opacity:1}
 }
 
-@keyframes ringPulse {
-  0%,100% {
-    transform: scale(.96);
-    opacity: .35;
-  }
-
-  50% {
-    transform: scale(1.08);
-    opacity: .8;
-  }
+@keyframes ringPulse{
+  0%,100%{transform:scale(.96);opacity:.35}
+  50%{transform:scale(1.08);opacity:.8}
 }
 
-@keyframes listeningPulse {
-  0%,100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.13);
-  }
+@keyframes listeningPulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.13)}
 }
 
-@keyframes listeningRing {
-  from {
-    transform: rotate(0deg) scale(.96);
-  }
-
-  to {
-    transform: rotate(360deg) scale(1.08);
-  }
+@keyframes listeningRing{
+  from{transform:rotate(0deg) scale(.96)}
+  to{transform:rotate(360deg) scale(1.08)}
 }
 
-@keyframes thinkingPulse {
-  0% {
-    transform: scale(1) rotate(0deg);
-  }
-
-  50% {
-    transform: scale(1.09) rotate(180deg);
-  }
-
-  100% {
-    transform: scale(1) rotate(360deg);
-  }
+@keyframes thinkingPulse{
+  0%{transform:scale(1) rotate(0deg)}
+  50%{transform:scale(1.09) rotate(180deg)}
+  100%{transform:scale(1) rotate(360deg)}
 }
 
-@keyframes speakingPulse {
-  0%,100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.18);
-  }
+@keyframes speakingPulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.18)}
 }
 
-@keyframes errorPulse {
-  0%,100% {
-    opacity: .55;
-  }
-
-  50% {
-    opacity: 1;
-  }
+@keyframes errorPulse{
+  0%,100%{opacity:.55}
+  50%{opacity:1}
 }
 
-@media (max-width:480px) {
+@media(max-width:480px){
 
-  .haiva-card {
-    height: 95vh;
-    border-radius: 28px;
+  .haiva-card{
+    height:95vh;
+    border-radius:28px;
   }
 
-  .logo {
-    margin-bottom: 42px;
-    font-size: 23px;
-    letter-spacing: 5px;
+  .logo{
+    margin-bottom:42px;
+    font-size:23px;
+    letter-spacing:5px;
   }
 
-  .core-wrapper {
-    width: 190px;
-    height: 190px;
+  .core-wrapper{
+    width:190px;
+    height:190px;
   }
 
-  .core-ring {
-    width: 180px;
-    height: 180px;
+  .core-ring{
+    width:180px;
+    height:180px;
   }
 
-  .core {
-    width: 145px;
-    height: 145px;
+  .core{
+    width:145px;
+    height:145px;
   }
 
-  .core::before {
-    width: 52px;
-    height: 52px;
+  .core:before{
+    width:52px;
+    height:52px;
   }
 }
 </style>
@@ -410,41 +297,28 @@ body.error .core {
 
   <main class="haiva-card">
 
-    <div class="logo">
-      H.A.I.V.A.
-    </div>
+    <div class="logo">H.A.I.V.A.</div>
 
     <div class="core-wrapper">
-
       <div class="core-ring"></div>
-
-      <div
-        class="core"
-        aria-label="H.A.I.V.A. Core">
-      </div>
-
+      <div class="core"></div>
     </div>
 
-    <div id="haiva-status">
-      STANDBY
-    </div>
+    <div id="haiva-status">READY</div>
 
     <div id="haiva-response">
-      Ready.
+      Press Activate Voice once.
     </div>
 
     <div class="instruction">
 
-      <button
-        id="activate-voice"
-        type="button">
+      <button id="activate-voice" type="button">
         🎙️ Activate Voice
       </button>
 
       <p>
-        Say
-        <strong>"Yi, H.A.I.V.A."</strong>
-        then your command.
+        Say <strong>"Yi, H.A.I.V.A."</strong>
+        to activate a command.
       </p>
 
     </div>
@@ -453,8 +327,11 @@ body.error .core {
 
 </div>
 
-
 <script>
+
+/* =========================================
+   H.A.I.V.A. SINGLE-FILE VOICE TEST
+========================================= */
 
 const statusElement =
   document.getElementById("haiva-status");
@@ -467,15 +344,16 @@ const button =
 
 
 let recognition = null;
-
-let active = false;
-
-let waitingForCommand = false;
-
-let speaking = false;
+let voiceActive = false;
+let commandMode = false;
+let recognitionRunning = false;
 
 
-function setState(state) {
+/* =========================================
+   STATE
+========================================= */
+
+function setState(state){
 
   document.body.className =
     state.toLowerCase();
@@ -486,7 +364,11 @@ function setState(state) {
 }
 
 
-function showResponse(text) {
+/* =========================================
+   RESPONSE
+========================================= */
+
+function showResponse(text){
 
   responseElement.textContent =
     text;
@@ -494,90 +376,113 @@ function showResponse(text) {
 }
 
 
-function speak(text) {
+/* =========================================
+   SPEAK
+========================================= */
+
+function speak(text){
 
   return new Promise(resolve => {
 
-    if (
-      !("speechSynthesis" in window)
-    ) {
+    if(!("speechSynthesis" in window)){
 
       resolve();
-
       return;
 
     }
 
-
     speechSynthesis.cancel();
-
-
-    speaking = true;
 
     setState("SPEAKING");
 
+    showResponse(text);
 
-    const voice =
+    const utterance =
       new SpeechSynthesisUtterance(text);
 
-
-    voice.lang = "en-US";
-
-    voice.rate = 0.95;
-
-    voice.pitch = 1.0;
-
-    voice.volume = 1.0;
+    utterance.lang = "en-US";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
 
-    voice.onend = () => {
+    utterance.onend = () => {
 
-      speaking = false;
+      if(voiceActive){
+
+        commandMode = false;
+
+        setState("LISTENING");
+
+        showResponse(
+          'Listening for "Yi, H.A.I.V.A."'
+        );
+
+        restartRecognition();
+
+      }
 
       resolve();
 
     };
 
 
-    voice.onerror = () => {
+    utterance.onerror = () => {
 
-      speaking = false;
+      if(voiceActive){
+
+        commandMode = false;
+
+        setState("LISTENING");
+
+        restartRecognition();
+
+      }
 
       resolve();
 
     };
 
 
-    speechSynthesis.speak(voice);
+    speechSynthesis.speak(
+      utterance
+    );
 
   });
 
 }
 
 
-function normalize(text) {
+/* =========================================
+   NORMALIZE
+========================================= */
+
+function normalize(text){
 
   return text
     .toLowerCase()
-    .replace(/[.,!?]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[.,!?]/g,"")
+    .replace(/\s+/g," ")
     .trim();
 
 }
 
 
-function hasWakeWord(text) {
+/* =========================================
+   WAKE WORD
+========================================= */
+
+function detectWakeWord(text){
 
   const wakeWords = [
 
-    "yo haiva",
+    "yi haiva",
     "hey haiva",
     "hi haiva",
-    "yi haiva",
+    "yo haiva",
     "haiva"
 
   ];
-
 
   return wakeWords.some(
     word => text.includes(word)
@@ -586,53 +491,55 @@ function hasWakeWord(text) {
 }
 
 
-function removeWakeWord(text) {
+/* =========================================
+   REMOVE WAKE WORD
+========================================= */
+
+function removeWakeWord(text){
 
   const wakeWords = [
 
-    "yo haiva",
+    "yi haiva",
     "hey haiva",
     "hi haiva",
-    "yi haiva",
+    "yo haiva",
     "haiva"
 
   ];
 
-
   let result = text;
 
-
-  wakeWords.forEach(word => {
+  for(const word of wakeWords){
 
     result =
-      result.replace(
-        word,
-        ""
-      );
+      result.replace(word,"");
 
-  });
-
+  }
 
   return result.trim();
 
 }
 
 
-async function processCommand(command) {
+/* =========================================
+   COMMAND
+========================================= */
+
+async function processCommand(command){
 
   command =
     normalize(command);
 
 
-  if (!command) {
+  if(!command){
+
+    commandMode = true;
+
+    setState("LISTENING");
 
     await speak(
       "Yes, Master. I'm listening."
     );
-
-    waitingForCommand = true;
-
-    setState("LISTENING");
 
     return;
 
@@ -641,74 +548,48 @@ async function processCommand(command) {
 
   setState("THINKING");
 
-
   showResponse(
-    "Processing..."
+    "Thinking..."
   );
 
 
-  /*
-   * LOCAL TEST RESPONSES
-   *
-   * These prove that the complete
-   * voice → command → response →
-   * speech system is working.
-   */
-
-  let answer = "";
+  let answer;
 
 
-  if (
+  if(
     command.includes("hello") ||
     command.includes("hi")
-  ) {
+  ){
 
     answer =
       "Hello, Master. How can I help you?";
 
   }
 
-  else if (
+  else if(
     command.includes("who are you")
-  ) {
+  ){
 
     answer =
       "I am H.A.I.V.A., your artificial intelligence voice assistant.";
 
   }
 
-  else if (
-    command.includes("what time")
-  ) {
+  else if(
+    command.includes("what time") ||
+    command.includes("time")
+  ){
 
     answer =
       "The current time is " +
       new Date().toLocaleTimeString(
         [],
         {
-          hour: "numeric",
-          minute: "2-digit"
+          hour:"numeric",
+          minute:"2-digit"
         }
-      ) + ".";
-
-  }
-
-  else if (
-    command.includes("what date") ||
-    command.includes("what day")
-  ) {
-
-    answer =
-      "Today is " +
-      new Date().toLocaleDateString(
-        [],
-        {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric"
-        }
-      ) + ".";
+      ) +
+      ".";
 
   }
 
@@ -722,85 +603,71 @@ async function processCommand(command) {
   }
 
 
-  showResponse(
-    answer
-  );
-
-
-  await speak(
-    answer
-  );
-
-
-  waitingForCommand =
-    false;
-
-
-  setState("STANDBY");
+  await speak(answer);
 
 }
 
 
-function handleSpeech(event) {
+/* =========================================
+   SPEECH RESULT
+========================================= */
 
-  let text = "";
+function handleSpeech(event){
+
+  let transcript = "";
 
 
-  for (
+  for(
     let i = event.resultIndex;
     i < event.results.length;
     i++
-  ) {
+  ){
 
-    text +=
+    transcript +=
       event.results[i][0].transcript;
 
   }
 
 
-  text =
-    normalize(text);
+  transcript =
+    normalize(transcript);
 
 
-  if (!text) {
+  if(!transcript){
     return;
   }
 
 
   console.log(
     "H.A.I.V.A. heard:",
-    text
+    transcript
   );
 
 
-  if (!waitingForCommand) {
+  /*
+   * WAKE-WORD MODE
+   */
 
-    if (
-      hasWakeWord(text)
-    ) {
+  if(!commandMode){
+
+    if(
+      detectWakeWord(transcript)
+    ){
+
+      commandMode = true;
+
+      setState("LISTENING");
 
       const command =
-        removeWakeWord(text);
+        removeWakeWord(transcript);
 
 
-      waitingForCommand =
-        true;
+      if(command){
 
-
-      setState(
-        "LISTENING"
-      );
-
-
-      if (command) {
-
-        processCommand(
-          command
-        );
+        processCommand(command);
 
       }
-
-      else {
+      else{
 
         speak(
           "Yes, Master. I'm listening."
@@ -810,39 +677,51 @@ function handleSpeech(event) {
 
     }
 
-
     return;
 
   }
 
 
+  /*
+   * COMMAND MODE
+   */
+
   processCommand(
-    text
+    transcript
   );
 
 }
 
 
-function startRecognition() {
+/* =========================================
+   START
+========================================= */
 
-  if (
-    !recognition ||
-    !active
-  ) {
+function startRecognition(){
 
+  if(!recognition){
     return;
+  }
 
+  if(!voiceActive){
+    return;
+  }
+
+  if(recognitionRunning){
+    return;
   }
 
 
-  try {
+  try{
 
     recognition.start();
 
-  } catch (error) {
+  }
+  catch(error){
 
     console.log(
-      "Recognition already running."
+      "Recognition start:",
+      error
     );
 
   }
@@ -850,26 +729,47 @@ function startRecognition() {
 }
 
 
-function setupRecognition() {
+/* =========================================
+   RESTART
+========================================= */
+
+function restartRecognition(){
+
+  if(!voiceActive){
+    return;
+  }
+
+
+  setTimeout(
+    startRecognition,
+    700
+  );
+
+}
+
+
+/* =========================================
+   SETUP
+========================================= */
+
+function setupRecognition(){
 
   const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
 
-  if (!SpeechRecognition) {
+  if(!SpeechRecognition){
 
     setState(
       "VOICE UNAVAILABLE"
     );
 
-
     showResponse(
-      "Speech recognition is not supported by this browser."
+      "Speech Recognition is unavailable."
     );
 
-
-    return;
+    return false;
 
   }
 
@@ -893,14 +793,12 @@ function setupRecognition() {
   recognition.onstart =
     () => {
 
-      console.log(
-        "H.A.I.V.A. microphone active."
-      );
+      recognitionRunning = true;
 
-      setState(
-        waitingForCommand
-          ? "LISTENING"
-          : "STANDBY"
+      setState("LISTENING");
+
+      showResponse(
+        'Listening for "Yi, H.A.I.V.A."'
       );
 
     };
@@ -914,23 +812,36 @@ function setupRecognition() {
     event => {
 
       console.warn(
-        "Speech error:",
+        "Speech recognition error:",
         event.error
       );
 
 
-      if (
+      recognitionRunning =
+        false;
+
+
+      if(
         event.error ===
         "not-allowed"
-      ) {
+      ){
+
+        voiceActive = false;
 
         setState(
           "MICROPHONE DENIED"
         );
 
         showResponse(
-          "Please allow microphone access in Chrome."
+          "Allow microphone access in Chrome."
         );
+
+        button.classList.remove(
+          "active"
+        );
+
+        button.textContent =
+          "🎙️ Activate Voice";
 
       }
 
@@ -940,54 +851,68 @@ function setupRecognition() {
   recognition.onend =
     () => {
 
-      if (active) {
+      recognitionRunning =
+        false;
 
-        setTimeout(
-          startRecognition,
-          600
-        );
+
+      /*
+       * AUTOMATIC RESTART
+       *
+       * No second button press.
+       */
+
+      if(voiceActive){
+
+        restartRecognition();
 
       }
 
     };
 
+
+  return true;
+
 }
 
+
+/* =========================================
+   ONE-TAP ACTIVATION
+========================================= */
 
 button.addEventListener(
   "click",
   async () => {
 
-    if (active) {
+    if(voiceActive){
       return;
     }
 
 
-    setupRecognition();
+    const ready =
+      setupRecognition();
 
 
-    if (!recognition) {
+    if(!ready){
       return;
     }
 
 
-    try {
+    try{
 
       /*
-       * The button click gives Chrome
-       * the user gesture needed to
-       * request microphone access.
+       * Request microphone permission
+       * from the button gesture.
        */
 
-      if (
+      if(
         navigator.mediaDevices &&
         navigator.mediaDevices.getUserMedia
-      ) {
+      ){
 
         const stream =
           await navigator.mediaDevices
             .getUserMedia({
-              audio: true
+              audio:true
             });
 
 
@@ -1001,44 +926,58 @@ button.addEventListener(
       }
 
 
-      active = true;
+      voiceActive = true;
+
+      commandMode = false;
+
 
       button.classList.add(
         "active"
       );
 
       button.textContent =
-        "🎙️ Voice Active";
+        "🎙️ Listening";
 
 
-      showResponse(
-        'Say "Yi, H.A.I.V.A."'
-      );
-
+      /*
+       * First confirmation.
+       */
 
       await speak(
         "H.A.I.V.A. is ready."
       );
 
 
-      setState(
-        "STANDBY"
+      /*
+       * IMPORTANT:
+       * No STANDBY.
+       */
+
+      commandMode = false;
+
+      setState("LISTENING");
+
+      showResponse(
+        'Listening for "Yi, H.A.I.V.A."'
       );
 
 
       startRecognition();
 
-    } catch (error) {
+    }
+    catch(error){
 
       console.error(
+        "Activation error:",
         error
       );
 
 
-      setState(
-        "MICROPHONE DENIED"
-      );
+      voiceActive = false;
 
+      setState(
+        "MICROPHONE ERROR"
+      );
 
       showResponse(
         "Microphone access is required."
@@ -1050,9 +989,11 @@ button.addEventListener(
 );
 
 
-setState(
-  "STANDBY"
-);
+/* =========================================
+   INITIAL
+========================================= */
+
+setState("READY");
 
 </script>
 
