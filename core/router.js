@@ -1,26 +1,193 @@
-// H.A.I.V.A. Request Router
+// =========================================
+// H.A.I.V.A. REQUEST ROUTER
+// =========================================
 
-import { getSkill } from "./skill-manager.js";
+import { CONFIG } from "./config.js";
 
-/**
- * Route a request to the appropriate skill.
- */
-export async function routeRequest(skillName, input) {
-  if (!skillName) {
-    throw new Error("Skill name is required.");
+import {
+  executeSkill
+} from "./skill-manager.js";
+
+
+export async function routeRequest(
+  input
+) {
+
+  if (!input) {
+
+    return {
+      success: false,
+      source: "router",
+      response: ""
+    };
+
   }
 
-  const skill = getSkill(skillName);
 
-  if (!skill) {
-    throw new Error(`Skill not found: ${skillName}`);
+  const message =
+    String(input).trim();
+
+
+  if (!message) {
+
+    return {
+      success: false,
+      source: "router",
+      response: ""
+    };
+
   }
 
-  if (typeof skill.execute !== "function") {
-    throw new Error(
-      `Skill "${skillName}" does not have an execute function.`
+
+  console.log(
+    "H.A.I.V.A. Router:",
+    message
+  );
+
+
+  // =======================================
+  // LOCAL SKILLS
+  // =======================================
+
+  try {
+
+    const skillResponse =
+      await executeSkill(
+        message
+      );
+
+
+    if (
+      skillResponse !== null &&
+      skillResponse !== undefined &&
+      skillResponse !== ""
+    ) {
+
+      return {
+
+        success: true,
+
+        source: "skill",
+
+        response:
+          String(skillResponse)
+
+      };
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Skill routing failed:",
+      error
     );
+
   }
 
-  return await skill.execute(input);
+
+  // =======================================
+  // AI BACKEND
+  // =======================================
+
+  if (
+    !CONFIG.features.chat
+  ) {
+
+    return {
+
+      success: false,
+
+      source: "router",
+
+      response:
+        CONFIG.assistant.fallbackResponse
+
+    };
+
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        CONFIG.api.chatEndpoint,
+        {
+
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              message
+            })
+
+        }
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        `AI server returned ${response.status}`
+      );
+
+    }
+
+
+    const data =
+      await response.json();
+
+
+    const answer =
+      data.response ||
+      data.message;
+
+
+    if (!answer) {
+
+      throw new Error(
+        "AI returned an empty response."
+      );
+
+    }
+
+
+    return {
+
+      success: true,
+
+      source: "ai",
+
+      response:
+        String(answer)
+
+    };
+
+  } catch (error) {
+
+    console.error(
+      "AI request failed:",
+      error
+    );
+
+
+    return {
+
+      success: false,
+
+      source: "error",
+
+      response:
+        CONFIG.assistant.connectionError
+
+    };
+
+  }
+
 }
