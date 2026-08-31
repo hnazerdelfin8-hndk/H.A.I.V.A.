@@ -1,43 +1,72 @@
 // =========================================
-// H.A.I.V.A. APPLICATION CONTROLLER
+// H.A.I.V.A. MAIN APPLICATION
 // =========================================
 
-import { initializeHAIVA } from "./initializer.js";
-import { CONFIG } from "./config.js";
 import {
-  executeSkill
-} from "./skill-manager.js";
+  initializeHAIVA
+} from "./initializer.js";
+
+import {
+  CONFIG
+} from "./config.js";
+
+import {
+  HAIVAAssistant
+} from "./assistant.js";
+
+import {
+  setUIState,
+  setVoiceButtonActive,
+  speak,
+  normalizeSpeech,
+  containsWakeWord,
+  removeWakeWord
+} from "./ui-bridge.js";
 
 
-console.log("H.A.I.V.A. is starting...");
+console.log(
+  "H.A.I.V.A. is starting..."
+);
 
 
 class HAIVA {
 
   constructor() {
 
-    this.state = "BOOTING";
+    this.state =
+      "BOOTING";
 
-    this.recognition = null;
+    this.recognition =
+      null;
 
-    this.isRecognitionRunning = false;
+    this.voiceActivated =
+      false;
 
-    this.voiceActivated = false;
+    this.isListening =
+      false;
 
-    this.awaitingCommand = false;
+    this.awaitingCommand =
+      false;
 
-    this.lastTranscript = "";
+    this.commandTimer =
+      null;
 
-    this.init();
+    this.assistant =
+      new HAIVAAssistant();
+
+    this.lastTranscript =
+      "";
+
+    this.initialize();
 
   }
 
 
   // =======================================
-  // INITIALIZATION
+  // INITIALIZE
   // =======================================
 
-  async init() {
+  async initialize() {
 
     try {
 
@@ -47,38 +76,38 @@ class HAIVA {
 
       if (!result?.ready) {
 
-        this.setState("ERROR");
+        this.setState(
+          "ERROR"
+        );
 
         return;
 
       }
 
 
-      console.log(
-        "H.A.I.V.A. Core ready."
+      this.setupRecognition();
+
+
+      this.setState(
+        "STANDBY"
       );
 
 
-      this.setupVoice();
-
-
-      this.setState("STANDBY");
-
-
       console.log(
-        "Waiting for voice activation."
+        "H.A.I.V.A. is ready."
       );
-
 
     } catch (error) {
 
       console.error(
-        "H.A.I.V.A. startup failed:",
+        "Initialization failed:",
         error
       );
 
 
-      this.setState("ERROR");
+      this.setState(
+        "ERROR"
+      );
 
     }
 
@@ -91,24 +120,13 @@ class HAIVA {
 
   setState(state) {
 
-    this.state = state;
+    this.state =
+      state;
 
 
-    document.body.dataset.haivaState =
-      state.toLowerCase();
-
-
-    const status =
-      document.getElementById(
-        "haiva-status"
-      );
-
-
-    if (status) {
-
-      status.textContent = state;
-
-    }
+    setUIState(
+      state
+    );
 
 
     console.log(
@@ -120,10 +138,10 @@ class HAIVA {
 
 
   // =======================================
-  // VOICE SETUP
+  // SPEECH RECOGNITION SETUP
   // =======================================
 
-  setupVoice() {
+  setupRecognition() {
 
     const SpeechRecognition =
       window.SpeechRecognition ||
@@ -133,7 +151,7 @@ class HAIVA {
     if (!SpeechRecognition) {
 
       console.error(
-        "Speech Recognition is unavailable."
+        "Speech Recognition is not available in this browser."
       );
 
 
@@ -151,6 +169,10 @@ class HAIVA {
       new SpeechRecognition();
 
 
+    this.recognition.lang =
+      CONFIG.voice.recognitionLanguage;
+
+
     this.recognition.continuous =
       CONFIG.voice.continuous;
 
@@ -159,21 +181,17 @@ class HAIVA {
       CONFIG.voice.interimResults;
 
 
-    this.recognition.lang =
-      CONFIG.voice.language;
+    this.recognition.onstart =
+      () => {
+
+        this.isListening =
+          true;
 
 
-    this.recognition.onstart = () => {
+        console.log(
+          "Microphone listening."
+        );
 
-      this.isRecognitionRunning = true;
-
-
-      console.log(
-        "Microphone recognition started."
-      );
-
-
-      if (this.voiceActivated) {
 
         this.setState(
           this.awaitingCommand
@@ -181,21 +199,21 @@ class HAIVA {
             : "STANDBY"
         );
 
-      }
-
-    };
+      };
 
 
     this.recognition.onresult =
-      (event) => {
+      event => {
 
-        this.handleSpeech(event);
+        this.handleResult(
+          event
+        );
 
       };
 
 
     this.recognition.onerror =
-      (event) => {
+      event => {
 
         console.warn(
           "Speech recognition error:",
@@ -203,17 +221,27 @@ class HAIVA {
         );
 
 
-        this.isRecognitionRunning =
+        this.isListening =
           false;
 
 
-        /*
-         * Ignore normal no-speech errors.
-         */
+        if (
+          event.error ===
+          "not-allowed"
+        ) {
+
+          this.setState(
+            "MICROPHONE DENIED"
+          );
+
+          return;
+
+        }
+
 
         if (
-          event.error !== "no-speech" &&
-          event.error !== "aborted"
+          event.error !==
+          "no-speech"
         ) {
 
           this.setState(
@@ -225,48 +253,52 @@ class HAIVA {
       };
 
 
-    this.recognition.onend = () => {
+    this.recognition.onend =
+      () => {
 
-      this.isRecognitionRunning =
-        false;
-
-
-      console.log(
-        "Speech recognition ended."
-      );
+        this.isListening =
+          false;
 
 
-      /*
-       * Restart only after the user
-       * has activated voice.
-       */
+        console.log(
+          "Microphone listening ended."
+        );
 
-      if (
-        this.voiceActivated
-      ) {
 
-        setTimeout(() => {
+        if (
+          this.voiceActivated
+        ) {
 
-          this.startListening();
+          setTimeout(
+            () => {
 
-        }, 500);
+              this.startListening();
 
-      }
+            },
+            CONFIG.voice.restartDelay
+          );
 
-    };
+        }
+
+      };
 
   }
 
 
   // =======================================
-  // ACTIVATE MICROPHONE
+  // USER ACTIVATION
   // =======================================
 
-  activateVoice() {
-    console.log("VOICE BUTTON CONNECTED");
-alert("H.A.I.V.A. voice activation started.");
+  async activateVoice() {
 
-    if (!this.recognition) {
+    console.log(
+      "Voice activation requested."
+    );
+
+
+    if (
+      !this.recognition
+    ) {
 
       this.setState(
         "VOICE UNAVAILABLE"
@@ -277,9 +309,79 @@ alert("H.A.I.V.A. voice activation started.");
     }
 
 
-    this.voiceActivated = true;
+    /*
+     * Microphone permission.
+     *
+     * The button click provides the
+     * required user gesture on Chrome.
+     */
 
-    this.awaitingCommand = false;
+    try {
+
+      if (
+        navigator.mediaDevices &&
+        navigator.mediaDevices.getUserMedia
+      ) {
+
+        const stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              audio: true
+            });
+
+
+        stream
+          .getTracks()
+          .forEach(
+            track =>
+              track.stop()
+          );
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Microphone permission failed:",
+        error
+      );
+
+
+      this.setState(
+        "MICROPHONE DENIED"
+      );
+
+
+      return;
+
+    }
+
+
+    this.voiceActivated =
+      true;
+
+
+    this.awaitingCommand =
+      false;
+
+
+    setVoiceButtonActive(
+      true
+    );
+
+
+    this.setState(
+      "STANDBY"
+    );
+
+
+    /*
+     * Small voice confirmation.
+     */
+
+    await speak(
+      "H.A.I.V.A. is ready."
+    );
 
 
     this.setState(
@@ -298,18 +400,30 @@ alert("H.A.I.V.A. voice activation started.");
 
   startListening() {
 
-    if (!this.recognition) {
+    if (
+      !this.voiceActivated
+    ) {
+
       return;
+
     }
 
 
-    if (!this.voiceActivated) {
+    if (
+      !this.recognition
+    ) {
+
       return;
+
     }
 
 
-    if (this.isRecognitionRunning) {
+    if (
+      this.isListening
+    ) {
+
       return;
+
     }
 
 
@@ -330,34 +444,42 @@ alert("H.A.I.V.A. voice activation started.");
 
 
   // =======================================
-  // HANDLE SPEECH
+  // SPEECH RESULT
   // =======================================
 
-  handleSpeech(event) {
+  handleResult(event) {
 
-    let transcript = "";
+    let transcript =
+      "";
 
 
     for (
-      let i = event.resultIndex;
-      i < event.results.length;
+      let i =
+        event.resultIndex;
+
+      i <
+        event.results.length;
+
       i++
     ) {
 
       transcript +=
-        event.results[i][0].transcript;
+        event.results[i][0]
+          .transcript;
 
     }
 
 
     transcript =
-      transcript
-        .toLowerCase()
-        .trim();
+      normalizeSpeech(
+        transcript
+      );
 
 
     if (!transcript) {
+
       return;
+
     }
 
 
@@ -366,11 +488,6 @@ alert("H.A.I.V.A. voice activation started.");
       transcript
     );
 
-
-    /*
-     * Prevent processing the same transcript
-     * repeatedly.
-     */
 
     if (
       transcript ===
@@ -387,18 +504,20 @@ alert("H.A.I.V.A. voice activation started.");
 
 
     // =====================================
-    // STANDBY
+    // WAITING FOR WAKE WORD
     // =====================================
 
-    if (!this.awaitingCommand) {
+    if (
+      !this.awaitingCommand
+    ) {
 
       if (
-        this.detectWakeWord(
+        containsWakeWord(
           transcript
         )
       ) {
 
-        this.activate(
+        this.handleWakeWord(
           transcript
         );
 
@@ -410,10 +529,10 @@ alert("H.A.I.V.A. voice activation started.");
 
 
     // =====================================
-    // LISTENING
+    // COMMAND
     // =====================================
 
-    this.processCommand(
+    this.handleCommand(
       transcript
     );
 
@@ -424,36 +543,17 @@ alert("H.A.I.V.A. voice activation started.");
   // WAKE WORD
   // =======================================
 
-  detectWakeWord(text) {
-
-    const normalized =
-      text
-        .replace(/[.,!?]/g, "")
-        .trim();
-
-
-    return CONFIG.voice.wakeWords.some(
-      wakeWord =>
-        normalized.includes(
-          wakeWord.toLowerCase()
-        )
-    );
-
-  }
-
-
-  // =======================================
-  // ACTIVATE H.A.I.V.A.
-  // =======================================
-
-  async activate(transcript) {
+  async handleWakeWord(
+    transcript
+  ) {
 
     console.log(
       "Wake word detected."
     );
 
 
-    this.awaitingCommand = true;
+    this.awaitingCommand =
+      true;
 
 
     this.setState(
@@ -461,37 +561,25 @@ alert("H.A.I.V.A. voice activation started.");
     );
 
 
-    let command =
-      transcript;
-
-
-    for (
-      const wakeWord
-      of CONFIG.voice.wakeWords
-    ) {
-
-      command =
-        command.replace(
-          wakeWord.toLowerCase(),
-          ""
-        );
-
-    }
-
-
-    command =
-      command.trim();
+    const command =
+      removeWakeWord(
+        transcript
+      );
 
 
     /*
-     * If user only said:
-     * "Yi, H.A.I.V.A."
+     * Example:
+     *
+     * "yo haiva"
+     *
+     * No command yet.
      */
 
     if (!command) {
 
-      await this.speak(
-        "Yes, Master. I'm listening."
+      await speak(
+        CONFIG.assistant
+          .defaultGreeting
       );
 
 
@@ -500,12 +588,15 @@ alert("H.A.I.V.A. voice activation started.");
       );
 
 
+      this.startCommandTimeout();
+
+
       return;
 
     }
 
 
-    await this.processCommand(
+    await this.handleCommand(
       command
     );
 
@@ -513,56 +604,21 @@ alert("H.A.I.V.A. voice activation started.");
 
 
   // =======================================
-  // PROCESS COMMAND
+  // COMMAND
   // =======================================
 
-  async processCommand(command) {
+  async handleCommand(
+    command
+  ) {
 
     if (!command) {
+
       return;
-    }
-
-
-    this.setState(
-      "THINKING"
-    );
-
-
-    try {
-
-      const result =
-        await executeSkill(
-          command
-        );
-
-
-      if (result) {
-
-        await this.speak(
-          result
-        );
-
-      } else {
-
-        await this.speak(
-          `I heard you say ${command}.`
-        );
-
-      }
-
-    } catch (error) {
-
-      console.error(
-        "Command processing failed:",
-        error
-      );
-
-
-      await this.speak(
-        "Sorry, Master. Something went wrong."
-      );
 
     }
+
+
+    this.clearCommandTimeout();
 
 
     this.awaitingCommand =
@@ -573,90 +629,79 @@ alert("H.A.I.V.A. voice activation started.");
       "";
 
 
+    await this.assistant.respond(
+      command
+    );
+
+
     this.setState(
       "STANDBY"
     );
+
+
+    /*
+     * Return to wake-word mode.
+     */
+
+    this.awaitingCommand =
+      false;
+
+
+    this.startListening();
 
   }
 
 
   // =======================================
-  // TEXT TO SPEECH
+  // COMMAND TIMEOUT
   // =======================================
 
-  speak(text) {
+  startCommandTimeout() {
 
-    return new Promise(
-      resolve => {
-
-        if (
-          !("speechSynthesis" in window)
-        ) {
-
-          resolve();
-
-          return;
-
-        }
+    this.clearCommandTimeout();
 
 
-        this.setState(
-          "SPEAKING"
-        );
+    this.commandTimer =
+      setTimeout(
+        () => {
 
+          this.awaitingCommand =
+            false;
 
-        speechSynthesis.cancel();
-
-
-        const utterance =
-          new SpeechSynthesisUtterance(
-            text
-          );
-
-
-        utterance.lang =
-          CONFIG.voice.speechLanguage;
-
-
-        utterance.rate =
-          CONFIG.voice.speechRate;
-
-
-        utterance.pitch =
-          CONFIG.voice.speechPitch;
-
-
-        utterance.volume =
-          CONFIG.voice.speechVolume;
-
-
-        utterance.onend = () => {
 
           this.setState(
-            this.awaitingCommand
-              ? "LISTENING"
-              : "STANDBY"
+            "STANDBY"
           );
 
 
-          resolve();
-
-        };
-
-
-        utterance.onerror = () => {
-
-          resolve();
-
-        };
+          this.lastTranscript =
+            "";
 
 
-        speechSynthesis.speak(
-          utterance
-        );
+          this.startListening();
 
-      }
-    );
+        },
+        8000
+      );
+
+  }
+
+
+  clearCommandTimeout() {
+
+    if (
+      this.commandTimer
+    ) {
+
+      clearTimeout(
+        this.commandTimer
+      );
+
+
+      this.commandTimer =
+        null;
+
+    }
 
   }
 
@@ -664,11 +709,15 @@ alert("H.A.I.V.A. voice activation started.");
 
 
 // =========================================
-// CREATE H.A.I.V.A.
+// START H.A.I.V.A.
 // =========================================
 
-window.HAIVA =
+const haiva =
   new HAIVA();
+
+
+window.HAIVA =
+  haiva;
 
 
 // =========================================
@@ -686,7 +735,14 @@ document.addEventListener(
 
 
     if (!button) {
+
+      console.warn(
+        "Activate Voice button not found."
+      );
+
+
       return;
+
     }
 
 
@@ -694,18 +750,7 @@ document.addEventListener(
       "click",
       () => {
 
-        console.log(
-          "Voice activation button pressed."
-        );
-
-
-        if (
-          window.HAIVA
-        ) {
-
-          window.HAIVA.activateVoice();
-
-        }
+        haiva.activateVoice();
 
       }
     );
