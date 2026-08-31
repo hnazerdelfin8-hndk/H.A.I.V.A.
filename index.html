@@ -1,16 +1,621 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
   <title>H.A.I.V.A.</title>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    html,
+    body {
+
+      width: 100%;
+      height: 100%;
+
+      margin: 0;
+
+      overflow: hidden;
+
+    }
+
+
+    body {
+
+      display: flex;
+
+      justify-content: center;
+
+      align-items: center;
+
+      background:
+        radial-gradient(
+          circle at center,
+          #172033 0%,
+          #080b12 45%,
+          #030408 100%
+        );
+
+      color: white;
+
+      font-family:
+        Arial,
+        sans-serif;
+
+    }
+
+
+    /* =====================================
+       MAIN APP
+    ===================================== */
+
+    #haiva-app {
+
+      width: 100%;
+
+      height: 100%;
+
+      display: flex;
+
+      justify-content: center;
+
+      align-items: center;
+
+      padding: 20px;
+
+    }
+
+
+    /* =====================================
+       CARD
+    ===================================== */
+
+    .haiva-card {
+
+      width: 100%;
+
+      max-width: 480px;
+
+      height: min(
+        700px,
+        92vh
+      );
+
+      border-radius: 32px;
+
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.045
+        );
+
+      border:
+        1px solid
+        rgba(
+          255,
+          255,
+          255,
+          0.10
+        );
+
+      backdrop-filter:
+        blur(25px);
+
+      -webkit-backdrop-filter:
+        blur(25px);
+
+      display: flex;
+
+      flex-direction: column;
+
+      align-items: center;
+
+      justify-content: center;
+
+      box-shadow:
+        0 30px 90px
+        rgba(
+          0,
+          0,
+          0,
+          0.55
+        );
+
+    }
+
+
+    /* =====================================
+       LOGO
+    ===================================== */
+
+    .logo {
+
+      font-size: 28px;
+
+      font-weight: 700;
+
+      letter-spacing: 6px;
+
+      margin-bottom: 60px;
+
+      user-select: none;
+
+    }
+
+
+    /* =====================================
+       CORE
+    ===================================== */
+
+    .core {
+
+      width: 190px;
+
+      height: 190px;
+
+      border-radius: 50%;
+
+      display: flex;
+
+      justify-content: center;
+
+      align-items: center;
+
+      position: relative;
+
+      background:
+        radial-gradient(
+          circle,
+          rgba(
+            255,
+            255,
+            255,
+            0.95
+          ) 0%,
+          rgba(
+            110,
+            160,
+            255,
+            0.25
+          ) 30%,
+          transparent 70%
+        );
+
+      box-shadow:
+        0 0 60px
+        rgba(
+          100,
+          160,
+          255,
+          0.35
+        );
+
+      animation:
+        haivaPulse 3s
+        ease-in-out
+        infinite;
+
+    }
+
+
+    .core::before {
+
+      content: "";
+
+      width: 72px;
+
+      height: 72px;
+
+      border-radius: 50%;
+
+      background:
+        rgba(
+          255,
+          255,
+          255,
+          0.95
+        );
+
+      box-shadow:
+        0 0 40px
+        rgba(
+          255,
+          255,
+          255,
+          0.9
+        );
+
+    }
+
+
+    /* =====================================
+       STATUS
+    ===================================== */
+
+    #haiva-status {
+
+      margin-top: 50px;
+
+      font-size: 14px;
+
+      font-weight: 600;
+
+      letter-spacing: 4px;
+
+      opacity: 0.85;
+
+      text-align: center;
+
+    }
+
+
+    /* =====================================
+       INSTRUCTION
+    ===================================== */
+
+    .instruction {
+
+      margin-top: 20px;
+
+      font-size: 13px;
+
+      opacity: 0.45;
+
+      text-align: center;
+
+      line-height: 1.5;
+
+    }
+
+
+    /* =====================================
+       DEFAULT PULSE
+    ===================================== */
+
+    @keyframes haivaPulse {
+
+      0%,
+      100% {
+
+        transform:
+          scale(1);
+
+        opacity: 0.75;
+
+      }
+
+      50% {
+
+        transform:
+          scale(1.08);
+
+        opacity: 1;
+
+      }
+
+    }
+
+
+    /* =====================================
+       LISTENING
+    ===================================== */
+
+    body[data-haiva-state="listening"]
+    .core {
+
+      animation:
+        haivaListening
+        0.8s
+        ease-in-out
+        infinite;
+
+      box-shadow:
+        0 0 90px
+        rgba(
+          100,
+          180,
+          255,
+          0.85
+        );
+
+    }
+
+
+    @keyframes haivaListening {
+
+      0%,
+      100% {
+
+        transform:
+          scale(1);
+
+      }
+
+      50% {
+
+        transform:
+          scale(1.14);
+
+      }
+
+    }
+
+
+    /* =====================================
+       THINKING
+    ===================================== */
+
+    body[data-haiva-state="thinking"]
+    .core {
+
+      animation:
+        haivaThinking
+        0.45s
+        linear
+        infinite;
+
+      box-shadow:
+        0 0 100px
+        rgba(
+          180,
+          120,
+          255,
+          0.85
+        );
+
+    }
+
+
+    @keyframes haivaThinking {
+
+      from {
+
+        transform:
+          rotate(0deg)
+          scale(1);
+
+      }
+
+      to {
+
+        transform:
+          rotate(360deg)
+          scale(1.08);
+
+      }
+
+    }
+
+
+    /* =====================================
+       SPEAKING
+    ===================================== */
+
+    body[data-haiva-state="speaking"]
+    .core {
+
+      animation:
+        haivaSpeaking
+        0.35s
+        ease-in-out
+        infinite;
+
+      box-shadow:
+        0 0 110px
+        rgba(
+          255,
+          170,
+          100,
+          0.85
+        );
+
+    }
+
+
+    @keyframes haivaSpeaking {
+
+      0%,
+      100% {
+
+        transform:
+          scale(1);
+
+      }
+
+      50% {
+
+        transform:
+          scale(1.18);
+
+      }
+
+    }
+
+
+    /* =====================================
+       ERROR
+    ===================================== */
+
+    body[data-haiva-state="error"]
+    .core {
+
+      animation:
+        haivaError
+        0.6s
+        ease-in-out
+        infinite;
+
+      box-shadow:
+        0 0 100px
+        rgba(
+          255,
+          70,
+          70,
+          0.85
+        );
+
+    }
+
+
+    @keyframes haivaError {
+
+      0%,
+      100% {
+
+        opacity:
+          0.6;
+
+      }
+
+      50% {
+
+        opacity:
+          1;
+
+      }
+
+    }
+
+
+    /* =====================================
+       MOBILE
+    ===================================== */
+
+    @media (
+      max-width: 480px
+    ) {
+
+      #haiva-app {
+
+        padding: 12px;
+
+      }
+
+
+      .haiva-card {
+
+        height: 94vh;
+
+        border-radius:
+          26px;
+
+      }
+
+
+      .logo {
+
+        font-size:
+          24px;
+
+        letter-spacing:
+          5px;
+
+      }
+
+
+      .core {
+
+        width:
+          160px;
+
+        height:
+          160px;
+
+      }
+
+
+      .core::before {
+
+        width:
+          62px;
+
+        height:
+          62px;
+
+      }
+
+    }
+
+  </style>
+
 </head>
+
 
 <body>
 
-  <div id="haiva-app"></div>
+  <div id="haiva-app">
 
-  <script type="module" src="./core/app.js"></script>
+    <main class="haiva-card">
+
+
+      <div class="logo">
+
+        H.A.I.V.A.
+
+      </div>
+
+
+      <div
+        class="core"
+        aria-label="H.A.I.V.A. Core"
+      >
+      </div>
+
+
+      <div
+        id="haiva-status"
+        aria-live="polite"
+      >
+
+        BOOTING
+
+      </div>
+
+
+      <div class="instruction">
+
+        Say
+        <strong>
+          "Yi, H.A.I.V.A."
+        </strong>
+
+        <br>
+
+        to activate
+
+      </div>
+
+
+    </main>
+
+  </div>
+
+
+  <!-- ===================================
+       H.A.I.V.A. CORE
+  ==================================== -->
+
+  <script
+    type="module"
+    src="./core/app.js"
+  ></script>
+
 
 </body>
+
 </html>
