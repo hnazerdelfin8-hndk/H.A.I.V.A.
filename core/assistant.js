@@ -1,61 +1,124 @@
 // =========================================
-// H.A.I.V.A. Assistant Controller
+// H.A.I.V.A. ASSISTANT CONTROLLER
 // =========================================
 
-import { routeRequest } from "./router.js";
+import { CONFIG } from "./config.js";
 
-/**
- * Process a user request through H.A.I.V.A.
- *
- * UI and other modules can call this function
- * without needing to know how skills work.
- */
-export async function processRequest(
-  skillName,
-  input
-) {
-  if (!skillName) {
-    throw new Error(
-      "Skill name is required."
-    );
+import {
+  routeRequest
+} from "./router.js";
+
+import {
+  setUIState,
+  speak
+} from "./ui-bridge.js";
+
+
+export class HAIVAAssistant {
+
+  constructor() {
+
+    this.processing = false;
+
   }
 
-  if (
-    input === undefined ||
-    input === null
+
+  async respond(
+    command
   ) {
-    throw new Error(
-      "Request input is required."
-    );
+
+    if (
+      this.processing
+    ) {
+
+      return null;
+
+    }
+
+
+    const text =
+      String(command)
+        .trim();
+
+
+    if (!text) {
+
+      return null;
+
+    }
+
+
+    this.processing = true;
+
+
+    try {
+
+      setUIState(
+        "THINKING"
+      );
+
+
+      const result =
+        await routeRequest(
+          text
+        );
+
+
+      if (
+        !result ||
+        !result.response
+      ) {
+
+        throw new Error(
+          "No response received."
+        );
+
+      }
+
+
+      setUIState(
+        "SPEAKING"
+      );
+
+
+      await speak(
+        result.response
+      );
+
+
+      return result.response;
+
+    } catch (error) {
+
+      console.error(
+        "Assistant response failed:",
+        error
+      );
+
+
+      const fallback =
+        CONFIG.assistant
+          .fallbackResponse;
+
+
+      setUIState(
+        "SPEAKING"
+      );
+
+
+      await speak(
+        fallback
+      );
+
+
+      return fallback;
+
+    } finally {
+
+      this.processing = false;
+
+    }
+
   }
 
-  console.log(
-    `H.A.I.V.A. processing: ${skillName}`
-  );
-
-  try {
-    const result = await routeRequest(
-      skillName,
-      input
-    );
-
-    console.log(
-      `H.A.I.V.A. completed: ${skillName}`
-    );
-
-    return result;
-
-  } catch (error) {
-
-    console.error(
-      `H.A.I.V.A. request failed: ${skillName}`,
-      error
-    );
-
-    throw error;
-  }
 }
-
-console.log(
-  "H.A.I.V.A. Assistant Controller loaded."
-);
