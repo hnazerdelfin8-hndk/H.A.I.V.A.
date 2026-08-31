@@ -1,883 +1,1060 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#030408">
 
-  <meta charset="UTF-8">
+<title>H.A.I.V.A.</title>
 
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+<style>
+* {
+  box-sizing: border-box;
+}
 
-  <meta
-    name="theme-color"
-    content="#030408"
-  >
+html,
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
 
-  <title>H.A.I.V.A.</title>
+body {
+  min-height: 100vh;
+  overflow: hidden;
 
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-  <style>
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
 
-    * {
-      box-sizing: border-box;
-    }
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      #172033 0%,
+      #0a0e18 42%,
+      #030408 100%
+    );
+}
 
+#haiva-app {
+  width: 100%;
+  min-height: 100vh;
 
-    html,
-    body {
-      width: 100%;
-      min-height: 100%;
-      margin: 0;
-    }
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
+  padding: 12px;
+}
 
-    body {
+.haiva-card {
+  width: 100%;
+  max-width: 480px;
+  height: min(720px, 94vh);
 
-      min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 
-      overflow: hidden;
+  position: relative;
+  overflow: hidden;
 
-      display: flex;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 32px;
 
-      justify-content: center;
+  background: rgba(255,255,255,.045);
 
-      align-items: center;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
 
-      color: white;
+  box-shadow:
+    0 35px 100px rgba(0,0,0,.55);
+}
 
-      font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
+.logo {
+  margin-bottom: 50px;
 
-      background:
-        radial-gradient(
-          circle at 50% 42%,
-          #172033 0%,
-          #0a0e18 42%,
-          #030408 100%
-        );
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 7px;
 
-      transition:
-        background 0.5s ease;
+  text-shadow:
+    0 0 25px rgba(255,255,255,.18);
+}
 
-    }
+.core-wrapper {
+  width: 220px;
+  height: 220px;
 
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-    /* =====================================
-       APP
-    ===================================== */
+  position: relative;
+}
 
-    #haiva-app {
+.core-ring {
+  position: absolute;
 
-      width: 100%;
+  width: 210px;
+  height: 210px;
 
-      min-height: 100vh;
+  border-radius: 50%;
 
-      display: flex;
+  border: 1px solid rgba(150,190,255,.18);
 
-      justify-content: center;
+  animation:
+    ringPulse 3s ease-in-out infinite;
+}
 
-      align-items: center;
+.core-ring::before,
+.core-ring::after {
+  content: "";
 
-      padding: 16px;
+  position: absolute;
+  inset: 15px;
 
-    }
+  border-radius: 50%;
 
+  border: 1px solid rgba(150,190,255,.1);
+}
 
-    /* =====================================
-       MAIN CARD
-    ===================================== */
+.core {
+  width: 165px;
+  height: 165px;
 
-    .haiva-card {
+  position: relative;
 
-      position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-      width: 100%;
+  border-radius: 50%;
 
-      max-width: 480px;
+  background:
+    radial-gradient(
+      circle,
+      rgba(255,255,255,.98) 0%,
+      rgba(180,210,255,.75) 8%,
+      rgba(90,145,255,.28) 30%,
+      rgba(40,80,150,.08) 52%,
+      transparent 72%
+    );
 
-      height:
-        min(720px, 94vh);
+  box-shadow:
+    0 0 35px rgba(120,170,255,.35),
+    inset 0 0 35px rgba(255,255,255,.12);
 
-      overflow: hidden;
+  animation:
+    corePulse 3s ease-in-out infinite;
+}
 
-      display: flex;
+.core::before {
+  content: "";
 
-      flex-direction: column;
+  width: 58px;
+  height: 58px;
 
-      align-items: center;
+  border-radius: 50%;
 
-      justify-content: center;
+  background:
+    radial-gradient(
+      circle,
+      #fff 0%,
+      rgba(220,235,255,.95) 45%,
+      rgba(130,180,255,.35) 100%
+    );
 
-      border:
-        1px solid
-        rgba(255,255,255,0.10);
+  box-shadow:
+    0 0 35px rgba(255,255,255,.85);
+}
 
-      border-radius: 32px;
+#haiva-status {
+  margin-top: 40px;
 
-      background:
-        rgba(255,255,255,0.045);
+  min-height: 20px;
 
-      backdrop-filter:
-        blur(28px);
+  font-size: 13px;
+  font-weight: 700;
 
-      -webkit-backdrop-filter:
-        blur(28px);
+  letter-spacing: 4px;
+  text-align: center;
 
-      box-shadow:
-        0 35px 100px
-        rgba(0,0,0,0.55);
+  opacity: .9;
+}
 
-    }
+#haiva-response {
+  width: 88%;
+  min-height: 25px;
 
+  margin-top: 18px;
 
-    /* =====================================
-       DECORATIVE GLOW
-    ===================================== */
+  text-align: center;
 
-    .haiva-card::before {
+  font-size: 14px;
+  line-height: 1.5;
 
-      content: "";
+  opacity: .75;
+}
 
-      position: absolute;
+.instruction {
+  margin-top: 28px;
 
-      width: 300px;
+  width: 90%;
 
-      height: 300px;
+  text-align: center;
 
-      top: -180px;
+  font-size: 13px;
 
-      border-radius: 50%;
+  opacity: .55;
+}
 
-      background:
-        rgba(100,160,255,0.10);
+#activate-voice {
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
 
-      filter: blur(50px);
+  padding: 13px 23px;
 
-      pointer-events: none;
+  color: white;
+  background: rgba(255,255,255,.07);
 
-    }
+  font-size: 13px;
+  font-weight: 600;
 
+  cursor: pointer;
 
-    /* =====================================
-       LOGO
-    ===================================== */
+  transition:
+    transform .2s ease,
+    background .2s ease,
+    box-shadow .2s ease;
+}
 
-    .logo {
+#activate-voice:active {
+  transform: scale(.95);
+}
 
-      position: relative;
+#activate-voice.active {
+  background: rgba(100,160,255,.18);
 
-      z-index: 2;
+  box-shadow:
+    0 0 30px rgba(100,160,255,.25);
+}
 
-      margin-bottom: 55px;
+/* LISTENING */
 
-      font-size: 27px;
+body.listening .core {
+  animation:
+    listeningPulse .8s ease-in-out infinite;
 
-      font-weight: 700;
+  box-shadow:
+    0 0 80px rgba(80,170,255,.75),
+    inset 0 0 40px rgba(120,190,255,.25);
+}
 
-      letter-spacing: 7px;
+body.listening .core-ring {
+  animation:
+    listeningRing 1s linear infinite;
+}
 
-      user-select: none;
+/* THINKING */
 
-      text-shadow:
-        0 0 25px
-        rgba(255,255,255,0.18);
+body.thinking .core {
+  animation:
+    thinkingPulse .45s ease-in-out infinite;
 
-    }
+  box-shadow:
+    0 0 95px rgba(175,100,255,.75);
+}
 
+/* SPEAKING */
 
-    /* =====================================
-       CORE
-    ===================================== */
+body.speaking .core {
+  animation:
+    speakingPulse .35s ease-in-out infinite;
 
-    .core-wrapper {
+  box-shadow:
+    0 0 100px rgba(255,165,90,.8);
+}
 
-      position: relative;
+/* ERROR */
 
-      width: 220px;
+body.error .core {
+  animation:
+    errorPulse .6s ease-in-out infinite;
 
-      height: 220px;
+  box-shadow:
+    0 0 90px rgba(255,70,70,.75);
+}
 
-      display: flex;
+@keyframes corePulse {
+  0%,100% {
+    transform: scale(1);
+    opacity: .75;
+  }
 
-      justify-content: center;
+  50% {
+    transform: scale(1.07);
+    opacity: 1;
+  }
+}
 
-      align-items: center;
+@keyframes ringPulse {
+  0%,100% {
+    transform: scale(.96);
+    opacity: .35;
+  }
 
-    }
+  50% {
+    transform: scale(1.08);
+    opacity: .8;
+  }
+}
 
+@keyframes listeningPulse {
+  0%,100% {
+    transform: scale(1);
+  }
 
-    .core-ring {
+  50% {
+    transform: scale(1.13);
+  }
+}
 
-      position: absolute;
+@keyframes listeningRing {
+  from {
+    transform: rotate(0deg) scale(.96);
+  }
 
-      width: 210px;
+  to {
+    transform: rotate(360deg) scale(1.08);
+  }
+}
 
-      height: 210px;
+@keyframes thinkingPulse {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
 
-      border-radius: 50%;
+  50% {
+    transform: scale(1.09) rotate(180deg);
+  }
 
-      border:
-        1px solid
-        rgba(150,190,255,0.18);
+  100% {
+    transform: scale(1) rotate(360deg);
+  }
+}
 
-      animation:
-        ringPulse
-        3s
-        ease-in-out
-        infinite;
+@keyframes speakingPulse {
+  0%,100% {
+    transform: scale(1);
+  }
 
-    }
+  50% {
+    transform: scale(1.18);
+  }
+}
 
+@keyframes errorPulse {
+  0%,100% {
+    opacity: .55;
+  }
 
-    .core-ring::before,
-    .core-ring::after {
+  50% {
+    opacity: 1;
+  }
+}
 
-      content: "";
+@media (max-width:480px) {
 
-      position: absolute;
+  .haiva-card {
+    height: 95vh;
+    border-radius: 28px;
+  }
 
-      inset: 15px;
+  .logo {
+    margin-bottom: 42px;
+    font-size: 23px;
+    letter-spacing: 5px;
+  }
 
-      border-radius: 50%;
+  .core-wrapper {
+    width: 190px;
+    height: 190px;
+  }
 
-      border:
-        1px solid
-        rgba(150,190,255,0.10);
+  .core-ring {
+    width: 180px;
+    height: 180px;
+  }
 
-    }
+  .core {
+    width: 145px;
+    height: 145px;
+  }
 
-
-    .core {
-
-      position: relative;
-
-      width: 165px;
-
-      height: 165px;
-
-      display: flex;
-
-      justify-content: center;
-
-      align-items: center;
-
-      border-radius: 50%;
-
-      background:
-        radial-gradient(
-          circle,
-          rgba(255,255,255,0.98) 0%,
-          rgba(180,210,255,0.75) 8%,
-          rgba(90,145,255,0.28) 30%,
-          rgba(40,80,150,0.08) 52%,
-          transparent 72%
-        );
-
-      box-shadow:
-        0 0 35px
-        rgba(120,170,255,0.35),
-        inset 0 0 35px
-        rgba(255,255,255,0.12);
-
-      animation:
-        corePulse
-        3s
-        ease-in-out
-        infinite;
-
-    }
-
-
-    .core::before {
-
-      content: "";
-
-      width: 58px;
-
-      height: 58px;
-
-      border-radius: 50%;
-
-      background:
-        radial-gradient(
-          circle,
-          #ffffff 0%,
-          rgba(220,235,255,0.95) 45%,
-          rgba(130,180,255,0.35) 100%
-        );
-
-      box-shadow:
-        0 0 35px
-        rgba(255,255,255,0.85);
-
-    }
-
-
-    /* =====================================
-       STATUS
-    ===================================== */
-
-    #haiva-status {
-
-      position: relative;
-
-      z-index: 2;
-
-      margin-top: 45px;
-
-      min-height: 20px;
-
-      font-size: 13px;
-
-      font-weight: 700;
-
-      letter-spacing: 4px;
-
-      text-align: center;
-
-      opacity: 0.9;
-
-      transition:
-        color 0.3s ease,
-        opacity 0.3s ease;
-
-    }
-
-
-    /* =====================================
-       INSTRUCTION
-    ===================================== */
-
-    .instruction {
-
-      position: relative;
-
-      z-index: 2;
-
-      width: 90%;
-
-      margin-top: 22px;
-
-      text-align: center;
-
-      font-size: 13px;
-
-      line-height: 1.6;
-
-      opacity: 0.5;
-
-    }
-
-
-    .instruction p {
-
-      margin: 12px 0 0;
-
-    }
-
-
-    .instruction strong {
-
-      opacity: 1;
-
-      color: white;
-
-    }
-
-
-    /* =====================================
-       VOICE BUTTON
-    ===================================== */
-
-    #activate-voice {
-
-      border:
-        1px solid
-        rgba(255,255,255,0.16);
-
-      border-radius: 999px;
-
-      padding: 13px 23px;
-
-      color: white;
-
-      background:
-        rgba(255,255,255,0.07);
-
-      font-size: 13px;
-
-      font-weight: 600;
-
-      cursor: pointer;
-
-      transition:
-        transform 0.2s ease,
-        background 0.2s ease,
-        box-shadow 0.2s ease;
-
-      box-shadow:
-        0 8px 25px
-        rgba(0,0,0,0.20);
-
-    }
-
-
-    #activate-voice:hover {
-
-      background:
-        rgba(255,255,255,0.12);
-
-    }
-
-
-    #activate-voice:active {
-
-      transform:
-        scale(0.95);
-
-    }
-
-
-    #activate-voice.active {
-
-      background:
-        rgba(100,160,255,0.18);
-
-      box-shadow:
-        0 0 30px
-        rgba(100,160,255,0.25);
-
-    }
-
-
-    /* =====================================
-       ANIMATIONS
-    ===================================== */
-
-    @keyframes corePulse {
-
-      0%,
-      100% {
-
-        transform:
-          scale(1);
-
-        opacity:
-          0.75;
-
-      }
-
-      50% {
-
-        transform:
-          scale(1.07);
-
-        opacity:
-          1;
-
-      }
-
-    }
-
-
-    @keyframes ringPulse {
-
-      0%,
-      100% {
-
-        transform:
-          scale(0.96);
-
-        opacity:
-          0.35;
-
-      }
-
-      50% {
-
-        transform:
-          scale(1.08);
-
-        opacity:
-          0.8;
-
-      }
-
-    }
-
-
-    /* =====================================
-       LISTENING
-    ===================================== */
-
-    body[data-haiva-state="listening"]
-    .core {
-
-      animation:
-        listeningPulse
-        0.8s
-        ease-in-out
-        infinite;
-
-      box-shadow:
-        0 0 80px
-        rgba(80,170,255,0.75),
-        inset 0 0 40px
-        rgba(120,190,255,0.25);
-
-    }
-
-
-    body[data-haiva-state="listening"]
-    .core-ring {
-
-      animation:
-        listeningRing
-        1s
-        linear
-        infinite;
-
-    }
-
-
-    @keyframes listeningPulse {
-
-      0%,
-      100% {
-
-        transform:
-          scale(1);
-
-      }
-
-      50% {
-
-        transform:
-          scale(1.13);
-
-      }
-
-    }
-
-
-    @keyframes listeningRing {
-
-      from {
-
-        transform:
-          rotate(0deg)
-          scale(0.96);
-
-      }
-
-      to {
-
-        transform:
-          rotate(360deg)
-          scale(1.08);
-
-      }
-
-    }
-
-
-    /* =====================================
-       THINKING
-    ===================================== */
-
-    body[data-haiva-state="thinking"]
-    .core {
-
-      animation:
-        thinkingPulse
-        0.45s
-        ease-in-out
-        infinite;
-
-      box-shadow:
-        0 0 95px
-        rgba(175,100,255,0.75);
-
-    }
-
-
-    @keyframes thinkingPulse {
-
-      0% {
-
-        transform:
-          scale(1)
-          rotate(0deg);
-
-      }
-
-      50% {
-
-        transform:
-          scale(1.09)
-          rotate(180deg);
-
-      }
-
-      100% {
-
-        transform:
-          scale(1)
-          rotate(360deg);
-
-      }
-
-    }
-
-
-    /* =====================================
-       SPEAKING
-    ===================================== */
-
-    body[data-haiva-state="speaking"]
-    .core {
-
-      animation:
-        speakingPulse
-        0.35s
-        ease-in-out
-        infinite;
-
-      box-shadow:
-        0 0 100px
-        rgba(255,165,90,0.80);
-
-    }
-
-
-    @keyframes speakingPulse {
-
-      0%,
-      100% {
-
-        transform:
-          scale(1);
-
-      }
-
-      50% {
-
-        transform:
-          scale(1.18);
-
-      }
-
-    }
-
-
-    /* =====================================
-       ERROR
-    ===================================== */
-
-    body[data-haiva-state="error"]
-    .core {
-
-      animation:
-        errorPulse
-        0.6s
-        ease-in-out
-        infinite;
-
-      box-shadow:
-        0 0 90px
-        rgba(255,70,70,0.75);
-
-    }
-
-
-    @keyframes errorPulse {
-
-      0%,
-      100% {
-
-        opacity:
-          0.55;
-
-      }
-
-      50% {
-
-        opacity:
-          1;
-
-      }
-
-    }
-
-
-    /* =====================================
-       MOBILE
-    ===================================== */
-
-    @media (max-width: 480px) {
-
-      #haiva-app {
-
-        padding:
-          10px;
-
-      }
-
-
-      .haiva-card {
-
-        height:
-          95vh;
-
-        border-radius:
-          28px;
-
-      }
-
-
-      .logo {
-
-        margin-bottom:
-          42px;
-
-        font-size:
-          23px;
-
-        letter-spacing:
-          5px;
-
-      }
-
-
-      .core-wrapper {
-
-        width:
-          190px;
-
-        height:
-          190px;
-
-      }
-
-
-      .core-ring {
-
-        width:
-          180px;
-
-        height:
-          180px;
-
-      }
-
-
-      .core {
-
-        width:
-          145px;
-
-        height:
-          145px;
-
-      }
-
-
-      .core::before {
-
-        width:
-          52px;
-
-        height:
-          52px;
-
-      }
-
-
-      #haiva-status {
-
-        margin-top:
-          38px;
-
-      }
-
-    }
-
-  </style>
-
+  .core::before {
+    width: 52px;
+    height: 52px;
+  }
+}
+</style>
 </head>
-
 
 <body>
 
-  <div id="haiva-app">
+<div id="haiva-app">
 
-    <main class="haiva-card">
+  <main class="haiva-card">
 
-      <div class="logo">
-        H.A.I.V.A.
-      </div>
+    <div class="logo">
+      H.A.I.V.A.
+    </div>
 
+    <div class="core-wrapper">
 
-      <div class="core-wrapper">
-
-        <div class="core-ring"></div>
-
-        <div
-          class="core"
-          aria-label="H.A.I.V.A. Core"
-        ></div>
-
-      </div>
-
+      <div class="core-ring"></div>
 
       <div
-        id="haiva-status"
-        aria-live="polite"
-      >
-        BOOTING
+        class="core"
+        aria-label="H.A.I.V.A. Core">
       </div>
 
+    </div>
 
-      <div class="instruction">
+    <div id="haiva-status">
+      STANDBY
+    </div>
 
-        <button
-          id="activate-voice"
-          type="button"
-        >
-          🎙️ Activate Voice
-        </button>
+    <div id="haiva-response">
+      Ready.
+    </div>
+
+    <div class="instruction">
+
+      <button
+        id="activate-voice"
+        type="button">
+        🎙️ Activate Voice
+      </button>
+
+      <p>
+        Say
+        <strong>"Yi, H.A.I.V.A."</strong>
+        then your command.
+      </p>
+
+    </div>
+
+  </main>
+
+</div>
 
 
-        <p>
+<script>
 
-          After activation, say
+const statusElement =
+  document.getElementById("haiva-status");
 
-          <strong>
-            "Yi, H.A.I.V.A."
-          </strong>
+const responseElement =
+  document.getElementById("haiva-response");
 
-        </p>
-
-      </div>
-
-    </main>
-
-  </div>
+const button =
+  document.getElementById("activate-voice");
 
 
-  <!-- ===================================
-       H.A.I.V.A. CORE
-  ==================================== -->
+let recognition = null;
 
-  <script
-    type="module"
-    src="./core/app.js"
-  ></script>
+let active = false;
+
+let waitingForCommand = false;
+
+let speaking = false;
+
+
+function setState(state) {
+
+  document.body.className =
+    state.toLowerCase();
+
+  statusElement.textContent =
+    state;
+
+}
+
+
+function showResponse(text) {
+
+  responseElement.textContent =
+    text;
+
+}
+
+
+function speak(text) {
+
+  return new Promise(resolve => {
+
+    if (
+      !("speechSynthesis" in window)
+    ) {
+
+      resolve();
+
+      return;
+
+    }
+
+
+    speechSynthesis.cancel();
+
+
+    speaking = true;
+
+    setState("SPEAKING");
+
+
+    const voice =
+      new SpeechSynthesisUtterance(text);
+
+
+    voice.lang = "en-US";
+
+    voice.rate = 0.95;
+
+    voice.pitch = 1.0;
+
+    voice.volume = 1.0;
+
+
+    voice.onend = () => {
+
+      speaking = false;
+
+      resolve();
+
+    };
+
+
+    voice.onerror = () => {
+
+      speaking = false;
+
+      resolve();
+
+    };
+
+
+    speechSynthesis.speak(voice);
+
+  });
+
+}
+
+
+function normalize(text) {
+
+  return text
+    .toLowerCase()
+    .replace(/[.,!?]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+}
+
+
+function hasWakeWord(text) {
+
+  const wakeWords = [
+
+    "yo haiva",
+    "hey haiva",
+    "hi haiva",
+    "yi haiva",
+    "haiva"
+
+  ];
+
+
+  return wakeWords.some(
+    word => text.includes(word)
+  );
+
+}
+
+
+function removeWakeWord(text) {
+
+  const wakeWords = [
+
+    "yo haiva",
+    "hey haiva",
+    "hi haiva",
+    "yi haiva",
+    "haiva"
+
+  ];
+
+
+  let result = text;
+
+
+  wakeWords.forEach(word => {
+
+    result =
+      result.replace(
+        word,
+        ""
+      );
+
+  });
+
+
+  return result.trim();
+
+}
+
+
+async function processCommand(command) {
+
+  command =
+    normalize(command);
+
+
+  if (!command) {
+
+    await speak(
+      "Yes, Master. I'm listening."
+    );
+
+    waitingForCommand = true;
+
+    setState("LISTENING");
+
+    return;
+
+  }
+
+
+  setState("THINKING");
+
+
+  showResponse(
+    "Processing..."
+  );
+
+
+  /*
+   * LOCAL TEST RESPONSES
+   *
+   * These prove that the complete
+   * voice → command → response →
+   * speech system is working.
+   */
+
+  let answer = "";
+
+
+  if (
+    command.includes("hello") ||
+    command.includes("hi")
+  ) {
+
+    answer =
+      "Hello, Master. How can I help you?";
+
+  }
+
+  else if (
+    command.includes("who are you")
+  ) {
+
+    answer =
+      "I am H.A.I.V.A., your artificial intelligence voice assistant.";
+
+  }
+
+  else if (
+    command.includes("what time")
+  ) {
+
+    answer =
+      "The current time is " +
+      new Date().toLocaleTimeString(
+        [],
+        {
+          hour: "numeric",
+          minute: "2-digit"
+        }
+      ) + ".";
+
+  }
+
+  else if (
+    command.includes("what date") ||
+    command.includes("what day")
+  ) {
+
+    answer =
+      "Today is " +
+      new Date().toLocaleDateString(
+        [],
+        {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric"
+        }
+      ) + ".";
+
+  }
+
+  else {
+
+    answer =
+      "I heard you say " +
+      command +
+      ", Master.";
+
+  }
+
+
+  showResponse(
+    answer
+  );
+
+
+  await speak(
+    answer
+  );
+
+
+  waitingForCommand =
+    false;
+
+
+  setState("STANDBY");
+
+}
+
+
+function handleSpeech(event) {
+
+  let text = "";
+
+
+  for (
+    let i = event.resultIndex;
+    i < event.results.length;
+    i++
+  ) {
+
+    text +=
+      event.results[i][0].transcript;
+
+  }
+
+
+  text =
+    normalize(text);
+
+
+  if (!text) {
+    return;
+  }
+
+
+  console.log(
+    "H.A.I.V.A. heard:",
+    text
+  );
+
+
+  if (!waitingForCommand) {
+
+    if (
+      hasWakeWord(text)
+    ) {
+
+      const command =
+        removeWakeWord(text);
+
+
+      waitingForCommand =
+        true;
+
+
+      setState(
+        "LISTENING"
+      );
+
+
+      if (command) {
+
+        processCommand(
+          command
+        );
+
+      }
+
+      else {
+
+        speak(
+          "Yes, Master. I'm listening."
+        );
+
+      }
+
+    }
+
+
+    return;
+
+  }
+
+
+  processCommand(
+    text
+  );
+
+}
+
+
+function startRecognition() {
+
+  if (
+    !recognition ||
+    !active
+  ) {
+
+    return;
+
+  }
+
+
+  try {
+
+    recognition.start();
+
+  } catch (error) {
+
+    console.log(
+      "Recognition already running."
+    );
+
+  }
+
+}
+
+
+function setupRecognition() {
+
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+  if (!SpeechRecognition) {
+
+    setState(
+      "VOICE UNAVAILABLE"
+    );
+
+
+    showResponse(
+      "Speech recognition is not supported by this browser."
+    );
+
+
+    return;
+
+  }
+
+
+  recognition =
+    new SpeechRecognition();
+
+
+  recognition.lang =
+    "en-US";
+
+
+  recognition.continuous =
+    true;
+
+
+  recognition.interimResults =
+    false;
+
+
+  recognition.onstart =
+    () => {
+
+      console.log(
+        "H.A.I.V.A. microphone active."
+      );
+
+      setState(
+        waitingForCommand
+          ? "LISTENING"
+          : "STANDBY"
+      );
+
+    };
+
+
+  recognition.onresult =
+    handleSpeech;
+
+
+  recognition.onerror =
+    event => {
+
+      console.warn(
+        "Speech error:",
+        event.error
+      );
+
+
+      if (
+        event.error ===
+        "not-allowed"
+      ) {
+
+        setState(
+          "MICROPHONE DENIED"
+        );
+
+        showResponse(
+          "Please allow microphone access in Chrome."
+        );
+
+      }
+
+    };
+
+
+  recognition.onend =
+    () => {
+
+      if (active) {
+
+        setTimeout(
+          startRecognition,
+          600
+        );
+
+      }
+
+    };
+
+}
+
+
+button.addEventListener(
+  "click",
+  async () => {
+
+    if (active) {
+      return;
+    }
+
+
+    setupRecognition();
+
+
+    if (!recognition) {
+      return;
+    }
+
+
+    try {
+
+      /*
+       * The button click gives Chrome
+       * the user gesture needed to
+       * request microphone access.
+       */
+
+      if (
+        navigator.mediaDevices &&
+        navigator.mediaDevices.getUserMedia
+      ) {
+
+        const stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              audio: true
+            });
+
+
+        stream
+          .getTracks()
+          .forEach(
+            track =>
+              track.stop()
+          );
+
+      }
+
+
+      active = true;
+
+      button.classList.add(
+        "active"
+      );
+
+      button.textContent =
+        "🎙️ Voice Active";
+
+
+      showResponse(
+        'Say "Yi, H.A.I.V.A."'
+      );
+
+
+      await speak(
+        "H.A.I.V.A. is ready."
+      );
+
+
+      setState(
+        "STANDBY"
+      );
+
+
+      startRecognition();
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      setState(
+        "MICROPHONE DENIED"
+      );
+
+
+      showResponse(
+        "Microphone access is required."
+      );
+
+    }
+
+  }
+);
+
+
+setState(
+  "STANDBY"
+);
+
+</script>
 
 </body>
-
 </html>
