@@ -1,83 +1,100 @@
 // =========================================
-// H.A.I.V.A. System Initializer
+// H.A.I.V.A. Initializer
 // =========================================
 
 import {
-  registerSkill
+  registerSkill,
+  getSkills
 } from "./skill-manager.js";
 
-import {
-  routeRequest
-} from "./router.js";
 
-import * as chatSkill from "../skills/chat/index.js";
-
-
-// -----------------------------------------
-// Load H.A.I.V.A. UI
-// -----------------------------------------
-
-async function loadUI() {
-  const app = document.getElementById("haiva-app");
-
-  if (!app) {
-    throw new Error(
-      "H.A.I.V.A. application root not found."
-    );
-  }
-
-  const response = await fetch("./ui/ui.html");
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to load H.A.I.V.A. UI."
-    );
-  }
-
-  app.innerHTML = await response.text();
-
-  const css = document.createElement("link");
-
-  css.rel = "stylesheet";
-  css.href = "./ui/ui.css";
-
-  document.head.appendChild(css);
-
-  await import("../ui/ui.js");
-  await import("./ui-bridge.js");
-}
-
-
-// -----------------------------------------
+// =========================================
 // Initialize H.A.I.V.A.
-// -----------------------------------------
+// =========================================
 
 export async function initializeHAIVA() {
 
   console.log(
-    "Initializing H.A.I.V.A..."
+    "Initializing H.A.I.V.A. systems..."
   );
 
-  await loadUI();
 
-  // Register Chat Skill
+  // =======================================
+  // Greeting Skill
+  // =======================================
+
   registerSkill(
-    "chat",
-    chatSkill
+    "greeting",
+    {
+
+      canHandle(command) {
+
+        return (
+          command.includes("hello") ||
+          command.includes("hi") ||
+          command.includes("kumusta")
+        );
+
+      },
+
+      async execute() {
+
+        return "Hello, Master. How can I help you?";
+
+      }
+
+    }
   );
 
-  // Confirm Router
-  if (typeof routeRequest !== "function") {
-    throw new Error(
-      "H.A.I.V.A. router is not available."
-    );
-  }
+
+  // =======================================
+  // Identity Skill
+  // =======================================
+
+  registerSkill(
+    "identity",
+    {
+
+      canHandle(command) {
+
+        return (
+          command.includes("who are you") ||
+          command.includes("sino ka")
+        );
+
+      },
+
+      async execute() {
+
+        return (
+          "I am H.A.I.V.A., " +
+          "your intelligent virtual assistant."
+        );
+
+      }
+
+    }
+  );
+
+
+  // =======================================
+  // Initialization Complete
+  // =======================================
+
+  const skills = getSkills();
 
   console.log(
-    "H.A.I.V.A. initialization complete."
+    "H.A.I.V.A. skills loaded:",
+    skills
   );
 
+
   return {
-    ready: true
+
+    ready: true,
+
+    skills: skills
+
   };
+
 }
