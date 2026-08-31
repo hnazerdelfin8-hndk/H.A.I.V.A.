@@ -1,100 +1,63 @@
 // =========================================
-// H.A.I.V.A. Initializer
+// H.A.I.V.A. INITIALIZER
 // =========================================
 
+import { CONFIG } from "./config.js";
 import {
-  registerSkill,
-  getSkills
+  registerDefaultSkills
 } from "./skill-manager.js";
 
 
-// =========================================
-// Initialize H.A.I.V.A.
-// =========================================
+let initialized = false;
+
 
 export async function initializeHAIVA() {
 
-  console.log(
-    "Initializing H.A.I.V.A. systems..."
-  );
+  if (initialized) {
 
+    return {
+      ready: true,
+      alreadyInitialized: true
+    };
 
-  // =======================================
-  // Greeting Skill
-  // =======================================
+  }
 
-  registerSkill(
-    "greeting",
-    {
-
-      canHandle(command) {
-
-        return (
-          command.includes("hello") ||
-          command.includes("hi") ||
-          command.includes("kumusta")
-        );
-
-      },
-
-      async execute() {
-
-        return "Hello, Master. How can I help you?";
-
-      }
-
-    }
-  );
-
-
-  // =======================================
-  // Identity Skill
-  // =======================================
-
-  registerSkill(
-    "identity",
-    {
-
-      canHandle(command) {
-
-        return (
-          command.includes("who are you") ||
-          command.includes("sino ka")
-        );
-
-      },
-
-      async execute() {
-
-        return (
-          "I am H.A.I.V.A., " +
-          "your intelligent virtual assistant."
-        );
-
-      }
-
-    }
-  );
-
-
-  // =======================================
-  // Initialization Complete
-  // =======================================
-
-  const skills = getSkills();
 
   console.log(
-    "H.A.I.V.A. skills loaded:",
-    skills
+    `Starting ${CONFIG.app.name} v${CONFIG.app.version}...`
   );
 
 
-  return {
+  try {
 
-    ready: true,
+    registerDefaultSkills();
 
-    skills: skills
+    initialized = true;
 
-  };
+
+    console.log(
+      "H.A.I.V.A. initialization complete."
+    );
+
+
+    return {
+      ready: true,
+      version: CONFIG.app.version
+    };
+
+  } catch (error) {
+
+    console.error(
+      "H.A.I.V.A. initialization failed:",
+      error
+    );
+
+
+    return {
+      ready: false,
+      error
+    };
+
+  }
 
 }
