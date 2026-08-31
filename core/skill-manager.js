@@ -1,4 +1,6 @@
+// =========================================
 // H.A.I.V.A. Skill Manager
+// =========================================
 
 const skills = new Map();
 
@@ -6,6 +8,7 @@ const skills = new Map();
  * Register a skill
  */
 export function registerSkill(name, skill) {
+
   if (!name || !skill) {
     throw new Error("Invalid skill registration.");
   }
@@ -19,31 +22,42 @@ export function registerSkill(name, skill) {
   console.log(`H.A.I.V.A. skill registered: ${name}`);
 }
 
+
 /**
  * Get a registered skill
  */
 export function getSkill(name) {
+
   return skills.get(name) || null;
+
 }
+
 
 /**
  * Check if a skill exists
  */
 export function hasSkill(name) {
+
   return skills.has(name);
+
 }
+
 
 /**
  * Get all registered skills
  */
 export function getSkills() {
+
   return Array.from(skills.keys());
+
 }
+
 
 /**
  * Remove a skill
  */
 export function unregisterSkill(name) {
+
   if (!skills.has(name)) {
     return false;
   }
@@ -53,4 +67,49 @@ export function unregisterSkill(name) {
   console.log(`H.A.I.V.A. skill removed: ${name}`);
 
   return true;
+
+}
+
+
+/**
+ * Execute command through registered skills
+ */
+export async function executeSkill(command) {
+
+  const normalizedCommand = command
+    .toLowerCase()
+    .trim();
+
+  for (const [name, skill] of skills) {
+
+    try {
+
+      if (
+        typeof skill.canHandle === "function" &&
+        skill.canHandle(normalizedCommand)
+      ) {
+
+        console.log(
+          `H.A.I.V.A. executing skill: ${name}`
+        );
+
+        return await skill.execute(
+          normalizedCommand
+        );
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        `Skill "${name}" failed:`,
+        error
+      );
+
+    }
+
+  }
+
+  return null;
+
 }
