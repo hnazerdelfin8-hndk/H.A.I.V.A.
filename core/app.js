@@ -263,6 +263,8 @@ class HAIVA {
   // =======================================
 
   activateVoice() {
+    console.log("VOICE BUTTON CONNECTED");
+alert("H.A.I.V.A. voice activation started.");
 
     if (!this.recognition) {
 
