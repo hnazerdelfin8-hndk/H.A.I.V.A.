@@ -1,5 +1,5 @@
 // =========================================
-// H.A.I.V.A. Application Controller
+// H.A.I.V.A. APPLICATION CONTROLLER
 // =========================================
 
 import { initializeHAIVA } from "./initializer.js";
@@ -22,7 +22,11 @@ class HAIVA {
 
     this.isRecognitionRunning = false;
 
+    this.voiceActivated = false;
+
     this.awaitingCommand = false;
+
+    this.lastTranscript = "";
 
     this.init();
 
@@ -61,7 +65,9 @@ class HAIVA {
       this.setState("STANDBY");
 
 
-      this.startListening();
+      console.log(
+        "Waiting for voice activation."
+      );
 
 
     } catch (error) {
@@ -93,8 +99,8 @@ class HAIVA {
 
 
     const status =
-      document.querySelector(
-        "#haiva-status"
+      document.getElementById(
+        "haiva-status"
       );
 
 
@@ -106,7 +112,8 @@ class HAIVA {
 
 
     console.log(
-      `H.A.I.V.A. STATE: ${state}`
+      "H.A.I.V.A. STATE:",
+      state
     );
 
   }
@@ -126,7 +133,7 @@ class HAIVA {
     if (!SpeechRecognition) {
 
       console.error(
-        "Speech Recognition is not supported."
+        "Speech Recognition is unavailable."
       );
 
 
@@ -162,8 +169,19 @@ class HAIVA {
 
 
       console.log(
-        "H.A.I.V.A. voice recognition active."
+        "Microphone recognition started."
       );
+
+
+      if (this.voiceActivated) {
+
+        this.setState(
+          this.awaitingCommand
+            ? "LISTENING"
+            : "STANDBY"
+        );
+
+      }
 
     };
 
@@ -180,22 +198,52 @@ class HAIVA {
       (event) => {
 
         console.warn(
-          "Voice recognition error:",
+          "Speech recognition error:",
           event.error
         );
 
 
-        this.isRecognitionRunning = false;
+        this.isRecognitionRunning =
+          false;
+
+
+        /*
+         * Ignore normal no-speech errors.
+         */
+
+        if (
+          event.error !== "no-speech" &&
+          event.error !== "aborted"
+        ) {
+
+          this.setState(
+            "VOICE ERROR"
+          );
+
+        }
 
       };
 
 
     this.recognition.onend = () => {
 
-      this.isRecognitionRunning = false;
+      this.isRecognitionRunning =
+        false;
 
 
-      if (CONFIG.features.voice) {
+      console.log(
+        "Speech recognition ended."
+      );
+
+
+      /*
+       * Restart only after the user
+       * has activated voice.
+       */
+
+      if (
+        this.voiceActivated
+      ) {
 
         setTimeout(() => {
 
@@ -211,12 +259,49 @@ class HAIVA {
 
 
   // =======================================
+  // ACTIVATE MICROPHONE
+  // =======================================
+
+  activateVoice() {
+
+    if (!this.recognition) {
+
+      this.setState(
+        "VOICE UNAVAILABLE"
+      );
+
+      return;
+
+    }
+
+
+    this.voiceActivated = true;
+
+    this.awaitingCommand = false;
+
+
+    this.setState(
+      "STANDBY"
+    );
+
+
+    this.startListening();
+
+  }
+
+
+  // =======================================
   // START LISTENING
   // =======================================
 
   startListening() {
 
     if (!this.recognition) {
+      return;
+    }
+
+
+    if (!this.voiceActivated) {
       return;
     }
 
@@ -230,18 +315,10 @@ class HAIVA {
 
       this.recognition.start();
 
-
-      this.setState(
-        this.awaitingCommand
-          ? "LISTENING"
-          : "STANDBY"
-      );
-
-
     } catch (error) {
 
       console.warn(
-        "Unable to start recognition:",
+        "Recognition start failed:",
         error
       );
 
@@ -288,29 +365,51 @@ class HAIVA {
     );
 
 
-    // -------------------------------------
-    // Waiting for wake word
-    // -------------------------------------
+    /*
+     * Prevent processing the same transcript
+     * repeatedly.
+     */
 
-    if (!this.awaitingCommand) {
-
-      if (
-        this.detectWakeWord(transcript)
-      ) {
-
-        this.activate(transcript);
-
-      }
-
+    if (
+      transcript ===
+      this.lastTranscript
+    ) {
 
       return;
 
     }
 
 
-    // -------------------------------------
-    // Already activated
-    // -------------------------------------
+    this.lastTranscript =
+      transcript;
+
+
+    // =====================================
+    // STANDBY
+    // =====================================
+
+    if (!this.awaitingCommand) {
+
+      if (
+        this.detectWakeWord(
+          transcript
+        )
+      ) {
+
+        this.activate(
+          transcript
+        );
+
+      }
+
+      return;
+
+    }
+
+
+    // =====================================
+    // LISTENING
+    // =====================================
 
     this.processCommand(
       transcript
@@ -320,7 +419,7 @@ class HAIVA {
 
 
   // =======================================
-  // WAKE WORD DETECTION
+  // WAKE WORD
   // =======================================
 
   detectWakeWord(text) {
@@ -347,6 +446,11 @@ class HAIVA {
 
   async activate(transcript) {
 
+    console.log(
+      "Wake word detected."
+    );
+
+
     this.awaitingCommand = true;
 
 
@@ -366,7 +470,7 @@ class HAIVA {
 
       command =
         command.replace(
-          wakeWord,
+          wakeWord.toLowerCase(),
           ""
         );
 
@@ -377,9 +481,10 @@ class HAIVA {
       command.trim();
 
 
-    // -------------------------------------
-    // Wake word only
-    // -------------------------------------
+    /*
+     * If user only said:
+     * "Yi, H.A.I.V.A."
+     */
 
     if (!command) {
 
@@ -397,10 +502,6 @@ class HAIVA {
 
     }
 
-
-    // -------------------------------------
-    // Wake word + command
-    // -------------------------------------
 
     await this.processCommand(
       command
@@ -428,7 +529,9 @@ class HAIVA {
     try {
 
       const result =
-        await executeSkill(command);
+        await executeSkill(
+          command
+        );
 
 
       if (result) {
@@ -445,7 +548,6 @@ class HAIVA {
 
       }
 
-
     } catch (error) {
 
       console.error(
@@ -455,13 +557,18 @@ class HAIVA {
 
 
       await this.speak(
-        "Sorry, Master. I encountered an error."
+        "Sorry, Master. Something went wrong."
       );
 
     }
 
 
-    this.awaitingCommand = false;
+    this.awaitingCommand =
+      false;
+
+
+    this.lastTranscript =
+      "";
 
 
     this.setState(
@@ -535,6 +642,13 @@ class HAIVA {
         };
 
 
+        utterance.onerror = () => {
+
+          resolve();
+
+        };
+
+
         speechSynthesis.speak(
           utterance
         );
@@ -548,8 +662,51 @@ class HAIVA {
 
 
 // =========================================
-// START H.A.I.V.A.
+// CREATE H.A.I.V.A.
 // =========================================
 
 window.HAIVA =
   new HAIVA();
+
+
+// =========================================
+// CONNECT UI BUTTON
+// =========================================
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+
+    const button =
+      document.getElementById(
+        "activate-voice"
+      );
+
+
+    if (!button) {
+      return;
+    }
+
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        console.log(
+          "Voice activation button pressed."
+        );
+
+
+        if (
+          window.HAIVA
+        ) {
+
+          window.HAIVA.activateVoice();
+
+        }
+
+      }
+    );
+
+  }
+);
