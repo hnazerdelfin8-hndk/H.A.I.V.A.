@@ -5,7 +5,22 @@
 import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
-import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, containsWakeWord, removeWakeWord } from "./ui-bridge.js";
+import { setUIState, setVoiceButtonActive, speak, normalizeSpeech } from "./ui-bridge.js";
+
+// Wake phrase is intentionally handled here so the active application
+// recognizes exactly: "yo haiva" (including common punctuation/spacing).
+const WAKE_WORD = "yo haiva";
+
+function hasWakeWord(text) {
+  const normalized = normalizeSpeech(text || "");
+  return normalized === WAKE_WORD || normalized.startsWith(`${WAKE_WORD} `);
+}
+
+function stripWakeWord(text) {
+  const normalized = normalizeSpeech(text || "");
+  if (!hasWakeWord(normalized)) return normalized;
+  return normalized.slice(WAKE_WORD.length).trim();
+}
 
 class HAIVA {
   constructor() {
@@ -107,7 +122,7 @@ class HAIVA {
     this.lastTranscript = transcript;
 
     if (!this.awaitingCommand) {
-      if (containsWakeWord(transcript)) this.handleWakeWord(transcript);
+      if (hasWakeWord(transcript)) this.handleWakeWord(transcript);
       return;
     }
 
@@ -117,7 +132,7 @@ class HAIVA {
   async handleWakeWord(transcript) {
     this.awaitingCommand = true;
     this.setState("LISTENING");
-    const command = removeWakeWord(transcript);
+    const command = stripWakeWord(transcript);
 
     if (!command) {
       await speak(CONFIG.assistant.defaultGreeting);
