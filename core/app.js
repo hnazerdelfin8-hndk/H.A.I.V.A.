@@ -14,6 +14,8 @@ class HAIVA {
     this.voiceActivated = false;
     this.isListening = false;
     this.awaitingCommand = false;
+    this.isSpeaking = false;
+    this.restartTimer = null;
     this.commandTimer = null;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
@@ -54,14 +56,14 @@ class HAIVA {
     }
 
     this.recognition = new SpeechRecognition();
-    this.recognition.lang = CONFIG.voice.recognitionLanguage;
+    this.recognition.lang = CONFIG.voice.recognitionLanguage || "en-US";
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.maxAlternatives = 5;
 
     this.recognition.onstart = () => {
       this.isListening = true;
-      this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
+      if (!this.isSpeaking) this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
     };
 
     this.recognition.onresult = event => this.handleResult(event);
@@ -70,6 +72,8 @@ class HAIVA {
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
         this.setState("MICROPHONE DENIED");
       } else if (event.error !== "no-speech" && event.error !== "aborted") {
         this.setState("VOICE ERROR");
@@ -78,9 +82,7 @@ class HAIVA {
 
     this.recognition.onend = () => {
       this.isListening = false;
-      if (this.voiceActivated) {
-        setTimeout(() => this.startListening(), CONFIG.voice.restartDelay);
-      }
+      this.scheduleRecognitionRestart();
     };
   }
 
@@ -98,22 +100,37 @@ class HAIVA {
       return;
     }
 
+    // One button press only unlocks microphone access. From here on,
+    // recognition stays active and automatically restarts when the browser ends it.
     this.voiceActivated = true;
     this.awaitingCommand = false;
     this.lastTranscript = "";
     setVoiceButtonActive(true);
     this.setState("STANDBY");
-    await speak("H.A.I.V.A. is ready.");
     this.startListening();
   }
 
   startListening() {
-    if (!this.voiceActivated || !this.recognition || this.isListening) return;
+    if (!this.voiceActivated || !this.recognition || this.isListening || this.isSpeaking) return;
     try {
       this.recognition.start();
     } catch (error) {
-      console.warn("Recognition start failed:", error);
+      // Browser may report InvalidStateError if a restart races with onend.
+      console.debug("Recognition start skipped:", error?.message || error);
     }
+  }
+
+  scheduleRecognitionRestart() {
+    if (!this.voiceActivated || this.isSpeaking) return;
+    clearTimeout(this.restartTimer);
+    this.restartTimer = setTimeout(() => this.startListening(), CONFIG.voice.restartDelay || 400);
+  }
+
+  stopListening() {
+    clearTimeout(this.restartTimer);
+    if (!this.recognition) return;
+    try { this.recognition.stop(); } catch (error) { console.debug("Recognition stop skipped:", error?.message || error); }
+    this.isListening = false;
   }
 
   clean(text) {
@@ -130,13 +147,19 @@ class HAIVA {
 
   findWakeWord(text) {
     const normalized = this.clean(text);
-    const wakeWords = ["yo haiva", "yo, haiva", "yo hi va", "yo heyva", "yo aiva", "hey haiva", "hi haiva", "yi haiva"];
+    const wakeWords = [
+      "yo haiva", "yo hi va", "yo heyva", "yo aiva",
+      "hey haiva", "hi haiva", "yi haiva"
+    ];
     return wakeWords.find(word => normalized.includes(normalizeSpeech(word))) || null;
   }
 
   stripWakeWord(text) {
     let normalized = this.clean(text);
-    const wakeWords = ["yo haiva", "yo hi va", "yo heyva", "yo aiva", "hey haiva", "hi haiva", "yi haiva"];
+    const wakeWords = [
+      "yo haiva", "yo hi va", "yo heyva", "yo aiva",
+      "hey haiva", "hi haiva", "yi haiva"
+    ];
     for (const word of wakeWords) {
       normalized = normalized.replace(normalizeSpeech(word), "");
     }
@@ -155,19 +178,14 @@ class HAIVA {
 
     const displayText = this.clean(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
-
-    // Do not send interim speech to the AI. Only final recognition results trigger commands.
-    if (!finalText.trim()) return;
+    if (!finalText.trim() || this.isSpeaking) return;
 
     const transcript = this.clean(finalText);
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
 
     if (!this.awaitingCommand) {
-      const wakeWord = this.findWakeWord(transcript);
-      if (wakeWord) {
-        void this.handleWakeWord(transcript);
-      }
+      if (this.findWakeWord(transcript)) void this.handleWakeWord(transcript);
       return;
     }
 
@@ -180,9 +198,16 @@ class HAIVA {
 
     const command = this.stripWakeWord(transcript);
     if (!command) {
-      await speak(CONFIG.assistant.defaultGreeting);
-      this.setState("LISTENING");
-      this.startCommandTimeout();
+      this.stopListening();
+      this.isSpeaking = true;
+      this.setState("SPEAKING");
+      try { await speak(CONFIG.assistant.defaultGreeting); }
+      finally {
+        this.isSpeaking = false;
+        this.setState("LISTENING");
+        this.startCommandTimeout();
+        this.scheduleRecognitionRestart();
+      }
       return;
     }
 
@@ -196,18 +221,22 @@ class HAIVA {
     this.clearCommandTimeout();
     this.awaitingCommand = false;
     this.lastTranscript = "";
+    this.stopListening();
+    this.isSpeaking = false;
     this.setState("THINKING");
 
     try {
       await this.assistant.respond(text);
     } catch (error) {
       console.error("Assistant response failed:", error);
+      this.isSpeaking = true;
       this.setState("SPEAKING");
-      await speak("Sorry, Master. I could not process that request.");
+      try { await speak("Sorry, Master. I could not process that request."); }
+      finally { this.isSpeaking = false; }
     }
 
     this.setState("STANDBY");
-    this.startListening();
+    this.scheduleRecognitionRestart();
   }
 
   startCommandTimeout() {
@@ -216,7 +245,7 @@ class HAIVA {
       this.awaitingCommand = false;
       this.lastTranscript = "";
       this.setState("STANDBY");
-      this.startListening();
+      this.scheduleRecognitionRestart();
     }, 8000);
   }
 
