@@ -45,7 +45,7 @@ class HAIVA {
 
   showTranscript(text) {
     const heard = document.getElementById("heard");
-    if (heard) heard.textContent = `Heard: ${text}`;
+    if (heard && text) heard.textContent = `Heard: ${text}`;
   }
 
   setupRecognition() {
@@ -100,8 +100,6 @@ class HAIVA {
       return;
     }
 
-    // One button press only unlocks microphone access. From here on,
-    // recognition stays active and automatically restarts when the browser ends it.
     this.voiceActivated = true;
     this.awaitingCommand = false;
     this.lastTranscript = "";
@@ -115,7 +113,6 @@ class HAIVA {
     try {
       this.recognition.start();
     } catch (error) {
-      // Browser may report InvalidStateError if a restart races with onend.
       console.debug("Recognition start skipped:", error?.message || error);
     }
   }
@@ -123,7 +120,7 @@ class HAIVA {
   scheduleRecognitionRestart() {
     if (!this.voiceActivated || this.isSpeaking) return;
     clearTimeout(this.restartTimer);
-    this.restartTimer = setTimeout(() => this.startListening(), CONFIG.voice.restartDelay || 400);
+    this.restartTimer = setTimeout(() => this.startListening(), CONFIG.voice.restartDelay || 500);
   }
 
   stopListening() {
@@ -133,37 +130,31 @@ class HAIVA {
     this.isListening = false;
   }
 
-  clean(text) {
+  normalizeForWake(text) {
     return normalizeSpeech(text || "")
-      .replace(/\bhey\s+ha\s*iva\b/g, "yo haiva")
-      .replace(/\bhi\s+ha\s*iva\b/g, "yo haiva")
-      .replace(/\byi\s+ha\s*iva\b/g, "yo haiva")
-      .replace(/\byo\s+h\s*a\s*i\s*v\s*a\b/g, "yo haiva")
-      .replace(/\byo\s+hi\s+va\b/g, "yo haiva")
-      .replace(/\byo\s+heyva\b/g, "yo haiva")
-      .replace(/\byo\s+aiva\b/g, "yo haiva")
+      .replace(/[’'`]/g, "")
+      .replace(/\b(hey|hi|yi)\s+(?=haiva\b)/g, "yo ")
+      .replace(/\byo\s+(?:h\s*a\s*i\s*v\s*a|hi\s+va|heyva|aiva)\b/g, "yo haiva")
+      .replace(/\byo\s+ha\s*iva\b/g, "yo haiva")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
   findWakeWord(text) {
-    const normalized = this.clean(text);
-    const wakeWords = [
-      "yo haiva", "yo hi va", "yo heyva", "yo aiva",
-      "hey haiva", "hi haiva", "yi haiva"
-    ];
-    return wakeWords.find(word => normalized.includes(normalizeSpeech(word))) || null;
+    const normalized = this.normalizeForWake(text);
+    return CONFIG.voice.wakeWords.some(word => {
+      const wake = this.normalizeForWake(word);
+      return normalized === wake || normalized.includes(`${wake} `) || normalized.includes(` ${wake}`);
+    });
   }
 
   stripWakeWord(text) {
-    let normalized = this.clean(text);
-    const wakeWords = [
-      "yo haiva", "yo hi va", "yo heyva", "yo aiva",
-      "hey haiva", "hi haiva", "yi haiva"
-    ];
-    for (const word of wakeWords) {
-      normalized = normalized.replace(normalizeSpeech(word), "");
+    let result = this.normalizeForWake(text);
+    for (const word of CONFIG.voice.wakeWords) {
+      const wake = this.normalizeForWake(word);
+      result = result.replace(wake, "").trim();
     }
-    return normalized.trim();
+    return result;
   }
 
   handleResult(event) {
@@ -176,11 +167,13 @@ class HAIVA {
       else interimText += ` ${text}`;
     }
 
-    const displayText = this.clean(`${finalText} ${interimText}`);
+    const displayText = this.normalizeForWake(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
+
+    // Only final speech is allowed to trigger the assistant.
     if (!finalText.trim() || this.isSpeaking) return;
 
-    const transcript = this.clean(finalText);
+    const transcript = this.normalizeForWake(finalText);
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
 
@@ -201,8 +194,9 @@ class HAIVA {
       this.stopListening();
       this.isSpeaking = true;
       this.setState("SPEAKING");
-      try { await speak(CONFIG.assistant.defaultGreeting); }
-      finally {
+      try {
+        await speak(CONFIG.assistant.defaultGreeting);
+      } finally {
         this.isSpeaking = false;
         this.setState("LISTENING");
         this.startCommandTimeout();
@@ -222,7 +216,6 @@ class HAIVA {
     this.awaitingCommand = false;
     this.lastTranscript = "";
     this.stopListening();
-    this.isSpeaking = false;
     this.setState("THINKING");
 
     try {
