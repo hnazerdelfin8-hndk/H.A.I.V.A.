@@ -1,5 +1,5 @@
 // =========================================
-// H.A.I.V.A. AI CHAT API — OPENAI
+// H.A.I.V.A. AI CHAT API — GROQ
 // =========================================
 
 export default async function handler(req, res) {
@@ -12,28 +12,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ response: "Please provide a message." });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    console.error("[HAIVA] OPENAI_API_KEY missing in Vercel runtime.");
+    console.error("[HAIVA] GROQ_API_KEY missing in Vercel runtime.");
     return res.status(500).json({
-      response: "My OpenAI connection is not configured yet, Master."
+      response: "My Groq connection is not configured yet, Master."
     });
   }
 
   try {
-    console.log("[HAIVA] OpenAI request starting", {
-      model: "gpt-5.6-luna",
+    console.log("[HAIVA] Groq request starting", {
+      model: "openai/gpt-oss-20b",
       messageLength: message.trim().length
     });
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
+    const groqResponse = await fetch("https://api.groq.com/openai/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-5.6-luna",
+        model: "openai/gpt-oss-20b",
         instructions: `You are H.A.I.V.A., an intelligent voice assistant.
 
 Address the user as "Master".
@@ -52,9 +52,9 @@ Do not use unnecessary markdown in normal voice responses.`,
       })
     });
 
-    const responseText = await openaiResponse.text();
+    const responseText = await groqResponse.text();
 
-    if (!openaiResponse.ok) {
+    if (!groqResponse.ok) {
       let errorCode = "unknown";
       let errorType = "unknown";
 
@@ -63,17 +63,17 @@ Do not use unnecessary markdown in normal voice responses.`,
         errorCode = parsed?.error?.code || errorCode;
         errorType = parsed?.error?.type || errorType;
       } catch (_) {
-        // Keep diagnostics generic if OpenAI did not return JSON.
+        // Keep diagnostics generic if Groq did not return JSON.
       }
 
-      console.error("[HAIVA] OpenAI API rejected request", {
-        status: openaiResponse.status,
+      console.error("[HAIVA] Groq API rejected request", {
+        status: groqResponse.status,
         errorType,
         errorCode
       });
 
       return res.status(502).json({
-        response: `OpenAI connection error (${openaiResponse.status}). Please check the Vercel API configuration, Master.`
+        response: `Groq connection error (${groqResponse.status}). Please check the Vercel API configuration, Master.`
       });
     }
 
@@ -81,7 +81,7 @@ Do not use unnecessary markdown in normal voice responses.`,
     try {
       data = JSON.parse(responseText);
     } catch (error) {
-      console.error("[HAIVA] OpenAI returned invalid JSON.", error);
+      console.error("[HAIVA] Groq returned invalid JSON.", error);
       return res.status(502).json({
         response: "My AI system returned an invalid response, Master."
       });
@@ -90,7 +90,7 @@ Do not use unnecessary markdown in normal voice responses.`,
     const answer = data?.output_text?.trim();
 
     if (!answer) {
-      console.error("[HAIVA] OpenAI returned no output text.", {
+      console.error("[HAIVA] Groq returned no output text.", {
         hasOutput: Array.isArray(data?.output),
         outputCount: data?.output?.length ?? 0
       });
@@ -99,7 +99,7 @@ Do not use unnecessary markdown in normal voice responses.`,
       });
     }
 
-    console.log("[HAIVA] OpenAI response received", {
+    console.log("[HAIVA] Groq response received", {
       answerLength: answer.length
     });
 
@@ -108,13 +108,13 @@ Do not use unnecessary markdown in normal voice responses.`,
       message: answer
     });
   } catch (error) {
-    console.error("[HAIVA] OpenAI request failed", {
+    console.error("[HAIVA] Groq request failed", {
       name: error?.name,
       message: error?.message
     });
 
     return res.status(500).json({
-      response: "Something went wrong while connecting to my OpenAI system, Master."
+      response: "Something went wrong while connecting to my Groq system, Master."
     });
   }
 }
