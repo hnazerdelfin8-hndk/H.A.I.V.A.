@@ -91,8 +91,12 @@ class HAIVA {
 
   async activateVoice() {
     if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
+
+    // The mic button is now a real ON/OFF toggle.
+    // Tap once = start continuous listening.
+    // Tap again = completely stop listening.
     if (this.voiceActivated) {
-      this.startListening();
+      this.deactivateVoice();
       return;
     }
 
@@ -112,6 +116,20 @@ class HAIVA {
     setVoiceButtonActive(true);
     this.setState("LISTENING");
     this.startListening();
+  }
+
+  deactivateVoice() {
+    this.voiceActivated = false;
+    this.lastTranscript = "";
+    this.stopListening();
+    speechSynthesis?.cancel?.();
+    this.isSpeaking = false;
+    this.isProcessing = false;
+    setVoiceButtonActive(false);
+    this.setState("READY");
+
+    const heard = document.getElementById("heard");
+    if (heard) heard.textContent = "Voice paused";
   }
 
   startListening() {
@@ -173,7 +191,7 @@ class HAIVA {
 
   async handleCommand(command) {
     const text = String(command || "").trim();
-    if (!text || this.isSpeaking || this.isProcessing) return;
+    if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
 
     this.lastTranscript = "";
     this.isProcessing = true;
