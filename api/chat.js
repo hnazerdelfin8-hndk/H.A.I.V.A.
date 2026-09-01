@@ -15,9 +15,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     console.error("[HAIVA] GROQ_API_KEY missing in Vercel runtime.");
-    return res.status(500).json({
-      response: "My Groq connection is not configured yet, Master."
-    });
+    return res.status(500).json({ response: "My Groq connection is not configured yet, Master." });
   }
 
   try {
@@ -26,7 +24,7 @@ export default async function handler(req, res) {
       messageLength: message.trim().length
     });
 
-    const groqResponse = await fetch("https://api.groq.com/openai/v1/responses", {
+    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34,7 +32,10 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "openai/gpt-oss-20b",
-        instructions: `You are H.A.I.V.A., an intelligent voice assistant.
+        messages: [
+          {
+            role: "system",
+            content: `You are H.A.I.V.A., an intelligent voice assistant.
 
 Address the user as "Master".
 
@@ -46,9 +47,11 @@ Do not describe yourself as a chatbot unless specifically asked.
 
 If the user speaks Filipino or Taglish, respond naturally in Filipino or Taglish.
 
-Do not use unnecessary markdown in normal voice responses.`,
-        input: message.trim(),
-        max_output_tokens: 512
+Do not use unnecessary markdown in normal voice responses.`
+          },
+          { role: "user", content: message.trim() }
+        ],
+        max_tokens: 512
       })
     });
 
@@ -57,14 +60,11 @@ Do not use unnecessary markdown in normal voice responses.`,
     if (!groqResponse.ok) {
       let errorCode = "unknown";
       let errorType = "unknown";
-
       try {
         const parsed = JSON.parse(responseText);
         errorCode = parsed?.error?.code || errorCode;
         errorType = parsed?.error?.type || errorType;
-      } catch (_) {
-        // Keep diagnostics generic if Groq did not return JSON.
-      }
+      } catch (_) {}
 
       console.error("[HAIVA] Groq API rejected request", {
         status: groqResponse.status,
@@ -82,31 +82,22 @@ Do not use unnecessary markdown in normal voice responses.`,
       data = JSON.parse(responseText);
     } catch (error) {
       console.error("[HAIVA] Groq returned invalid JSON.", error);
-      return res.status(502).json({
-        response: "My AI system returned an invalid response, Master."
-      });
+      return res.status(502).json({ response: "My AI system returned an invalid response, Master." });
     }
 
-    const answer = data?.output_text?.trim();
+    const answer = data?.choices?.[0]?.message?.content?.trim();
 
     if (!answer) {
-      console.error("[HAIVA] Groq returned no output text.", {
-        hasOutput: Array.isArray(data?.output),
-        outputCount: data?.output?.length ?? 0
+      console.error("[HAIVA] Groq returned no message content.", {
+        hasChoices: Array.isArray(data?.choices),
+        choiceCount: data?.choices?.length ?? 0
       });
-      return res.status(502).json({
-        response: "I received an empty response from my AI system, Master."
-      });
+      return res.status(502).json({ response: "I received an empty response from my AI system, Master." });
     }
 
-    console.log("[HAIVA] Groq response received", {
-      answerLength: answer.length
-    });
+    console.log("[HAIVA] Groq response received", { answerLength: answer.length });
 
-    return res.status(200).json({
-      response: answer,
-      message: answer
-    });
+    return res.status(200).json({ response: answer, message: answer });
   } catch (error) {
     console.error("[HAIVA] Groq request failed", {
       name: error?.name,
