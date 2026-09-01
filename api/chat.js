@@ -6,22 +6,32 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ response: "Method not allowed." });
 
   const message = req.body?.message;
+  const history = Array.isArray(req.body?.history) ? req.body.history : [];
   if (typeof message !== "string" || !message.trim()) return res.status(400).json({ response: "Please provide a message." });
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return res.status(500).json({ response: "My Groq connection is not configured yet, Master." });
 
   try {
+    const safeHistory = history
+      .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
+      .slice(-20)
+      .map(item => ({ role: item.role, content: item.content.trim() }));
+
+    const messages = [
+      { role: "system", content: 'You are H.A.I.V.A., a fast intelligent personal voice assistant. Address the user as "Master". Maintain continuity using the supplied conversation history. Understand follow-up references such as "that", "it", "the one earlier", and related questions. Never claim to remember information that is not in the supplied history. Be helpful, natural, concise and conversational. Give short answers by default because responses are spoken aloud. If the user speaks Filipino or Taglish, respond naturally in Filipino or Taglish. Avoid unnecessary markdown and filler.' },
+      ...safeHistory,
+      { role: "user", content: message.trim() }
+    ];
+
     const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: "openai/gpt-oss-20b",
-        messages: [
-          { role: "system", content: 'You are H.A.I.V.A., a fast intelligent voice assistant. Address the user as "Master". Be helpful, natural, concise and conversational. Give short answers by default because responses are spoken aloud. If the user speaks Filipino or Taglish, respond naturally in Filipino or Taglish. Avoid unnecessary markdown and filler.' },
-          { role: "user", content: message.trim() }
-        ],
-        max_tokens: 256
+        messages,
+        max_tokens: 256,
+        temperature: 0.7
       })
     });
 
