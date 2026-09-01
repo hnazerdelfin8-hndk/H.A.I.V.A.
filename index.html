@@ -1,252 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>H.A.I.V.A. Mic Test</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>H.A.I.V.A.</title>
   <style>
-    body{
-      margin:0;
-      min-height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:#05070b;
-      color:white;
-      font-family:Arial,sans-serif;
-      text-align:center;
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #05070b;
+      color: #fff;
+      font-family: Arial, sans-serif;
     }
-
-    .box{
-      width:90%;
-      max-width:420px;
+    .box { width: min(92vw, 520px); text-align: center; }
+    h1 { margin: 0 0 8px; letter-spacing: 6px; }
+    .subtitle { opacity: .6; margin-bottom: 28px; }
+    #haiva-status {
+      margin: 0 0 16px;
+      font-weight: 700;
+      letter-spacing: 3px;
     }
-
-    h1{
-      letter-spacing:5px;
+    #heard {
+      min-height: 74px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 20px;
+      background: rgba(255,255,255,.05);
+      margin-bottom: 20px;
+      line-height: 1.5;
     }
-
-    #status{
-      margin:30px 0 15px;
-      font-weight:bold;
-      letter-spacing:3px;
+    button {
+      padding: 15px 25px;
+      border: 0;
+      border-radius: 30px;
+      background: #fff;
+      color: #000;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
     }
-
-    #heard{
-      min-height:60px;
-      padding:20px;
-      border:1px solid rgba(255,255,255,.15);
-      border-radius:20px;
-      background:rgba(255,255,255,.05);
-      margin-bottom:25px;
-    }
-
-    button{
-      padding:15px 25px;
-      border:0;
-      border-radius:30px;
-      background:#fff;
-      color:#000;
-      font-weight:bold;
-      font-size:16px;
-    }
+    button.active { opacity: .75; }
   </style>
 </head>
-
 <body>
+  <main class="box">
+    <h1>H.A.I.V.A.</h1>
+    <div class="subtitle">Hnazer Artificial Intelligence Voice Assistant</div>
 
-<div class="box">
+    <div id="haiva-status">BOOTING</div>
 
-  <h1>H.A.I.V.A.</h1>
+    <div id="heard">Press “Activate Voice” to give H.A.I.V.A. microphone permission.</div>
 
-  <div id="status">
-    READY
-  </div>
+    <button id="activate-voice" type="button">🎙️ Activate Voice</button>
+  </main>
 
-  <div id="heard">
-    Press the button and speak.
-  </div>
-
-  <button id="start">
-    🎙️ START MICROPHONE
-  </button>
-
-</div>
-
-<script>
-
-const status =
-  document.getElementById("status");
-
-const heard =
-  document.getElementById("heard");
-
-const button =
-  document.getElementById("start");
-
-
-const SpeechRecognition =
-  window.SpeechRecognition ||
-  window.webkitSpeechRecognition;
-
-
-if(!SpeechRecognition){
-
-  status.textContent =
-    "NOT SUPPORTED";
-
-  heard.textContent =
-    "Speech Recognition is not available in this Chrome environment.";
-
-}
-else{
-
-  const recognition =
-    new SpeechRecognition();
-
-  recognition.lang =
-    "en-US";
-
-  recognition.continuous =
-    false;
-
-  recognition.interimResults =
-    true;
-
-
-  recognition.onstart = () => {
-
-    console.log(
-      "MICROPHONE STARTED"
-    );
-
-    status.textContent =
-      "LISTENING";
-
-    heard.textContent =
-      "Speak now...";
-
-  };
-
-
-  recognition.onresult =
-    event => {
-
-      let text = "";
-
-      for(
-        let i = event.resultIndex;
-        i < event.results.length;
-        i++
-      ){
-
-        text +=
-          event.results[i][0].transcript;
-
-      }
-
-      console.log(
-        "RECEIVED:",
-        text
-      );
-
-      heard.textContent =
-        text;
-
-    };
-
-
-  recognition.onerror =
-    event => {
-
-      console.error(
-        "MIC ERROR:",
-        event.error
-      );
-
-      status.textContent =
-        "ERROR";
-
-      heard.textContent =
-        "Microphone error: " +
-        event.error;
-
-    };
-
-
-  recognition.onend = () => {
-
-    console.log(
-      "MICROPHONE ENDED"
-    );
-
-    status.textContent =
-      "READY";
-
-  };
-
-
-  button.onclick =
-    async () => {
-
-      try{
-
-        /*
-         * Ask Chrome for microphone
-         * permission.
-         */
-
-        const stream =
-          await navigator
-            .mediaDevices
-            .getUserMedia({
-              audio:true
-            });
-
-
-        /*
-         * We only use this to request
-         * permission. Stop the stream
-         * before SpeechRecognition starts.
-         */
-
-        stream
-          .getTracks()
-          .forEach(
-            track =>
-              track.stop()
-          );
-
-
-        console.log(
-          "MIC PERMISSION OK"
-        );
-
-
-        recognition.start();
-
-      }
-      catch(error){
-
-        console.error(
-          "MICROPHONE ACCESS FAILED:",
-          error
-        );
-
-        status.textContent =
-          "MIC ERROR";
-
-        heard.textContent =
-          error.message;
-
-      }
-
-    };
-
-}
-
-</script>
-
+  <!-- The real H.A.I.V.A. engine owns recognition, wake-word detection,
+       routing, OpenAI requests, and speech output. -->
+  <script type="module" src="./core/app.js"></script>
 </body>
 </html>
