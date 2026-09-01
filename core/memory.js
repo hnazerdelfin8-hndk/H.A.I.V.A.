@@ -2,8 +2,9 @@
 // H.A.I.V.A. MEMORY & CONTEXT LAYER
 // =========================================
 
-const STORAGE_KEY = "haiva_memory_v1";
-const MAX_MESSAGES = 30;
+const STORAGE_KEY = "haiva_memory_v2";
+const MAX_MESSAGES = 50;
+const CONTEXT_MESSAGES = 24;
 
 function loadMemory() {
   try {
@@ -25,7 +26,10 @@ function saveMemory(messages) {
 }
 
 export function getContext() {
-  return loadMemory().slice(-20);
+  return loadMemory()
+    .filter(item => item && (item.role === "user" || item.role === "assistant") && item.content)
+    .slice(-CONTEXT_MESSAGES)
+    .map(({ role, content }) => ({ role, content }));
 }
 
 export function remember(role, content) {
@@ -44,6 +48,7 @@ export function remember(role, content) {
 export function clearMemory() {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("haiva_memory_v1");
   } catch (error) {
     console.warn("H.A.I.V.A. memory clear failed:", error);
   }
@@ -51,4 +56,16 @@ export function clearMemory() {
 
 export function getMemoryCount() {
   return loadMemory().length;
+}
+
+export function getRecentMemory(limit = 10) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 20));
+  return loadMemory().slice(-safeLimit);
+}
+
+export function forgetLast(count = 2) {
+  const messages = loadMemory();
+  const safeCount = Math.max(1, Math.min(Number(count) || 2, messages.length));
+  messages.splice(-safeCount, safeCount);
+  saveMemory(messages);
 }
