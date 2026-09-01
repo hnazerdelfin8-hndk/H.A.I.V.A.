@@ -19,6 +19,7 @@ class HAIVA {
     this.commandTimer = null;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
+    this.wakeBuffer = "";
     this.initialize();
   }
 
@@ -103,6 +104,7 @@ class HAIVA {
     this.voiceActivated = true;
     this.awaitingCommand = false;
     this.lastTranscript = "";
+    this.wakeBuffer = "";
     setVoiceButtonActive(true);
     this.setState("STANDBY");
     this.startListening();
@@ -134,8 +136,8 @@ class HAIVA {
     return normalizeSpeech(text || "")
       .replace(/[’'`]/g, "")
       .replace(/\b(hey|hi|yi)\s+(?=haiva\b)/g, "yo ")
-      .replace(/\byo\s+(?:h\s*a\s*i\s*v\s*a|hi\s+va|heyva|aiva)\b/g, "yo haiva")
-      .replace(/\byo\s+ha\s*iva\b/g, "yo haiva")
+      .replace(/\b(?:yo|you|yoh)\s+(?:h\s*a\s*i\s*v\s*a|hi\s+va|heyva|aiva|ha\s*iva|hayva)\b/g, "yo haiva")
+      .replace(/\b(?:yo|you|yoh)\s+ha\s*iva\b/g, "yo haiva")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -144,7 +146,7 @@ class HAIVA {
     const normalized = this.normalizeForWake(text);
     return CONFIG.voice.wakeWords.some(word => {
       const wake = this.normalizeForWake(word);
-      return normalized === wake || normalized.includes(`${wake} `) || normalized.includes(` ${wake}`);
+      return normalized === wake || normalized.startsWith(`${wake} `) || normalized.includes(` ${wake} `) || normalized.endsWith(` ${wake}`);
     });
   }
 
@@ -154,6 +156,7 @@ class HAIVA {
       const wake = this.normalizeForWake(word);
       result = result.replace(wake, "").trim();
     }
+    result = result.replace(/\b(?:yo|you|yoh)\s+(?:h\s*a\s*i\s*v\s*a|hi\s+va|heyva|aiva|ha\s*iva|hayva)\b/, "").trim();
     return result;
   }
 
@@ -170,18 +173,34 @@ class HAIVA {
     const displayText = this.normalizeForWake(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
 
-    // Only final speech is allowed to trigger the assistant.
-    if (!finalText.trim() || this.isSpeaking) return;
+    if (this.isSpeaking) return;
+
+    // SpeechRecognition can split "Yo" and "H.A.I.V.A." into separate
+    // final events. Keep a short rolling buffer so the wake phrase survives
+    // those boundaries instead of remaining forever in STANDBY.
+    if (!this.awaitingCommand && finalText.trim()) {
+      this.wakeBuffer = this.normalizeForWake(`${this.wakeBuffer} ${finalText}`)
+        .split(/\s+/)
+        .slice(-12)
+        .join(" ");
+
+      if (this.findWakeWord(this.wakeBuffer)) {
+        const command = this.stripWakeWord(this.wakeBuffer);
+        this.wakeBuffer = "";
+        this.lastTranscript = "";
+        void this.handleWakeWord(command ? `${CONFIG.voice.wakeWords[0]} ${command}` : CONFIG.voice.wakeWords[0]);
+        return;
+      }
+
+      // Keep listening for the wake phrase. Do not send ordinary speech to AI.
+      return;
+    }
+
+    if (!this.awaitingCommand || !finalText.trim()) return;
 
     const transcript = this.normalizeForWake(finalText);
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
-
-    if (!this.awaitingCommand) {
-      if (this.findWakeWord(transcript)) void this.handleWakeWord(transcript);
-      return;
-    }
-
     void this.handleCommand(transcript);
   }
 
@@ -215,6 +234,7 @@ class HAIVA {
     this.clearCommandTimeout();
     this.awaitingCommand = false;
     this.lastTranscript = "";
+    this.wakeBuffer = "";
     this.stopListening();
     this.setState("THINKING");
 
@@ -237,6 +257,7 @@ class HAIVA {
     this.commandTimer = setTimeout(() => {
       this.awaitingCommand = false;
       this.lastTranscript = "";
+      this.wakeBuffer = "";
       this.setState("STANDBY");
       this.scheduleRecognitionRestart();
     }, 8000);
