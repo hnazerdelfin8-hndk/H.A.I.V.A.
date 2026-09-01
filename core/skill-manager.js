@@ -28,9 +28,10 @@ export function unregisterSkill(name) {
   return !!name && skills.delete(name.toLowerCase());
 }
 
-export async function executeSkill(command) {
+export async function executeSkill(command, brainContext = {}) {
   if (!command) return null;
   const text = String(command).toLowerCase().trim();
+  const intent = brainContext?.intent?.name || "unknown";
 
   if (["hello", "hi", "hey", "hello haiva", "hey haiva"].includes(text)) {
     return "Hello, Master. I'm here and listening.";
@@ -74,12 +75,25 @@ export async function executeSkill(command) {
   }
 
   if (text === "help" || text.includes("what can you do")) {
-    return "I can answer questions, remember conversation context, tell you the time and date, report system status, manage conversation memory, and use registered skills. You can speak naturally, Master.";
+    return "I can answer questions, understand conversation context, remember useful history, handle local commands, and use registered skills. You can speak naturally, Master.";
   }
 
+  // Prefer the Brain's detected intent when a matching skill is registered.
+  if (intent !== "unknown") {
+    const intentSkill = skills.get(intent);
+    if (intentSkill) {
+      try { return await intentSkill(command, brainContext); }
+      catch (error) {
+        console.error(`Skill "${intent}" failed:`, error);
+        return null;
+      }
+    }
+  }
+
+  // Backward-compatible skill matching for explicitly named skills.
   for (const [name, skill] of skills.entries()) {
     if (text === name || text.includes(name)) {
-      try { return await skill(command); }
+      try { return await skill(command, brainContext); }
       catch (error) {
         console.error(`Skill "${name}" failed:`, error);
         return null;
