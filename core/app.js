@@ -14,7 +14,9 @@ class HAIVA {
     this.voiceActivated = false;
     this.isListening = false;
     this.isSpeaking = false;
+    this.isProcessing = false;
     this.restartTimer = null;
+    this.intentionalStop = false;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
     this.initialize();
@@ -25,7 +27,7 @@ class HAIVA {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
-      this.setState("LISTENING");
+      this.setState("READY");
     } catch (error) {
       console.error("Initialization failed:", error);
       this.setState("ERROR");
@@ -56,7 +58,8 @@ class HAIVA {
 
     this.recognition.onstart = () => {
       this.isListening = true;
-      if (!this.isSpeaking) this.setState("LISTENING");
+      this.intentionalStop = false;
+      if (!this.isSpeaking && !this.isProcessing) this.setState("LISTENING");
     };
 
     this.recognition.onresult = event => this.handleResult(event);
@@ -71,17 +74,27 @@ class HAIVA {
         this.setState("MICROPHONE DENIED");
       } else if (event.error !== "no-speech" && event.error !== "aborted") {
         this.setState("VOICE ERROR");
+        this.scheduleRecognitionRestart();
       }
     };
 
     this.recognition.onend = () => {
       this.isListening = false;
-      this.scheduleRecognitionRestart();
+
+      // Chrome/Android can end SpeechRecognition unexpectedly even with
+      // continuous=true. Restart only when H.A.I.V.A. is actively listening.
+      if (!this.intentionalStop && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.scheduleRecognitionRestart();
+      }
     };
   }
 
   async activateVoice() {
     if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
+    if (this.voiceActivated) {
+      this.startListening();
+      return;
+    }
 
     try {
       if (navigator.mediaDevices?.getUserMedia) {
@@ -94,6 +107,7 @@ class HAIVA {
     }
 
     this.voiceActivated = true;
+    this.intentionalStop = false;
     this.lastTranscript = "";
     setVoiceButtonActive(true);
     this.setState("LISTENING");
@@ -101,22 +115,32 @@ class HAIVA {
   }
 
   startListening() {
-    if (!this.voiceActivated || !this.recognition || this.isListening || this.isSpeaking) return;
+    if (!this.voiceActivated || !this.recognition || this.isListening || this.isSpeaking || this.isProcessing) return;
+
+    this.intentionalStop = false;
     try {
       this.recognition.start();
     } catch (error) {
+      // InvalidStateError simply means recognition is already starting/running.
       console.debug("Recognition start skipped:", error?.message || error);
     }
   }
 
   scheduleRecognitionRestart() {
-    if (!this.voiceActivated || this.isSpeaking) return;
+    if (!this.voiceActivated || this.isSpeaking || this.isProcessing || this.intentionalStop) return;
+
     clearTimeout(this.restartTimer);
-    this.restartTimer = setTimeout(() => this.startListening(), CONFIG.voice.restartDelay || 500);
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      this.startListening();
+    }, CONFIG.voice.restartDelay || 500);
   }
 
   stopListening() {
     clearTimeout(this.restartTimer);
+    this.restartTimer = null;
+    this.intentionalStop = true;
+
     if (!this.recognition) return;
     try {
       this.recognition.stop();
@@ -138,7 +162,7 @@ class HAIVA {
 
     const displayText = normalizeSpeech(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
-    if (this.isSpeaking || !finalText.trim()) return;
+    if (this.isSpeaking || this.isProcessing || !finalText.trim()) return;
 
     const transcript = normalizeSpeech(finalText);
     if (!transcript || transcript === this.lastTranscript) return;
@@ -149,9 +173,10 @@ class HAIVA {
 
   async handleCommand(command) {
     const text = String(command || "").trim();
-    if (!text || this.isSpeaking) return;
+    if (!text || this.isSpeaking || this.isProcessing) return;
 
     this.lastTranscript = "";
+    this.isProcessing = true;
     this.stopListening();
     this.setState("THINKING");
 
@@ -166,10 +191,16 @@ class HAIVA {
       } finally {
         this.isSpeaking = false;
       }
+    } finally {
+      this.isProcessing = false;
     }
 
-    this.setState("LISTENING");
-    this.scheduleRecognitionRestart();
+    // One activation keeps the voice loop alive:
+    // LISTENING -> THINKING -> SPEAKING -> LISTENING.
+    if (this.voiceActivated) {
+      this.setState("LISTENING");
+      this.scheduleRecognitionRestart();
+    }
   }
 }
 
