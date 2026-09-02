@@ -54,7 +54,9 @@ class HAIVA {
       this.setState("SPEAKING");
 
       try {
-        await speak(`Reminder: ${message}.`);
+        const response = `Reminder: ${message}.`;
+        this.showResponse(response);
+        await speak(response);
       } catch (error) {
         console.warn("Reminder speech failed:", error);
       } finally {
@@ -77,8 +79,8 @@ class HAIVA {
     const heard = document.getElementById("heard");
     if (!heard) return;
 
-    if (state === "STANDBY") heard.textContent = "Say: Yi, H.A.I.V.A.";
     if (state === "LISTENING") heard.textContent = "Listening...";
+    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Press “Activate Voice” to give H.A.I.V.A. microphone permission.";
   }
 
   showTranscript(text) {
@@ -157,6 +159,8 @@ class HAIVA {
     this.lastTranscript = "";
     setVoiceButtonActive(true);
     this.setState("STANDBY");
+    const heard = document.getElementById("heard");
+    if (heard) heard.textContent = "Say: Yi, H.A.I.V.A.";
     this.startListening();
   }
 
@@ -172,7 +176,6 @@ class HAIVA {
     this.isProcessing = false;
     setVoiceButtonActive(false);
     this.setState("READY");
-
     const heard = document.getElementById("heard");
     if (heard) heard.textContent = "Voice paused";
   }
@@ -221,6 +224,8 @@ class HAIVA {
       if (this.awaitingCommand && !this.isProcessing && !this.isSpeaking) {
         this.awaitingCommand = false;
         this.setState("STANDBY");
+        const heard = document.getElementById("heard");
+        if (heard) heard.textContent = "Say: Yi, H.A.I.V.A.";
       }
     }, 10000);
     this.setState("LISTENING");
@@ -238,7 +243,6 @@ class HAIVA {
 
     const displayText = normalizeSpeech(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
-
     if (this.isSpeaking || this.isProcessing || !finalText.trim()) return;
 
     const transcript = normalizeSpeech(finalText);
@@ -248,17 +252,17 @@ class HAIVA {
     if (!this.awaitingCommand) {
       if (!CONFIG.features.wakeWord || containsWakeWord(transcript)) {
         const commandAfterWake = removeWakeWord(transcript);
-
         if (commandAfterWake) {
           void this.handleCommand(commandAfterWake);
         } else {
-          // Wake phrase alone gets an immediate acknowledgement, then listens.
           this.armForCommand();
-          this.speakWakeAcknowledgement();
+          void this.speakWakeAcknowledgement();
         }
       } else {
         this.lastTranscript = "";
         this.setState("STANDBY");
+        const heard = document.getElementById("heard");
+        if (heard) heard.textContent = "Say: Yi, H.A.I.V.A.";
       }
       return;
     }
@@ -277,7 +281,9 @@ class HAIVA {
     this.setState("SPEAKING");
 
     try {
-      await speak(CONFIG.assistant.defaultGreeting);
+      const response = CONFIG.assistant.defaultGreeting;
+      this.showResponse(response);
+      await speak(response);
     } finally {
       this.isSpeaking = false;
     }
@@ -305,7 +311,9 @@ class HAIVA {
       this.isSpeaking = true;
       this.setState("SPEAKING");
       try {
-        await speak("Sorry, Master. I could not process that request.");
+        const response = "Sorry, Master. I could not process that request.";
+        this.showResponse(response);
+        await speak(response);
       } finally {
         this.isSpeaking = false;
       }
