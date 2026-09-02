@@ -6,7 +6,7 @@ export const CONFIG = {
   app: {
     name: "H.A.I.V.A.",
     fullName: "Hnazer Artificial Intelligence Voice Assistant",
-    version: "2.2.0"
+    version: "2.3.0"
   },
 
   environment: "production",
@@ -23,7 +23,15 @@ export const CONFIG = {
     speechRate: 0.92,
     speechPitch: 1.0,
     speechVolume: 1.0,
-    restartDelay: 500
+    restartDelay: 500,
+    wakeWords: [
+      "yi haiva",
+      "yi h a i v a",
+      "hey haiva",
+      "hey h a i v a",
+      "hello haiva",
+      "hello h a i v a"
+    ]
   },
 
   assistant: {
@@ -39,7 +47,7 @@ export const CONFIG = {
     voice: true,
     chat: true,
     skills: true,
-    wakeWord: false,
+    wakeWord: true,
     textToSpeech: true,
     memory: true,
     commandRouter: true
