@@ -3,6 +3,9 @@
 // =========================================
 
 import { clearMemory, getMemoryCount, getRecentMemory, forgetLast } from "./memory.js";
+import { webSearch } from "./skills/web-search.js";
+import { weather } from "./skills/weather.js";
+import { reminder } from "./skills/reminder.js";
 
 const skills = new Map();
 
@@ -78,7 +81,6 @@ export async function executeSkill(command, brainContext = {}) {
     return "I can answer questions, understand conversation context, remember useful history, handle local commands, and use registered skills. You can speak naturally, Master.";
   }
 
-  // Prefer the Brain's detected intent when a matching skill is registered.
   if (intent !== "unknown") {
     const intentSkill = skills.get(intent);
     if (intentSkill) {
@@ -90,7 +92,6 @@ export async function executeSkill(command, brainContext = {}) {
     }
   }
 
-  // Backward-compatible skill matching for explicitly named skills.
   for (const [name, skill] of skills.entries()) {
     if (text === name || text.includes(name)) {
       try { return await skill(command, brainContext); }
@@ -109,4 +110,8 @@ let defaultsRegistered = false;
 export function registerDefaultSkills() {
   if (defaultsRegistered) return;
   defaultsRegistered = true;
+
+  registerSkill("weather", weather);
+  registerSkill("web_search", webSearch);
+  registerSkill("reminder", reminder);
 }
