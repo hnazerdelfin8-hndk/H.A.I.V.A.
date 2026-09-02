@@ -27,11 +27,36 @@ class HAIVA {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
+      this.setupReminderNotifications();
       this.setState("READY");
     } catch (error) {
       console.error("Initialization failed:", error);
       this.setState("ERROR");
     }
+  }
+
+  setupReminderNotifications() {
+    window.addEventListener("haiva:reminder", async event => {
+      const message = event.detail?.message;
+      if (!message) return;
+
+      const spoken = `Reminder: ${message}.`;
+      this.setState("SPEAKING");
+      this.isSpeaking = true;
+      try {
+        await speak(spoken);
+      } catch (error) {
+        console.warn("Reminder speech failed:", error);
+      } finally {
+        this.isSpeaking = false;
+        if (this.voiceActivated && !this.isProcessing) {
+          this.setState("LISTENING");
+          this.scheduleRecognitionRestart();
+        } else if (!this.voiceActivated) {
+          this.setState("READY");
+        }
+      }
+    });
   }
 
   setState(state) {
@@ -81,8 +106,6 @@ class HAIVA {
     this.recognition.onend = () => {
       this.isListening = false;
 
-      // Chrome/Android can end SpeechRecognition unexpectedly even with
-      // continuous=true. Restart only when H.A.I.V.A. is actively listening.
       if (!this.intentionalStop && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.scheduleRecognitionRestart();
       }
@@ -92,9 +115,6 @@ class HAIVA {
   async activateVoice() {
     if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
 
-    // The mic button is now a real ON/OFF toggle.
-    // Tap once = start continuous listening.
-    // Tap again = completely stop listening.
     if (this.voiceActivated) {
       this.deactivateVoice();
       return;
@@ -139,7 +159,6 @@ class HAIVA {
     try {
       this.recognition.start();
     } catch (error) {
-      // InvalidStateError simply means recognition is already starting/running.
       console.debug("Recognition start skipped:", error?.message || error);
     }
   }
@@ -213,8 +232,6 @@ class HAIVA {
       this.isProcessing = false;
     }
 
-    // One activation keeps the voice loop alive:
-    // LISTENING -> THINKING -> SPEAKING -> LISTENING.
     if (this.voiceActivated) {
       this.setState("LISTENING");
       this.scheduleRecognitionRestart();
