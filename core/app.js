@@ -62,6 +62,7 @@ class HAIVA {
         this.isSpeaking = false;
         if (this.voiceActivated && !this.isProcessing) {
           this.awaitingCommand = false;
+          this.intentionalStop = false;
           this.setState("STANDBY");
           this.scheduleRecognitionRestart();
         } else if (!this.voiceActivated) {
@@ -239,7 +240,6 @@ class HAIVA {
     this.awaitingCommand = true;
     clearTimeout(this.commandTimer);
 
-    // Return to standby if no command follows the wake word.
     this.commandTimer = setTimeout(() => {
       if (this.awaitingCommand && !this.isProcessing && !this.isSpeaking) {
         this.awaitingCommand = false;
@@ -269,8 +269,8 @@ class HAIVA {
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
 
-    // Wake-word gate: while in STANDBY, ignore everything except the wake phrase.
     if (!this.awaitingCommand) {
+      // STANDBY: ignore normal speech until the wake phrase is detected.
       if (!CONFIG.features.wakeWord || containsWakeWord(transcript)) {
         const commandAfterWake = removeWakeWord(transcript);
 
@@ -286,7 +286,6 @@ class HAIVA {
       return;
     }
 
-    // We are armed after the wake phrase; the next final utterance is the command.
     clearTimeout(this.commandTimer);
     this.commandTimer = null;
     this.awaitingCommand = false;
@@ -316,6 +315,9 @@ class HAIVA {
     } finally {
       this.isProcessing = false;
       this.awaitingCommand = false;
+      // stopListening() is intentional during processing; clear that flag
+      // before scheduling the next standby recognition cycle.
+      this.intentionalStop = false;
     }
 
     if (this.voiceActivated) {
