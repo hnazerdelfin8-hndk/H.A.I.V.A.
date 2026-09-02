@@ -49,20 +49,18 @@ class HAIVA {
       const message = event.detail?.message;
       if (!message) return;
 
-      const spoken = `Reminder: ${message}.`;
-      this.setState("SPEAKING");
-      this.isSpeaking = true;
       this.stopListening();
+      this.isSpeaking = true;
+      this.setState("SPEAKING");
 
       try {
-        await speak(spoken);
+        await speak(`Reminder: ${message}.`);
       } catch (error) {
         console.warn("Reminder speech failed:", error);
       } finally {
         this.isSpeaking = false;
+        this.awaitingCommand = false;
         if (this.voiceActivated && !this.isProcessing) {
-          this.awaitingCommand = false;
-          this.intentionalStop = false;
           this.setState("STANDBY");
           this.scheduleRecognitionRestart();
         } else if (!this.voiceActivated) {
@@ -88,10 +86,13 @@ class HAIVA {
     if (heard && text) heard.textContent = `Heard: ${text}`;
   }
 
-  setupRecognition() {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+  showResponse(text) {
+    const heard = document.getElementById("heard");
+    if (heard && text) heard.textContent = `H.A.I.V.A.: ${text}`;
+  }
 
+  setupRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       this.setState("VOICE UNAVAILABLE");
       return;
@@ -106,7 +107,6 @@ class HAIVA {
     this.recognition.onstart = () => {
       this.isListening = true;
       this.intentionalStop = false;
-
       if (!this.isSpeaking && !this.isProcessing) {
         this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
       }
@@ -118,10 +118,7 @@ class HAIVA {
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
 
-      if (
-        event.error === "not-allowed" ||
-        event.error === "service-not-allowed"
-      ) {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         this.voiceActivated = false;
         this.awaitingCommand = false;
         setVoiceButtonActive(false);
@@ -134,13 +131,7 @@ class HAIVA {
 
     this.recognition.onend = () => {
       this.isListening = false;
-
-      if (
-        !this.intentionalStop &&
-        this.voiceActivated &&
-        !this.isSpeaking &&
-        !this.isProcessing
-      ) {
+      if (!this.intentionalStop && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.scheduleRecognitionRestart();
       }
     };
@@ -148,11 +139,7 @@ class HAIVA {
 
   async activateVoice() {
     if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
-
-    if (this.voiceActivated) {
-      this.deactivateVoice();
-      return;
-    }
+    if (this.voiceActivated) return this.deactivateVoice();
 
     try {
       if (navigator.mediaDevices?.getUserMedia) {
@@ -191,14 +178,7 @@ class HAIVA {
   }
 
   startListening() {
-    if (
-      !this.voiceActivated ||
-      !this.recognition ||
-      this.isListening ||
-      this.isSpeaking ||
-      this.isProcessing
-    ) return;
-
+    if (!this.voiceActivated || !this.recognition || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
     try {
       this.recognition.start();
@@ -208,17 +188,15 @@ class HAIVA {
   }
 
   scheduleRecognitionRestart() {
-    if (
-      !this.voiceActivated ||
-      this.isSpeaking ||
-      this.isProcessing ||
-      this.intentionalStop
-    ) return;
+    if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
 
     clearTimeout(this.restartTimer);
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
-      this.startListening();
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.intentionalStop = false;
+        this.startListening();
+      }
     }, CONFIG.voice.restartDelay || 500);
   }
 
@@ -239,14 +217,12 @@ class HAIVA {
   armForCommand() {
     this.awaitingCommand = true;
     clearTimeout(this.commandTimer);
-
     this.commandTimer = setTimeout(() => {
       if (this.awaitingCommand && !this.isProcessing && !this.isSpeaking) {
         this.awaitingCommand = false;
         this.setState("STANDBY");
       }
     }, 10000);
-
     this.setState("LISTENING");
   }
 
@@ -270,14 +246,15 @@ class HAIVA {
     this.lastTranscript = transcript;
 
     if (!this.awaitingCommand) {
-      // STANDBY: ignore normal speech until the wake phrase is detected.
       if (!CONFIG.features.wakeWord || containsWakeWord(transcript)) {
         const commandAfterWake = removeWakeWord(transcript);
 
         if (commandAfterWake) {
           void this.handleCommand(commandAfterWake);
         } else {
+          // Wake phrase alone gets an immediate acknowledgement, then listens.
           this.armForCommand();
+          this.speakWakeAcknowledgement();
         }
       } else {
         this.lastTranscript = "";
@@ -292,6 +269,25 @@ class HAIVA {
     void this.handleCommand(transcript);
   }
 
+  async speakWakeAcknowledgement() {
+    if (this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
+
+    this.isSpeaking = true;
+    this.stopListening();
+    this.setState("SPEAKING");
+
+    try {
+      await speak(CONFIG.assistant.defaultGreeting);
+    } finally {
+      this.isSpeaking = false;
+    }
+
+    if (this.voiceActivated && !this.isProcessing) {
+      this.armForCommand();
+      this.scheduleRecognitionRestart();
+    }
+  }
+
   async handleCommand(command) {
     const text = String(command || "").trim();
     if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
@@ -302,7 +298,8 @@ class HAIVA {
     this.setState("THINKING");
 
     try {
-      await this.assistant.respond(text);
+      const response = await this.assistant.respond(text);
+      if (response) this.showResponse(response);
     } catch (error) {
       console.error("Assistant response failed:", error);
       this.isSpeaking = true;
@@ -315,9 +312,6 @@ class HAIVA {
     } finally {
       this.isProcessing = false;
       this.awaitingCommand = false;
-      // stopListening() is intentional during processing; clear that flag
-      // before scheduling the next standby recognition cycle.
-      this.intentionalStop = false;
     }
 
     if (this.voiceActivated) {
