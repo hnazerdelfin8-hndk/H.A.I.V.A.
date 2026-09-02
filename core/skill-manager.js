@@ -6,6 +6,8 @@ import { clearMemory, getMemoryCount, getRecentMemory, forgetLast } from "./memo
 import { webSearch } from "./skills/web-search.js";
 import { weather } from "./skills/weather.js";
 import { reminder } from "./skills/reminder.js";
+import { notes } from "./skills/notes.js";
+import { music } from "./skills/music.js";
 
 const skills = new Map();
 
@@ -78,7 +80,7 @@ export async function executeSkill(command, brainContext = {}) {
   }
 
   if (text === "help" || text.includes("what can you do")) {
-    return "I can answer questions, understand conversation context, remember useful history, handle local commands, and use registered skills. You can speak naturally, Master.";
+    return `I can use these skills: ${getSkills().join(", ")}. I can also answer general questions through my AI connection, Master.`;
   }
 
   if (intent !== "unknown") {
@@ -114,4 +116,6 @@ export function registerDefaultSkills() {
   registerSkill("weather", weather);
   registerSkill("web_search", webSearch);
   registerSkill("reminder", reminder);
+  registerSkill("notes", notes);
+  registerSkill("music", music);
 }
