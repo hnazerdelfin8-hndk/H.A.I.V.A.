@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: haiva-verification-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   verification:
     name: Full HAIVA verification
@@ -27,7 +23,7 @@ jobs:
           node-version: 20
 
       - name: Verify package metadata
-        run: node --input-type=commonjs -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('./package.json','utf8')); if(p.private!==true) process.exit(1); console.log('package.private=true: PASS')"
+        run: node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('./package.json','utf8')); if(p.private!==true) process.exit(1); console.log('package.private=true: PASS')"
 
       - name: Run full phase verification
         run: npm run test:phase6
