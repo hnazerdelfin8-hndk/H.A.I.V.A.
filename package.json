@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:agent": "node tests/agent/orchestrator.test.js"
+    "test:agent": "node tests/agent/orchestrator.test.js",
+    "test:tools": "node tests/tools/registry.test.js",
+    "test:phase3": "npm run test:agent && npm run test:tools"
   }
 }
