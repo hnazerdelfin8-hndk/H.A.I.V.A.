@@ -26,8 +26,12 @@ export function createIntegrationTool({
   const name = requireText(toolName, "Tool name").toLowerCase();
   const integration = requireText(integrationName, "Integration name").toLowerCase();
   requireFunction(integrationManager?.execute, "Integration manager");
+  requireFunction(integrationManager?.get, "Integration manager");
 
-  const toolRisk = risk || integrationManager.get?.(integration)?.risk || "controlled";
+  const integrationSpec = integrationManager.get(integration);
+  if (!integrationSpec) throw new Error(`Integration not found: ${integration}.`);
+
+  const toolRisk = risk || integrationSpec.risk || "controlled";
   if (!VALID_RISKS.has(toolRisk)) throw new Error(`Invalid risk level for tool: ${name}.`);
 
   const tool = {
