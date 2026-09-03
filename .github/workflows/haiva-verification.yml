@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   canonical-verification:
-    name: Canonical verification through Stage 2 Phase A
+    name: Canonical verification through Stage 2 Phase B
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,4 +22,4 @@ jobs:
         with:
           node-version: 24
       - name: Run canonical verification
-        run: npm run test:stage2a
+        run: npm run test:stage2b
