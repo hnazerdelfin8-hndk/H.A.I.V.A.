@@ -18,7 +18,7 @@ export async function executeRegisteredTool(name, input, {
   context = {}
 } = {}) {
   const tool = getTool(name);
-  if (!tool) throw new Error(`Tool \"${String(name || \"\").trim().toLowerCase()}\" is not registered.`);
+  if (!tool) throw new Error(`Tool "${String(name || "").trim().toLowerCase()}" is not registered.`);
 
   const action = {
     type: tool.risk,
