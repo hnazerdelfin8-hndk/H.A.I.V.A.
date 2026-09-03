@@ -1,5 +1,8 @@
 name: HAIVA Verification Gate
 
+# Canonical verification gate for the agentic-core migration.
+# Covers phases 2-6, security hardening, and package privacy metadata.
+
 on:
   push:
     branches: [haiva-core-vnext]
