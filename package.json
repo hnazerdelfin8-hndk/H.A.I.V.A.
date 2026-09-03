@@ -23,6 +23,7 @@
     "test:stage2a": "npm run test:phase10 && node tests/capabilities/prompt-agent-builder.test.js",
     "test:stage2b": "npm run test:stage2a && node tests/capabilities/autonomous-task-engine.test.js",
     "test:stage2c": "npm run test:stage2b && node tests/capabilities/multi-agent-ecosystem.test.js",
-    "test:stage3": "npm run test:stage2c && node tests/integrations/manager.test.js"
+    "test:stage3": "npm run test:stage2c && node tests/integrations/manager.test.js",
+    "test:stage3b": "npm run test:stage3 && node tests/integrations/tool-bridge.test.js"
   }
 }
