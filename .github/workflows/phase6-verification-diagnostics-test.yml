@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Verify package metadata
         run: node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('./package.json','utf8')); if(p.private!==true) process.exit(1); console.log('package.private=true: PASS')"
