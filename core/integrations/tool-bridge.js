@@ -13,6 +13,7 @@ function requireFunction(value, name) {
 }
 
 const VALID_RISKS = new Set(["safe", "controlled", "approval"]);
+const RISK_LEVEL = { safe: 0, controlled: 1, approval: 2 };
 
 export function createIntegrationTool({
   toolName,
@@ -33,6 +34,9 @@ export function createIntegrationTool({
 
   const toolRisk = risk || integrationSpec.risk || "controlled";
   if (!VALID_RISKS.has(toolRisk)) throw new Error(`Invalid risk level for tool: ${name}.`);
+  if (RISK_LEVEL[toolRisk] < RISK_LEVEL[integrationSpec.risk]) {
+    throw new Error(`Tool risk cannot be lower than integration risk: ${name}.`);
+  }
 
   const tool = {
     name,
