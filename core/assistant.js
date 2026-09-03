@@ -3,7 +3,7 @@
 // =========================================
 
 import { CONFIG } from "./config.js";
-import { routeRequest } from "./router.js";
+import { runInterfaceRequest } from "./integration/interface-pipeline.js";
 import { setUIState, speak } from "./ui-bridge.js";
 
 export class HAIVAAssistant {
@@ -22,7 +22,8 @@ export class HAIVAAssistant {
     try {
       setUIState("THINKING");
 
-      const result = await routeRequest(text);
+      // Phase 9: voice/UI requests enter the HAIVA Core pipeline first.
+      const result = await runInterfaceRequest(text);
       if (!result || !result.response) {
         throw new Error("No response received.");
       }
