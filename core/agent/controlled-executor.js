@@ -7,20 +7,29 @@ import { executeTool, getTool } from "../tools/registry.js";
 
 /**
  * Execute a registered tool through the agent safety boundary.
- * Tool risk metadata never overrides approval policy.
+ *
+ * The generic approval policy keeps `controlled` actions available to the
+ * task engine, but this executor is the explicit boundary for tool execution:
+ * both controlled and approval-risk tools require an explicit approval flag.
+ * Safe tools remain autonomous.
  */
 export async function executeRegisteredTool(name, input, {
   approved = false,
   context = {}
 } = {}) {
   const tool = getTool(name);
-  if (!tool) throw new Error(`Tool "${String(name || "").trim().toLowerCase()}" is not registered.`);
+  if (!tool) throw new Error(`Tool \"${String(name || \"\").trim().toLowerCase()}\" is not registered.`);
 
   const action = {
     type: tool.risk,
     tool: tool.name,
     input
   };
+
+  const approvalRequired = tool.risk === "controlled" || tool.risk === "approval";
+  if (approvalRequired && approved !== true) {
+    throw new Error(`Approval required for tool: ${tool.name}`);
+  }
 
   if (!canExecute(action, { approved })) {
     throw new Error(`Approval required for tool: ${tool.name}`);
