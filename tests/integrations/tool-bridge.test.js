@@ -31,10 +31,7 @@ assert.equal(tool.name, "test api tool");
 assert.equal(tool.risk, "controlled");
 assert.equal(getTool("TEST API TOOL").name, "test api tool");
 
-await assert.rejects(
-  () => executeRegisteredTool("test api tool", { value: 1 }),
-  /Approval required for tool: test api tool/
-);
+await assert.rejects(() => executeRegisteredTool("test api tool", { value: 1 }), /Approval required for tool: test api tool/);
 
 const result = await executeRegisteredTool("test api tool", { value: 2 }, {
   approved: true,
@@ -49,12 +46,13 @@ assert.equal(result.context.risk, "controlled");
 assert.equal(result.context.requestId, "req-1");
 assert.equal(calls.length, 1);
 
+assert.throws(
+  () => createIntegrationTool({ toolName: "downgrade", integrationName: "test api", risk: "safe", integrationManager: manager }),
+  /Tool risk cannot be lower than integration risk/
+);
+
 const safeManager = createIntegrationManager({
-  integrations: [{
-    name: "safe-service",
-    risk: "safe",
-    execute: async (input) => ({ ok: true, input })
-  }]
+  integrations: [{ name: "safe-service", risk: "safe", execute: async (input) => ({ ok: true, input }) }]
 });
 const safeTool = createIntegrationTool({
   toolName: "safe-service-tool",
