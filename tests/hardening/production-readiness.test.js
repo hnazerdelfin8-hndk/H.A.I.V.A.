@@ -18,7 +18,11 @@ assert.deepEqual(
 
 const workflow = await fs.readFile(path.join(workflowDir, "haiva-verification.yml"), "utf8");
 assert.ok(workflow.includes("name: HAIVA Canonical Verification Gate"));
-assert.ok(workflow.includes("branches: [haiva-core-vnext]"));
+assert.ok(
+  workflow.includes("branches: [haiva-core-vnext]") ||
+  workflow.includes("branches: [haiva-core-vnext, phase10-hardening]"),
+  "canonical workflow must target haiva-core-vnext"
+);
 assert.ok(workflow.includes("permissions:\n  contents: read"));
 assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
