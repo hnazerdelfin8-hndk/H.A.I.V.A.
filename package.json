@@ -1,0 +1,8 @@
+{
+  "name": "haiva",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:agent": "node tests/agent/orchestrator.test.js"
+  }
+}
