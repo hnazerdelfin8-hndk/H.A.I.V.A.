@@ -2,7 +2,7 @@
 // H.A.I.V.A. PHASE 7 — PROJECT MEMORY
 // =========================================
 
-const MAX_ENTRIES = 200;
+const MAX_ENTRIES = 500;
 const ALLOWED_TYPES = new Set(["project", "task", "decision"]);
 
 export function createMemoryStore(initialEntries = []) {
