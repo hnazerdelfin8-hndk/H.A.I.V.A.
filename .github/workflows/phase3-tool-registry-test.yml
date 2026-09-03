@@ -1,0 +1,20 @@
+name: HAIVA Phase 3 Tool Registry Test
+
+on:
+  push:
+    branches: [haiva-core-vnext]
+  pull_request:
+    branches: [haiva-core-vnext]
+
+jobs:
+  tool-registry-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run Phase 3 tests
+        run: npm run test:phase3
