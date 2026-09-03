@@ -5,6 +5,7 @@ on:
     branches: [haiva-core-vnext, main]
   pull_request:
     branches: [haiva-core-vnext, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,24 +26,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Verify package metadata
         run: node --input-type=commonjs -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('./package.json','utf8')); if(p.private!==true) process.exit(1); console.log('package.private=true: PASS')"
 
-      - name: Run agent tests
-        run: npm run test:agent
-
-      - name: Run tool registry tests
-        run: npm run test:tools
-
-      - name: Run project intelligence tests
-        run: npm run test:project
-
-      - name: Run security hardening tests
-        run: npm run test:security
-
-      - name: Run controlled execution tests
-        run: npm run test:controlled
+      - name: Run full phase verification
+        run: npm run test:phase6
 
       - name: Verification complete
-        run: echo "HAIVA VERIFICATION: PASS"
+        run: echo "HAIVA VERIFICATION GATE: PASS"
