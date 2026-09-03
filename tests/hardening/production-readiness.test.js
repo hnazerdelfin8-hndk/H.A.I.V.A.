@@ -10,11 +10,7 @@ const workflowFiles = workflowEntries
   .filter((entry) => entry.isFile() && /\.(yml|yaml)$/i.test(entry.name))
   .map((entry) => entry.name);
 
-assert.deepEqual(
-  workflowFiles,
-  ["haiva-verification.yml"],
-  "production gate must have exactly one canonical workflow"
-);
+assert.deepEqual(workflowFiles, ["haiva-verification.yml"], "production gate must have exactly one canonical workflow");
 
 const workflow = await fs.readFile(path.join(workflowDir, "haiva-verification.yml"), "utf8");
 assert.ok(workflow.includes("name: HAIVA Canonical Verification Gate"));
@@ -23,38 +19,20 @@ assert.ok(workflow.includes("permissions:\n  contents: read"));
 assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
 assert.ok(workflow.includes("node-version: 24"));
-assert.ok(
-  workflow.includes("run: npm run test:stage3"),
-  "canonical production gate must verify the complete Stage 3 chain"
-);
+assert.ok(workflow.includes("run: npm run test:stage3b"), "canonical production gate must verify the complete Stage 3B chain");
 assert.doesNotMatch(workflow, /node-version:\s*2?0\b/i, "Node 20 must not be used");
 assert.doesNotMatch(workflow, /vercel/i, "Vercel must not be part of the HAIVA production path");
 
 const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 assert.equal(packageJson.private, true, "HAIVA package must remain private");
-for (const script of ["test:phase9", "test:phase10", "test:stage2a", "test:stage2b", "test:stage2c", "test:stage3"]) {
+for (const script of ["test:phase9", "test:phase10", "test:stage2a", "test:stage2b", "test:stage2c", "test:stage3", "test:stage3b"]) {
   assert.equal(typeof packageJson.scripts?.[script], "string", `${script} verification command must exist`);
 }
-assert.match(
-  packageJson.scripts["test:stage2a"],
-  /npm run test:phase10.*prompt-agent-builder\.test\.js/,
-  "Stage 2 Phase A verification must preserve the full Phase 10 gate before capability tests"
-);
-assert.match(
-  packageJson.scripts["test:stage2b"],
-  /npm run test:stage2a.*autonomous-task-engine\.test\.js/,
-  "Stage 2 Phase B verification must preserve the complete Stage 2 Phase A gate before Phase B tests"
-);
-assert.match(
-  packageJson.scripts["test:stage2c"],
-  /npm run test:stage2b.*multi-agent-ecosystem\.test\.js/,
-  "Stage 2 Phase C verification must preserve the complete Stage 2 Phase B gate before Phase C tests"
-);
-assert.match(
-  packageJson.scripts["test:stage3"],
-  /npm run test:stage2c.*integrations\/manager\.test\.js/,
-  "Stage 3 verification must preserve the complete Stage 2 Phase C gate before integration tests"
-);
+assert.match(packageJson.scripts["test:stage2a"], /npm run test:phase10.*prompt-agent-builder\.test\.js/);
+assert.match(packageJson.scripts["test:stage2b"], /npm run test:stage2a.*autonomous-task-engine\.test\.js/);
+assert.match(packageJson.scripts["test:stage2c"], /npm run test:stage2b.*multi-agent-ecosystem\.test\.js/);
+assert.match(packageJson.scripts["test:stage3"], /npm run test:stage2c.*integrations\/manager\.test\.js/);
+assert.match(packageJson.scripts["test:stage3b"], /npm run test:stage3.*integrations\/tool-bridge\.test\.js/);
 
 const requiredFiles = [
   "core/agent/orchestrator.js",
@@ -71,10 +49,10 @@ const requiredFiles = [
   "core/capabilities/multi-agent-ecosystem.js",
   "tests/capabilities/multi-agent-ecosystem.test.js",
   "core/integrations/manager.js",
-  "tests/integrations/manager.test.js"
+  "tests/integrations/manager.test.js",
+  "core/integrations/tool-bridge.js",
+  "tests/integrations/tool-bridge.test.js"
 ];
-for (const relativePath of requiredFiles) {
-  await fs.access(path.join(root, relativePath));
-}
+for (const relativePath of requiredFiles) await fs.access(path.join(root, relativePath));
 
-console.log("PASS: HAIVA Production Readiness through Stage 3 tests");
+console.log("PASS: HAIVA Production Readiness through Stage 3B tests");
