@@ -24,6 +24,12 @@
     "test:stage2b": "npm run test:stage2a && node tests/capabilities/autonomous-task-engine.test.js",
     "test:stage2c": "npm run test:stage2b && node tests/capabilities/multi-agent-ecosystem.test.js",
     "test:stage3": "npm run test:stage2c && node tests/integrations/manager.test.js",
-    "test:stage3b": "npm run test:stage3 && node tests/integrations/tool-bridge.test.js"
+    "test:stage3b": "npm run test:stage3 && node tests/integrations/tool-bridge.test.js",
+    "test:stage4a": "npm run test:stage3b && node tests/voice/stage4a-voice-interface.test.js",
+    "test:stage4b": "npm run test:stage4a && node tests/voice/stage4b-speech-intent.test.js",
+    "test:stage4c": "npm run test:stage4b && node tests/voice/stage4c-intent-task.test.js",
+    "test:stage4d": "npm run test:stage4c && node tests/voice/stage4d-full-voice-pipeline.test.js",
+    "test:stage4e": "npm run test:stage4d && node tests/voice/stage4e-response-voice.test.js",
+    "test:stage4f": "npm run test:stage4e && node tests/voice/stage4f-end-to-end-voice.test.js"
   }
 }
