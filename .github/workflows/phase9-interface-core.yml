@@ -1,8 +1,8 @@
-name: HAIVA Canonical Verification Gate
+name: HAIVA Phase 9 Interface Core
 
 on:
   push:
-    branches: [haiva-core-vnext]
+    branches: [phase9-interface-core]
   pull_request:
     branches: [haiva-core-vnext]
 
@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  canonical-verification:
-    name: Canonical verification through Phase 9
+  interface-core-test:
+    name: Interface to core integration test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -21,5 +21,5 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Run canonical verification
+      - name: Run Phase 9 verification
         run: npm run test:phase9
