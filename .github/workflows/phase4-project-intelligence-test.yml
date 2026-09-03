@@ -1,0 +1,20 @@
+name: HAIVA Phase 4 Project Intelligence Test
+
+on:
+  push:
+    branches: [haiva-core-vnext]
+  pull_request:
+    branches: [haiva-core-vnext]
+
+jobs:
+  project-intelligence-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run Phase 4 tests
+        run: npm run test:phase4
