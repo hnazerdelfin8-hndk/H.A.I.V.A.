@@ -51,8 +51,8 @@ assert.throws(
   () => registerTool({ name: "no-executor" }),
   /execute function/
 );
-assert.throws(
-  () => executeTool("missing", null),
+await assert.rejects(
+  executeTool("missing", null),
   /not registered/
 );
 
