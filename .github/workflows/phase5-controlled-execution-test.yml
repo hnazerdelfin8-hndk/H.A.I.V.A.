@@ -1,0 +1,27 @@
+name: HAIVA Phase 5 Controlled Execution Test
+
+on:
+  push:
+    branches: [haiva-core-vnext]
+  pull_request:
+    branches: [haiva-core-vnext]
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-execution-test:
+    name: Controlled execution test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run Phase 5 tests
+        run: npm run test:phase5
