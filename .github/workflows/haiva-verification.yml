@@ -1,0 +1,46 @@
+name: HAIVA Verification Gate
+
+on:
+  push:
+    branches: [haiva-core-vnext, main]
+  pull_request:
+    branches: [haiva-core-vnext, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: haiva-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: Full HAIVA verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify package metadata
+        run: node -e "const p=require('./package.json'); if(p.private!==true) process.exit(1); console.log('package.private=true: PASS')"
+
+      - name: Run agent tests
+        run: npm run test:agent
+
+      - name: Run tool registry tests
+        run: npm run test:tools
+
+      - name: Run project intelligence tests
+        run: npm run test:project
+
+      - name: Run security hardening tests
+        run: npm run test:security
+
+      - name: Verification complete
+        run: echo "HAIVA VERIFICATION: PASS"
