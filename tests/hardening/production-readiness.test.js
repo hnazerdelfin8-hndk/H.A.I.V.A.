@@ -23,7 +23,10 @@ assert.ok(workflow.includes("permissions:\n  contents: read"));
 assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
 assert.ok(workflow.includes("node-version: 24"));
-assert.ok(workflow.includes("npm run test:phase10"));
+assert.ok(
+  workflow.includes("run: npm run test:stage2a"),
+  "canonical production gate must verify the complete Stage 2 Phase A chain"
+);
 assert.doesNotMatch(workflow, /node-version:\s*2?0\b/i, "Node 20 must not be used");
 assert.doesNotMatch(workflow, /vercel/i, "Vercel must not be part of the HAIVA production path");
 
@@ -31,6 +34,16 @@ const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json")
 assert.equal(packageJson.private, true, "HAIVA package must remain private");
 assert.equal(typeof packageJson.scripts?.["test:phase9"], "string");
 assert.equal(typeof packageJson.scripts?.["test:phase10"], "string");
+assert.equal(
+  typeof packageJson.scripts?.["test:stage2a"],
+  "string",
+  "Stage 2 Phase A verification command must exist"
+);
+assert.match(
+  packageJson.scripts["test:stage2a"],
+  /npm run test:phase10.*prompt-agent-builder\.test\.js/,
+  "Stage 2 Phase A verification must preserve the full Phase 10 gate before capability tests"
+);
 
 const requiredFiles = [
   "core/agent/orchestrator.js",
@@ -39,7 +52,9 @@ const requiredFiles = [
   "core/agent/diagnostics.js",
   "core/memory/project-memory.js",
   "core/integration/core-pipeline.js",
-  "core/integration/interface-pipeline.js"
+  "core/integration/interface-pipeline.js",
+  "core/capabilities/prompt-agent-builder.js",
+  "tests/capabilities/prompt-agent-builder.test.js"
 ];
 for (const relativePath of requiredFiles) {
   await fs.access(path.join(root, relativePath));
