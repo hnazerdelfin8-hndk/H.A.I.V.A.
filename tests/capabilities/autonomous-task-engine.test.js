@@ -45,7 +45,7 @@ const retryEngine = createAutonomousTaskEngine({
 
 const retried = await retryEngine.run("recover from a temporary failure", { maxAttempts: 2 });
 assert.equal(retried.state, "completed");
-assert.equal(retried.steps[0].attempts, 2);
+assert.equal(attempts, 2);
 
 const blockedEngine = createAutonomousTaskEngine({
   planner: async () => [{ id: "deploy", action: { type: "production_deploy" } }],
