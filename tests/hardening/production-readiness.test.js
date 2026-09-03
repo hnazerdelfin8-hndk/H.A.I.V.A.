@@ -24,8 +24,8 @@ assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
 assert.ok(workflow.includes("node-version: 24"));
 assert.ok(
-  workflow.includes("run: npm run test:stage2a"),
-  "canonical production gate must verify the complete Stage 2 Phase A chain"
+  workflow.includes("run: npm run test:stage2b"),
+  "canonical production gate must verify the complete Stage 2 Phase B chain"
 );
 assert.doesNotMatch(workflow, /node-version:\s*2?0\b/i, "Node 20 must not be used");
 assert.doesNotMatch(workflow, /vercel/i, "Vercel must not be part of the HAIVA production path");
@@ -34,15 +34,21 @@ const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json")
 assert.equal(packageJson.private, true, "HAIVA package must remain private");
 assert.equal(typeof packageJson.scripts?.["test:phase9"], "string");
 assert.equal(typeof packageJson.scripts?.["test:phase10"], "string");
+assert.equal(typeof packageJson.scripts?.["test:stage2a"], "string");
 assert.equal(
-  typeof packageJson.scripts?.["test:stage2a"],
+  typeof packageJson.scripts?.["test:stage2b"],
   "string",
-  "Stage 2 Phase A verification command must exist"
+  "Stage 2 Phase B verification command must exist"
 );
 assert.match(
   packageJson.scripts["test:stage2a"],
   /npm run test:phase10.*prompt-agent-builder\.test\.js/,
   "Stage 2 Phase A verification must preserve the full Phase 10 gate before capability tests"
+);
+assert.match(
+  packageJson.scripts["test:stage2b"],
+  /npm run test:stage2a.*autonomous-task-engine\.test\.js/,
+  "Stage 2 Phase B verification must preserve the complete Stage 2 Phase A gate before Phase B tests"
 );
 
 const requiredFiles = [
@@ -54,7 +60,9 @@ const requiredFiles = [
   "core/integration/core-pipeline.js",
   "core/integration/interface-pipeline.js",
   "core/capabilities/prompt-agent-builder.js",
-  "tests/capabilities/prompt-agent-builder.test.js"
+  "tests/capabilities/prompt-agent-builder.test.js",
+  "core/capabilities/autonomous-task-engine.js",
+  "tests/capabilities/autonomous-task-engine.test.js"
 ];
 for (const relativePath of requiredFiles) {
   await fs.access(path.join(root, relativePath));
