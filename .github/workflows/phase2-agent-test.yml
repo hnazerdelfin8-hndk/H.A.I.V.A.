@@ -1,0 +1,20 @@
+name: HAIVA Phase 2 Agent Test
+
+on:
+  push:
+    branches: [haiva-core-vnext]
+  pull_request:
+    branches: [haiva-core-vnext]
+
+jobs:
+  agent-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run Phase 2 agent tests
+        run: npm run test:agent
