@@ -5,6 +5,7 @@ on:
     branches: [haiva-core-vnext]
   pull_request:
     branches: [haiva-core-vnext]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,5 +28,11 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Verify package metadata
+        run: node -e "import('./package.json', { with: { type: 'json' } }).then(({default:p}) => { if (p.private !== true) process.exit(1); console.log('package.private=true: PASS') })"
+
       - name: Run Phase 6 tests
         run: npm run test:phase6
+
+      - name: Verification complete
+        run: echo "HAIVA PHASE 6 VERIFICATION: PASS"
