@@ -62,7 +62,7 @@ assert.equal(failure.verification.passed, false);
 assert.equal(failure.diagnosis.category, "verification");
 assert.equal(failureMemory.recall({ type: "decision", query: "verification failed" }).length, 1);
 
-await assert.rejects(
+assert.throws(
   () => createCorePipeline({}),
   /Agent is required/
 );
