@@ -24,8 +24,8 @@ assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
 assert.ok(workflow.includes("node-version: 24"));
 assert.ok(
-  workflow.includes("run: npm run test:stage2b"),
-  "canonical production gate must verify the complete Stage 2 Phase B chain"
+  workflow.includes("run: npm run test:stage2c"),
+  "canonical production gate must verify the complete Stage 2 Phase C chain"
 );
 assert.doesNotMatch(workflow, /node-version:\s*2?0\b/i, "Node 20 must not be used");
 assert.doesNotMatch(workflow, /vercel/i, "Vercel must not be part of the HAIVA production path");
@@ -40,6 +40,11 @@ assert.equal(
   "string",
   "Stage 2 Phase B verification command must exist"
 );
+assert.equal(
+  typeof packageJson.scripts?.["test:stage2c"],
+  "string",
+  "Stage 2 Phase C verification command must exist"
+);
 assert.match(
   packageJson.scripts["test:stage2a"],
   /npm run test:phase10.*prompt-agent-builder\.test\.js/,
@@ -49,6 +54,11 @@ assert.match(
   packageJson.scripts["test:stage2b"],
   /npm run test:stage2a.*autonomous-task-engine\.test\.js/,
   "Stage 2 Phase B verification must preserve the complete Stage 2 Phase A gate before Phase B tests"
+);
+assert.match(
+  packageJson.scripts["test:stage2c"],
+  /npm run test:stage2b.*multi-agent-ecosystem\.test\.js/,
+  "Stage 2 Phase C verification must preserve the complete Stage 2 Phase B gate before Phase C tests"
 );
 
 const requiredFiles = [
@@ -62,7 +72,9 @@ const requiredFiles = [
   "core/capabilities/prompt-agent-builder.js",
   "tests/capabilities/prompt-agent-builder.test.js",
   "core/capabilities/autonomous-task-engine.js",
-  "tests/capabilities/autonomous-task-engine.test.js"
+  "tests/capabilities/autonomous-task-engine.test.js",
+  "core/capabilities/multi-agent-ecosystem.js",
+  "tests/capabilities/multi-agent-ecosystem.test.js"
 ];
 for (const relativePath of requiredFiles) {
   await fs.access(path.join(root, relativePath));
