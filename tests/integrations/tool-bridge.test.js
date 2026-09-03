@@ -66,7 +66,7 @@ assert.deepEqual(await safeTool.execute({ value: 3 }), { ok: true, input: { valu
 
 assert.throws(
   () => createIntegrationTool({ toolName: "broken", integrationName: "missing", integrationManager: manager }),
-  /Invalid risk level|Integration manager/
+  /Integration not found: missing/
 );
 
 clearTools();
