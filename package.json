@@ -7,6 +7,7 @@
     "test:tools": "node tests/tools/registry.test.js",
     "test:phase3": "npm run test:agent && npm run test:tools",
     "test:project": "node tests/project/intelligence.test.js",
-    "test:phase4": "npm run test:phase3 && npm run test:project"
+    "test:phase4": "npm run test:phase3 && npm run test:project",
+    "test:security": "node tests/security/security.test.js"
   }
 }
