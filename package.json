@@ -14,6 +14,8 @@
     "test:verification": "node tests/agent/verification-diagnostics.test.js",
     "test:phase6": "npm run test:phase5 && npm run test:security && npm run test:verification",
     "test:memory": "node tests/memory/project-memory.test.js",
-    "test:phase7": "npm run test:phase6 && npm run test:memory"
+    "test:phase7": "npm run test:phase6 && npm run test:memory",
+    "test:integration": "node tests/integration/core-pipeline.test.js",
+    "test:phase8": "npm run test:phase7 && npm run test:integration"
   }
 }
