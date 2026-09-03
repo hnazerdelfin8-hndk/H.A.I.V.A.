@@ -2,7 +2,7 @@ name: HAIVA Canonical Verification Gate
 
 on:
   push:
-    branches: [haiva-core-vnext]
+    branches: [haiva-core-vnext, phase10-hardening]
   pull_request:
     branches: [haiva-core-vnext]
 
