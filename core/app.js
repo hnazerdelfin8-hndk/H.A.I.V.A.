@@ -48,11 +48,12 @@ class HAIVA {
       const data = await response.json().catch(() => ({}));
       const micSetting = document.getElementById("mic-setting");
       if (micSetting) micSetting.textContent = navigator.mediaDevices?.getUserMedia ? "Available" : "Unavailable";
-      if (!response.ok || data.configured === false) {
-        console.warn("[HAIVA] AI backend is reachable but not configured.");
+      if (!response.ok) {
+        console.warn("[HAIVA] AI backend health check returned", response.status);
         return;
       }
-      console.log("[HAIVA] AI backend health check passed.");
+      if (data.configured === false) console.warn("[HAIVA] AI backend is reachable but not configured.");
+      else console.log("[HAIVA] AI backend health check passed.");
     } catch (error) {
       console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
     }
@@ -88,13 +89,17 @@ class HAIVA {
     this.setState("THINKING");
     try {
       const response = await this.assistant.respond(command);
-      this.showResponse(response || CONFIG.assistant.fallbackResponse);
+      const answer = response || CONFIG.assistant.fallbackResponse;
+      this.showResponse(answer);
+      this.isSpeaking = true;
+      this.setState("SPEAKING");
+      await speak(answer);
     } catch (error) {
       console.error("Text command failed:", error);
-      this.showResponse(CONFIG.assistant.fallbackResponse);
+      this.showResponse(CONFIG.assistant.connectionError || CONFIG.assistant.fallbackResponse);
       this.setState("VOICE ERROR");
-      return;
     } finally {
+      this.isSpeaking = false;
       this.isProcessing = false;
       if (!this.voiceActivated) this.setState("READY");
     }
@@ -289,7 +294,7 @@ class HAIVA {
   async speakWakeAcknowledgement() {
     this.isSpeaking = true;
     this.setState("SPEAKING");
-    try { await speak(CONFIG.assistant.greeting); }
+    try { await speak(CONFIG.assistant.defaultGreeting); }
     catch (error) { console.warn("Wake acknowledgement failed:", error); }
     finally {
       this.isSpeaking = false;
@@ -309,12 +314,14 @@ class HAIVA {
     this.setState("THINKING");
     try {
       const response = await this.assistant.respond(command);
-      this.showResponse(response || CONFIG.assistant.fallbackResponse);
+      const answer = response || CONFIG.assistant.fallbackResponse;
+      this.showResponse(answer);
       this.isSpeaking = true;
       this.setState("SPEAKING");
-      await speak(response || CONFIG.assistant.fallbackResponse);
+      await speak(answer);
     } catch (error) {
       console.error("Command failed:", error);
+      this.showResponse(CONFIG.assistant.fallbackResponse);
       this.setState("VOICE ERROR");
     } finally {
       this.isSpeaking = false;
