@@ -1,0 +1,57 @@
+name: HAIVA Android APK
+
+on:
+  push:
+    branches: [android-installable-v1]
+  pull_request:
+    branches: [haiva-core-vnext]
+
+permissions:
+  contents: read
+
+jobs:
+  core-diagnostic:
+    name: Run HAIVA Core Stage 10 diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Run Core Stage 10 test suite
+        run: npm run test:stage10
+
+  android-build:
+    name: Build HAIVA Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Run Android unit tests
+        working-directory: android
+        run: gradle --no-daemon testDebugUnitTest
+      - name: Build debug APK
+        working-directory: android
+        run: gradle --no-daemon assembleDebug
+      - name: Verify APK exists
+        working-directory: android
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: haiva-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
