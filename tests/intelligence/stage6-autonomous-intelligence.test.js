@@ -10,7 +10,7 @@ import { createIntelligenceMemoryBridge } from "../../core/intelligence/memory-b
 const state = createReasoningState("ship feature", { project: "HAIVA" }, [candidate => candidate.safe]);
 assert.equal(decomposeGoal(state, () => ["inspect", "implement"]).length, 2);
 const memory = createAdvancedMemoryStore([{ type: "fact", content: "HAIVA project", importance: 1 }]);
-assert.equal(assembleContext(state, memory).memories.length, 1);
+assert.equal(assembleContext(state, memory, "HAIVA").memories.length, 1);
 assert.equal(evaluateConstraints({ safe: true }, state.constraints).allowed, true);
 
 const plan = createPlan("ship", [{ id: "a", description: "inspect" }, { id: "b", description: "implement", dependencies: ["a"] }]);
