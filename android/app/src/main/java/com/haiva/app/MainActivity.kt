@@ -10,8 +10,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.haiva.bridge.HaivaBridge
 
 class MainActivity : Activity(), HaivaBridge {
@@ -35,7 +33,7 @@ class MainActivity : Activity(), HaivaBridge {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val audioRequested = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
-                    if (audioRequested && ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    if (audioRequested && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                         requestVoicePermission()
                         request.cancel()
                     } else {
@@ -46,13 +44,13 @@ class MainActivity : Activity(), HaivaBridge {
         }
         setContentView(webView)
         webView.loadUrl(coreUrl)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestVoicePermission()
         }
     }
 
     private fun requestVoicePermission() {
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
+        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
