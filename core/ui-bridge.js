@@ -17,9 +17,9 @@ export function setVoiceButtonActive(active) {
   if (!button) return;
 
   button.classList.toggle("active", active);
-  button.textContent = active
-    ? "🎙️ Voice Active"
-    : "🎙️ Activate Voice";
+  button.setAttribute("aria-pressed", String(active));
+  button.innerHTML = `<span aria-hidden="true">🎙️</span>`;
+  button.title = active ? "Voice active — tap to pause" : "Activate voice mode";
 }
 
 export function speak(text) {
