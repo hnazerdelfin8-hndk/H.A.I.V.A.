@@ -30,6 +30,7 @@
     "test:stage4c": "npm run test:stage4b && node tests/voice/stage4c-intent-task.test.js",
     "test:stage4d": "npm run test:stage4c && node tests/voice/stage4d-full-voice-pipeline.test.js",
     "test:stage4e": "npm run test:stage4d && node tests/voice/stage4e-response-voice.test.js",
-    "test:stage4f": "npm run test:stage4e && node tests/voice/stage4f-end-to-end-voice.test.js"
+    "test:stage4f": "npm run test:stage4e && node tests/voice/stage4f-end-to-end-voice.test.js",
+    "test:stage5": "npm run test:stage4f && node tests/memory/stage5-advanced-memory.test.js"
   }
 }
