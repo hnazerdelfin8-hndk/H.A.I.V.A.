@@ -30,4 +30,4 @@ export function createProductivityQueue() {
   return { add(task) { if (!task?.id) throw new Error("Task id is required."); tasks.push(clone(task)); return clone(task); }, next() { return clone(tasks.shift() ?? null); }, snapshot() { return clone(tasks); } };
 }
 
-export function createBusinessWorkflow(steps = []) { return { steps: clone(steps), async run(input) { let value = input; for (const step of steps) value = await step(value); return value; } }; }
+export function createBusinessWorkflow(steps = []) { if (!Array.isArray(steps) || steps.some(step => typeof step !== "function")) throw new Error("Workflow steps must be functions."); return { steps: [...steps], async run(input) { let value = input; for (const step of steps) value = await step(value); return value; } }; }
