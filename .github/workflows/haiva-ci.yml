@@ -50,6 +50,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Package H.A.I.V.A. web core into APK assets
+        shell: bash
+        run: |
+          set -e
+          rm -rf android/app/src/main/assets/haiva
+          mkdir -p android/app/src/main/assets/haiva
+          cp index.html android/app/src/main/assets/haiva/index.html
+          cp -R core android/app/src/main/assets/haiva/
+          cp -R ui android/app/src/main/assets/haiva/
+          if [ -d skills ]; then cp -R skills android/app/src/main/assets/haiva/; fi
+
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon
