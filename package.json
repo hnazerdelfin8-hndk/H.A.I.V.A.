@@ -33,6 +33,7 @@
     "test:stage4f": "npm run test:stage4e && node tests/voice/stage4f-end-to-end-voice.test.js",
     "test:stage5": "npm run test:stage4f && node tests/memory/stage5-advanced-memory.test.js",
     "test:stage6": "npm run test:stage5 && node tests/intelligence/stage6-autonomous-intelligence.test.js",
-    "test:stage7": "npm run test:stage6 && node tests/agents/stage7-agent-ecosystem.test.js"
+    "test:stage7": "npm run test:stage6 && node tests/agents/stage7-agent-ecosystem.test.js",
+    "test:stage8": "npm run test:stage7 && node tests/tools/stage8-real-world-tools.test.js"
   }
 }
