@@ -6,6 +6,7 @@ import { containsWakeWord } from "../core/voice/wake-word.js";
 import { orchestrate } from "../core/orchestrator/index.js";
 import { buildProviderRequest, extractProviderAnswer, listProviders } from "../api/provider-gateway.js";
 import { getCanonicalSkills } from "../skills/registry.js";
+import { readFile } from "node:fs/promises";
 
 test("advanced memory stores, recalls and forgets typed entries", () => {
   const store = createAdvancedMemoryStore([], { maxEntries: 10 });
@@ -49,6 +50,12 @@ test("provider registry exposes configuration state without secrets", () => {
 
 test("canonical skill registry exposes the expected skill surface", () => {
   assert.deepEqual(getCanonicalSkills().sort(), ["music", "notes", "reminder", "weather", "web_search"].sort());
+});
+
+test("main application calls the assistant's supported respond API", async () => {
+  const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
+  assert.match(source, /this\.assistant\.respond\(command\)/);
+  assert.doesNotMatch(source, /this\.assistant\.process\(command\)/);
 });
 
 test("orchestrator executes through the configured chat gateway", async () => {
