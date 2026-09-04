@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { createAdvancedMemoryStore } from "../core/memory/advanced-memory.js";
 import { containsWakeWord } from "../core/voice/wake-word.js";
 import { orchestrate } from "../core/orchestrator/index.js";
+import { buildProviderRequest, extractProviderAnswer, listProviders } from "../api/provider-gateway.js";
+import { getCanonicalSkills } from "../skills/registry.js";
 
 test("advanced memory stores, recalls and forgets typed entries", () => {
   const store = createAdvancedMemoryStore([], { maxEntries: 10 });
@@ -17,6 +19,36 @@ test("advanced memory stores, recalls and forgets typed entries", () => {
 test("wake word matching is case insensitive", () => {
   assert.equal(containsWakeWord("YO HAIVA, are you there?", ["yo haiva"]), true);
   assert.equal(containsWakeWord("hello there", ["yo haiva"]), false);
+});
+
+test("provider gateway builds Groq-compatible requests", () => {
+  const request = buildProviderRequest("groq", [{ role: "user", content: "hello" }], {}, { GROQ_API_KEY: "test-key" });
+  assert.equal(request.provider.id, "groq");
+  assert.equal(request.headers.Authorization, "Bearer test-key");
+  assert.match(request.url, /api\.groq\.com/);
+  assert.equal(JSON.parse(request.body).messages[0].content, "hello");
+});
+
+test("provider gateway rejects an unconfigured provider explicitly", () => {
+  assert.throws(
+    () => buildProviderRequest("openai", [{ role: "user", content: "hello" }], {}, {}),
+    error => error.code === "PROVIDER_NOT_CONFIGURED"
+  );
+});
+
+test("provider answer extraction supports Gemini and Anthropic", () => {
+  assert.equal(extractProviderAnswer("gemini", { candidates: [{ content: { parts: [{ text: "hello" }] } }] }), "hello");
+  assert.equal(extractProviderAnswer("anthropic", { content: [{ type: "text", text: "hello" }] }), "hello");
+});
+
+test("provider registry exposes configuration state without secrets", () => {
+  const providers = listProviders({ GROQ_API_KEY: "x" });
+  assert.equal(providers.find(provider => provider.id === "groq")?.configured, true);
+  assert.equal(Object.keys(providers[0]).includes("apiKey"), false);
+});
+
+test("canonical skill registry exposes the expected skill surface", () => {
+  assert.deepEqual(getCanonicalSkills().sort(), ["music", "notes", "reminder", "weather", "web_search"].sort());
 });
 
 test("orchestrator executes through the configured chat gateway", async () => {
