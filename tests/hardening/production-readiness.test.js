@@ -8,7 +8,7 @@ const workflowFiles = workflowEntries.filter((entry) => entry.isFile() && /\.(ym
 assert.deepEqual(workflowFiles, ["haiva-verification.yml"], "production gate must have exactly one canonical workflow");
 const workflow = await fs.readFile(path.join(workflowDir, "haiva-verification.yml"), "utf8");
 assert.ok(workflow.includes("name: HAIVA Canonical Verification Gate"));
-assert.ok(workflow.includes("branches: [haiva-core-vnext]"));
+assert.ok(workflow.includes("branches: [haiva-core-brain]"));
 assert.ok(workflow.includes("permissions:\n  contents: read"));
 assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
