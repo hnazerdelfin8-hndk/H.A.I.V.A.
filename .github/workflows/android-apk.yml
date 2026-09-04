@@ -10,6 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  core-diagnostic:
+    name: Run HAIVA Core Stage 10 diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Run Core Stage 10 test suite
+        run: npm run test:stage10
+
   android-build:
     name: Build HAIVA Android debug APK
     runs-on: ubuntu-latest
