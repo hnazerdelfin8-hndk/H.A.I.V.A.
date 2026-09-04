@@ -19,13 +19,13 @@ assert.ok(workflow.includes("permissions:\n  contents: read"));
 assert.ok(workflow.includes("actions/checkout@v6"));
 assert.ok(workflow.includes("actions/setup-node@v7"));
 assert.ok(workflow.includes("node-version: 24"));
-assert.ok(workflow.includes("run: npm run test:stage3b"), "canonical production gate must verify the complete Stage 3B chain");
+assert.ok(workflow.includes("run: npm run test:stage4f"), "canonical production gate must verify the complete Stage 4F chain");
 assert.doesNotMatch(workflow, /node-version:\s*2?0\b/i, "Node 20 must not be used");
 assert.doesNotMatch(workflow, /vercel/i, "Vercel must not be part of the HAIVA production path");
 
 const packageJson = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 assert.equal(packageJson.private, true, "HAIVA package must remain private");
-for (const script of ["test:phase9", "test:phase10", "test:stage2a", "test:stage2b", "test:stage2c", "test:stage3", "test:stage3b"]) {
+for (const script of ["test:phase9", "test:phase10", "test:stage2a", "test:stage2b", "test:stage2c", "test:stage3", "test:stage3b", "test:stage4a", "test:stage4b", "test:stage4c", "test:stage4d", "test:stage4e", "test:stage4f"]) {
   assert.equal(typeof packageJson.scripts?.[script], "string", `${script} verification command must exist`);
 }
 assert.match(packageJson.scripts["test:stage2a"], /npm run test:phase10.*prompt-agent-builder\.test\.js/);
@@ -33,6 +33,12 @@ assert.match(packageJson.scripts["test:stage2b"], /npm run test:stage2a.*autonom
 assert.match(packageJson.scripts["test:stage2c"], /npm run test:stage2b.*multi-agent-ecosystem\.test\.js/);
 assert.match(packageJson.scripts["test:stage3"], /npm run test:stage2c.*integrations\/manager\.test\.js/);
 assert.match(packageJson.scripts["test:stage3b"], /npm run test:stage3.*integrations\/tool-bridge\.test\.js/);
+assert.match(packageJson.scripts["test:stage4a"], /npm run test:stage3b.*stage4a-voice-interface\.test\.js/);
+assert.match(packageJson.scripts["test:stage4b"], /npm run test:stage4a.*stage4b-speech-intent\.test\.js/);
+assert.match(packageJson.scripts["test:stage4c"], /npm run test:stage4b.*stage4c-intent-task\.test\.js/);
+assert.match(packageJson.scripts["test:stage4d"], /npm run test:stage4c.*stage4d-full-voice-pipeline\.test\.js/);
+assert.match(packageJson.scripts["test:stage4e"], /npm run test:stage4d.*stage4e-response-voice\.test\.js/);
+assert.match(packageJson.scripts["test:stage4f"], /npm run test:stage4e.*stage4f-end-to-end-voice\.test\.js/);
 
 const requiredFiles = [
   "core/agent/orchestrator.js",
@@ -51,8 +57,17 @@ const requiredFiles = [
   "core/integrations/manager.js",
   "tests/integrations/manager.test.js",
   "core/integrations/tool-bridge.js",
-  "tests/integrations/tool-bridge.test.js"
+  "tests/integrations/tool-bridge.test.js",
+  "core/voice/wake-word.js",
+  "core/voice/speech-to-text.js",
+  "core/voice/text-to-speech.js",
+  "tests/voice/stage4a-voice-interface.test.js",
+  "tests/voice/stage4b-speech-intent.test.js",
+  "tests/voice/stage4c-intent-task.test.js",
+  "tests/voice/stage4d-full-voice-pipeline.test.js",
+  "tests/voice/stage4e-response-voice.test.js",
+  "tests/voice/stage4f-end-to-end-voice.test.js"
 ];
 for (const relativePath of requiredFiles) await fs.access(path.join(root, relativePath));
 
-console.log("PASS: HAIVA Production Readiness through Stage 3B tests");
+console.log("PASS: HAIVA Production Readiness through Stage 4F tests");
