@@ -6,13 +6,15 @@ export const CONFIG = {
   app: {
     name: "H.A.I.V.A.",
     fullName: "Hnazer Artificial Intelligence Voice Assistant",
-    version: "2.3.1"
+    version: "2.4.0"
   },
 
   environment: "production",
 
   api: {
-    chatEndpoint: "/api/chat"
+    // Absolute production endpoint so the bundled Android WebView can reach
+    // the H.A.I.V.A. backend instead of resolving /api/chat against file://.
+    chatEndpoint: "https://h-a-i-v-a-hnrk.vercel.app/api/chat"
   },
 
   voice: {
@@ -23,10 +25,13 @@ export const CONFIG = {
     speechRate: 0.92,
     speechPitch: 1.0,
     speechVolume: 1.0,
-    restartDelay: 500,
+    restartDelay: 650,
     wakeWords: [
       "yo haiva",
-      "yo h a i v a"
+      "yo h a i v a",
+      "hey haiva",
+      "hi haiva",
+      "haiva"
     ]
   },
 
