@@ -16,16 +16,16 @@ public final class WakeWordEngine {
     }
 
     public String extractCommand(String text) {
-        if (text == null) return "";
         String normalized = normalize(text);
         for (String wake : WAKE_WORDS) {
             int index = normalized.indexOf(wake);
-            if (index >= 0) return text.trim().substring(Math.min(text.trim().length(), index + wake.length())).trim();
+            if (index >= 0) return normalized.substring(index + wake.length()).trim();
         }
         return "";
     }
 
     private String normalize(String text) {
-        return text == null ? "" : text.trim().toLowerCase(Locale.US).replaceAll("\\s+", " ");
+        if (text == null) return "";
+        return text.trim().toLowerCase(Locale.US).replaceAll("[^a-z0-9]+", " ").replaceAll("\\s+", " ").trim();
     }
 }
