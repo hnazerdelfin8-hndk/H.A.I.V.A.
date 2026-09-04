@@ -35,7 +35,7 @@ class MainActivity : Activity(), HaivaBridge {
                     val audioRequested = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
                     if (audioRequested && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                         requestVoicePermission()
-                        request.cancel()
+                        request.deny()
                     } else {
                         request.grant(request.resources)
                     }
