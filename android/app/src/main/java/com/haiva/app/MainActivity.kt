@@ -16,9 +16,11 @@ class MainActivity : Activity(), HaivaBridge {
     private lateinit var webView: WebView
     private val voicePermissionRequestCode = 1001
     private val coreUrl = "file:///android_asset/haiva/index.html"
+    private var pendingWebPermissionRequest: PermissionRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         webView = WebView(this)
         webView.settings.apply {
             javaScriptEnabled = true
@@ -28,39 +30,79 @@ class MainActivity : Activity(), HaivaBridge {
             allowContentAccess = true
             cacheMode = WebSettings.LOAD_DEFAULT
         }
+
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val audioRequested = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
-                    if (audioRequested && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    val microphoneGranted = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+                    if (audioRequested && !microphoneGranted) {
+                        // Keep the WebView request alive until Android permission is answered.
+                        // The previous implementation denied it immediately, which caused the
+                        // browser speech capture to fail even after the user granted the mic.
+                        pendingWebPermissionRequest = request
                         requestVoicePermission()
-                        request.deny()
                     } else {
                         request.grant(request.resources)
                     }
                 }
             }
         }
+
         setContentView(webView)
         webView.loadUrl(coreUrl)
+
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestVoicePermission()
         }
     }
 
     private fun requestVoicePermission() {
-        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
+        }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == voicePermissionRequestCode && grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Microphone permission is required for H.A.I.V.A. voice mode.", Toast.LENGTH_LONG).show()
+
+        if (requestCode != voicePermissionRequestCode) return
+
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        val request = pendingWebPermissionRequest
+        pendingWebPermissionRequest = null
+
+        if (granted) {
+            request?.let {
+                try {
+                    it.grant(it.resources)
+                } catch (error: Exception) {
+                    Toast.makeText(this, "Unable to activate microphone.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            webView.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('haiva:microphone-ready'))",
+                null
+            )
+        } else {
+            request?.deny()
+            Toast.makeText(
+                this,
+                "Microphone permission is required for H.A.I.V.A. voice mode.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
     override fun onDestroy() {
+        pendingWebPermissionRequest?.deny()
+        pendingWebPermissionRequest = null
         webView.destroy()
         super.onDestroy()
     }
