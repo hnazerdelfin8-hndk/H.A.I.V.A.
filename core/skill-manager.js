@@ -1,13 +1,10 @@
 // =========================================
 // H.A.I.V.A. SKILL MANAGER
+// Layer 8 runtime manager; canonical skill definitions live in /skills.
 // =========================================
 
 import { clearMemory, getMemoryCount, getRecentMemory, forgetLast } from "./memory.js";
-import { webSearch } from "./skills/web-search.js";
-import { weather } from "./skills/weather.js";
-import { reminder } from "./skills/reminder.js";
-import { notes } from "./skills/notes.js";
-import { music } from "./skills/music.js";
+import { SKILL_REGISTRY } from "../skills/registry.js";
 
 const skills = new Map();
 
@@ -38,84 +35,41 @@ export async function executeSkill(command, brainContext = {}) {
   const text = String(command).toLowerCase().trim();
   const intent = brainContext?.intent?.name || "unknown";
 
-  if (["hello", "hi", "hey", "hello haiva", "hey haiva"].includes(text)) {
-    return "Hello, Master. I'm here and listening.";
-  }
-
-  if (text.includes("what time") || text.includes("current time") || text === "time") {
-    return `The current time is ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`;
-  }
-
-  if (text.includes("what date") || text.includes("today's date") || text.includes("what day") || text === "date") {
-    return `Today is ${new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.`;
-  }
-
-  if (text === "status" || text.includes("system status") || text.includes("are you online")) {
-    return "All core systems are online, Master. Voice, memory, command routing and AI connection are ready.";
-  }
-
-  if (text === "who are you" || text.includes("what are you")) {
-    return "I am H.A.I.V.A., your personal artificial intelligence voice assistant. I'm designed to help you naturally through conversation and commands.";
-  }
-
-  if (text.includes("clear memory") || text.includes("forget everything") || text.includes("forget all memory")) {
-    clearMemory();
-    return "Done, Master. My saved conversation memory has been cleared.";
-  }
-
-  if (text.includes("forget the last") || text.includes("forget that")) {
-    forgetLast(2);
-    return "Understood, Master. I removed the most recent conversation memory.";
-  }
-
-  if (text.includes("how many memories") || text.includes("memory count")) {
-    return `I currently have ${getMemoryCount()} stored conversation entries, Master.`;
-  }
-
+  if (["hello", "hi", "hey", "hello haiva", "hey haiva"].includes(text)) return "Hello, Master. I'm here and listening.";
+  if (text.includes("what time") || text.includes("current time") || text === "time") return `The current time is ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`;
+  if (text.includes("what date") || text.includes("today's date") || text.includes("what day") || text === "date") return `Today is ${new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.`;
+  if (text === "status" || text.includes("system status") || text.includes("are you online")) return "All core systems are online, Master. Voice, memory, command routing and AI connection are ready.";
+  if (text === "who are you" || text.includes("what are you")) return "I am H.A.I.V.A., your personal artificial intelligence voice assistant. I'm designed to help you naturally through conversation and commands.";
+  if (text.includes("clear memory") || text.includes("forget everything") || text.includes("forget all memory")) { clearMemory(); return "Done, Master. My saved conversation memory has been cleared."; }
+  if (text.includes("forget the last") || text.includes("forget that")) { forgetLast(2); return "Understood, Master. I removed the most recent conversation memory."; }
+  if (text.includes("how many memories") || text.includes("memory count")) return `I currently have ${getMemoryCount()} stored conversation entries, Master.`;
   if (text.includes("what do you remember") || text.includes("show my recent memory")) {
     const recent = getRecentMemory(6);
     if (!recent.length) return "I don't have any saved conversation memory yet, Master.";
-    const lines = recent.map(item => `${item.role}: ${item.content}`).join(" | ");
-    return `My recent memory is: ${lines}`;
+    return `My recent memory is: ${recent.map(item => `${item.role}: ${item.content}`).join(" | ")}`;
   }
-
-  if (text === "help" || text.includes("what can you do")) {
-    return `I can use these skills: ${getSkills().join(", ")}. I can also answer general questions through my AI connection, Master.`;
-  }
+  if (text === "help" || text.includes("what can you do")) return `I can use these skills: ${getSkills().join(", ")}. I can also answer general questions through my AI connection, Master.`;
 
   if (intent !== "unknown") {
     const intentSkill = skills.get(intent);
     if (intentSkill) {
       try { return await intentSkill(command, brainContext); }
-      catch (error) {
-        console.error(`Skill "${intent}" failed:`, error);
-        return null;
-      }
+      catch (error) { console.error(`Skill "${intent}" failed:`, error); return null; }
     }
   }
 
   for (const [name, skill] of skills.entries()) {
     if (text === name || text.includes(name)) {
       try { return await skill(command, brainContext); }
-      catch (error) {
-        console.error(`Skill "${name}" failed:`, error);
-        return null;
-      }
+      catch (error) { console.error(`Skill "${name}" failed:`, error); return null; }
     }
   }
-
   return null;
 }
 
 let defaultsRegistered = false;
-
 export function registerDefaultSkills() {
   if (defaultsRegistered) return;
   defaultsRegistered = true;
-
-  registerSkill("weather", weather);
-  registerSkill("web_search", webSearch);
-  registerSkill("reminder", reminder);
-  registerSkill("notes", notes);
-  registerSkill("music", music);
+  for (const [name, skill] of Object.entries(SKILL_REGISTRY)) registerSkill(name, skill);
 }
