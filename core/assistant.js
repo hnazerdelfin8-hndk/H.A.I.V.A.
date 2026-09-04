@@ -4,7 +4,7 @@
 
 import { CONFIG } from "./config.js";
 import { routeRequest } from "./router.js";
-import { setUIState, speak } from "./ui-bridge.js";
+import { setUIState } from "./ui-bridge.js";
 
 export class HAIVAAssistant {
   constructor() {
@@ -27,19 +27,10 @@ export class HAIVAAssistant {
         throw new Error("No response received.");
       }
 
-      const response = String(result.response).trim();
-      setUIState("SPEAKING");
-
-      // Keep the spoken response alive until speech synthesis finishes.
-      await speak(response);
-      return response;
+      return String(result.response).trim();
     } catch (error) {
       console.error("Assistant response failed:", error);
-
-      const fallback = CONFIG.assistant.fallbackResponse;
-      setUIState("SPEAKING");
-      await speak(fallback);
-      return fallback;
+      return CONFIG.assistant.fallbackResponse;
     } finally {
       this.processing = false;
     }
