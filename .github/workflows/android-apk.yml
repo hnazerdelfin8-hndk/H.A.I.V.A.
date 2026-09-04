@@ -2,9 +2,9 @@ name: HAIVA Android APK
 
 on:
   push:
-    branches: [android-installable-v1]
+    branches: [haiva-android-body]
   pull_request:
-    branches: [haiva-core-vnext]
+    branches: [haiva-core-brain]
 
 permissions:
   contents: read
