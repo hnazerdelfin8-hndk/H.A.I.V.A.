@@ -31,7 +31,7 @@ const result = await runAutonomy({
   plan: async () => ({ id: ++executions }),
   decide: async planValue => planValue,
   execute: async () => ({ ok: executions > 1 }),
-  verify: async value => value,
+  verify: async value => ({ passed: value.ok, value }),
   maxRetries: 1
 });
 assert.equal(result.status, "completed");
