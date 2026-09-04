@@ -26,6 +26,9 @@ jobs:
             node --check "$file"
           done
 
+      - name: Run core contract tests
+        run: node --test tests/core-contracts.test.js
+
       - name: Validate orchestrator and router
         run: |
           node --check core/orchestrator/index.js
