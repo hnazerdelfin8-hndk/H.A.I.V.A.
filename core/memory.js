@@ -1,48 +1,62 @@
 // =========================================
-// H.A.I.V.A. MEMORY & CONTEXT LAYER
+// H.A.I.V.A. CANONICAL MEMORY ADAPTER
 // =========================================
+// Browser-persistent facade over the advanced memory engine.
+
+import { createAdvancedMemoryStore, importAdvancedMemory } from "./memory/advanced-memory.js";
 
 const STORAGE_KEY = "haiva_memory_v2";
 const MAX_MESSAGES = 50;
 const CONTEXT_MESSAGES = 24;
 
-function loadMemory() {
+function readStore() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const data = raw ? JSON.parse(raw) : [];
-    return Array.isArray(data) ? data : [];
+    return raw
+      ? importAdvancedMemory(raw, { maxEntries: MAX_MESSAGES })
+      : createAdvancedMemoryStore([], { maxEntries: MAX_MESSAGES });
   } catch (error) {
     console.warn("H.A.I.V.A. memory load failed:", error);
-    return [];
+    return createAdvancedMemoryStore([], { maxEntries: MAX_MESSAGES });
   }
 }
 
-function saveMemory(messages) {
+function persist(store) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES)));
+    localStorage.setItem(STORAGE_KEY, store.export());
   } catch (error) {
     console.warn("H.A.I.V.A. memory save failed:", error);
   }
 }
 
+function toConversation(entry) {
+  return {
+    role: entry.metadata?.role === "assistant" ? "assistant" : "user",
+    content: entry.content.replace(/^(user|assistant):\s*/i, ""),
+    timestamp: entry.updatedAt
+  };
+}
+
 export function getContext() {
-  return loadMemory()
-    .filter(item => item && (item.role === "user" || item.role === "assistant") && item.content)
-    .slice(-CONTEXT_MESSAGES)
+  return readStore().recall({ type: "conversation", limit: CONTEXT_MESSAGES })
+    .map(toConversation)
+    .reverse()
     .map(({ role, content }) => ({ role, content }));
 }
 
 export function remember(role, content) {
   const text = String(content || "").trim();
   if (!text) return;
-
-  const messages = loadMemory();
-  messages.push({
-    role: role === "assistant" ? "assistant" : "user",
-    content: text,
-    timestamp: Date.now()
+  const normalizedRole = role === "assistant" ? "assistant" : "user";
+  const store = readStore();
+  store.remember({
+    type: "conversation",
+    content: `${normalizedRole}: ${text}`,
+    metadata: { role: normalizedRole, memoryScope: "conversation" },
+    source: "conversation",
+    confidence: 0.7
   });
-  saveMemory(messages);
+  persist(store);
 }
 
 export function clearMemory() {
@@ -55,17 +69,24 @@ export function clearMemory() {
 }
 
 export function getMemoryCount() {
-  return loadMemory().length;
+  return readStore().size();
 }
 
 export function getRecentMemory(limit = 10) {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 20));
-  return loadMemory().slice(-safeLimit);
+  return readStore().recall({ type: "conversation", limit: safeLimit })
+    .map(toConversation)
+    .reverse();
 }
 
 export function forgetLast(count = 2) {
-  const messages = loadMemory();
-  const safeCount = Math.max(1, Math.min(Number(count) || 2, messages.length));
-  messages.splice(-safeCount, safeCount);
-  saveMemory(messages);
+  const store = readStore();
+  const recent = store.recall({ type: "conversation", limit: MAX_MESSAGES });
+  const safeCount = Math.max(1, Math.min(Number(count) || 2, recent.length));
+  recent.slice(-safeCount).forEach(entry => store.forget(entry.id));
+  persist(store);
+}
+
+export function getMemoryStore() {
+  return readStore();
 }
