@@ -27,7 +27,8 @@ public final class WakeWordEngine {
     private String normalize(String text) {
         if (text == null) return "";
         String value = text.trim().toLowerCase(Locale.US);
-        value = value.replaceAll("h\\s*a\\s*i\\s*v\\s*a", "haiva");
+        // Accept natural spoken/transcribed forms such as "Yi, H.A.I.V.A.".
+        value = value.replaceAll("h[\\s.\\-_:]*a[\\s.\\-_:]*i[\\s.\\-_:]*v[\\s.\\-_:]*a", "haiva");
         value = value.replaceAll("[^a-z0-9]+", " ");
         return value.replaceAll("\\s+", " ").trim();
     }
