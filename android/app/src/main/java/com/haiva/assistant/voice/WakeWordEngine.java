@@ -26,6 +26,9 @@ public final class WakeWordEngine {
 
     private String normalize(String text) {
         if (text == null) return "";
-        return text.trim().toLowerCase(Locale.US).replaceAll("[^a-z0-9]+", " ").replaceAll("\\s+", " ").trim();
+        String value = text.trim().toLowerCase(Locale.US);
+        value = value.replaceAll("h\\s*a\\s*i\\s*v\\s*a", "haiva");
+        value = value.replaceAll("[^a-z0-9]+", " ");
+        return value.replaceAll("\\s+", " ").trim();
     }
 }
