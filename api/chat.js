@@ -2,72 +2,72 @@
 // H.A.I.V.A. AI CHAT API — GROQ
 // =========================================
 
+const MODEL = "openai/gpt-oss-20b";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ response: "Method not allowed." });
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      service: "H.A.I.V.A. AI API",
+      provider: "Groq",
+      configured: Boolean(process.env.GROQ_API_KEY),
+      model: MODEL
+    });
+  }
+
+  if (req.method !== "POST") return res.status(405).json({ ok: false, response: "Method not allowed." });
 
   const message = req.body?.message;
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
-  if (typeof message !== "string" || !message.trim()) return res.status(400).json({ response: "Please provide a message." });
+  if (typeof message !== "string" || !message.trim()) {
+    return res.status(400).json({ ok: false, response: "Please provide a message." });
+  }
 
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return res.status(500).json({ response: "My Groq connection is not configured yet, Master." });
+  if (!apiKey) {
+    console.error("[HAIVA] GROQ_API_KEY is missing in the server environment.");
+    return res.status(503).json({ ok: false, code: "AI_NOT_CONFIGURED", response: "My AI connection is not configured yet. Please add GROQ_API_KEY to the server environment, Master." });
+  }
 
   try {
     const safeHistory = history
       .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
-      .slice(-30)
+      .slice(-20)
       .map(item => ({ role: item.role, content: item.content.trim() }));
 
     const systemPrompt = `You are H.A.I.V.A., Hnazer Artificial Intelligence Voice Assistant, the user's personal AI assistant.
 
 CORE BEHAVIOR:
 - Prioritize accuracy, relevance, and understanding over sounding impressive.
-- Understand what the user actually means before answering. Answer the exact question first.
-- Use the conversation history to understand references, follow-ups, corrections, and ongoing tasks.
-- Resolve phrases such as "ito", "iyan", "yun", "yung sinabi mo kanina", "that", "it", "the earlier one", and "continue" from recent context when possible.
-- If the request is genuinely ambiguous and context cannot resolve it, ask one short clarification instead of guessing.
-- Never invent facts, names, dates, prices, links, capabilities, actions, or previous conversations.
-- Never claim that you searched the web, opened a site, changed code, deployed something, or performed an action unless that action was actually performed by a connected tool.
-- If you are uncertain or do not know, say so plainly.
-- If the user corrects something, accept the correction and use the newer information.
+- Answer the exact question first.
+- Use supplied conversation history for follow-ups and references.
+- If context cannot resolve a genuinely ambiguous request, ask one short clarification.
+- Never invent facts, actions, links, capabilities, or memories.
+- Never claim to have performed an action unless a connected tool actually performed it.
 
 PERSONALITY:
 - Calm, intelligent, warm, confident, loyal, and natural.
-- Speak like a capable personal assistant, not a generic chatbot.
 - Call the user "Master" naturally, but do not force it into every response.
-- Do not sound overly formal, dramatic, submissive, or robotic.
-- Be concise for simple questions and detailed only when the request needs it.
-- Do not repeat information the user already understands.
+- Do not sound robotic, overly formal, dramatic, or submissive.
+- Be concise for simple questions and detailed only when needed.
 
-TAGALOG / TAGLISH QUALITY:
-- If the user speaks Filipino, answer in natural Filipino.
-- If the user speaks Taglish, answer naturally in Taglish.
-- If the user speaks English, answer in English.
-- Do not translate English word-for-word into awkward Filipino.
-- Use normal everyday Filipino sentence structure and vocabulary.
-- Avoid deep, archaic, overly formal, or unnatural Tagalog unless the user asks for it.
-- Keep technical terms in English when that is clearer and more natural.
-- Match the user's tone without copying mistakes that would make the answer harder to understand.
+LANGUAGE:
+- Filipino input → natural Filipino.
+- Taglish input → natural Taglish.
+- English input → English.
+- Keep technical terms in English when clearer.
 
-VOICE RESPONSE:
-- Write responses that sound natural when spoken aloud.
+VOICE:
+- Write naturally for spoken audio.
 - Prefer short, clear sentences.
-- Give the direct answer first, then a brief explanation if useful.
-- Avoid unnecessary headings, markdown tables, long disclaimers, filler phrases, and excessive emojis.
-- Do not start every answer with "Master".
-
-CONTEXT:
-- The supplied history is conversation context, not guaranteed truth.
-- Distinguish the user's statements from your own previous answers.
-- Do not claim memory beyond the supplied history.
-- When a follow-up clearly refers to the previous topic, continue that topic instead of restarting from zero.
+- Avoid unnecessary headings, tables, disclaimers, and filler.
 
 LIMITATIONS:
-- The browser handles voice recognition, speech synthesis, and local conversation memory.
+- The browser handles voice recognition, speech synthesis, and local UI state.
 - You handle reasoning and conversation.
-- If the user asks for an action that is not actually connected to H.A.I.V.A., explain the limitation honestly instead of pretending it happened.
 
-The current message is the user's latest request. Respond directly and naturally.`;
+Respond directly to the user's latest message.`;
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -75,33 +75,39 @@ The current message is the user's latest request. Respond directly and naturally
       { role: "user", content: message.trim() }
     ];
 
-    const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-20b",
-        messages,
-        max_tokens: 384,
-        temperature: 0.2
-      })
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    let groqResponse;
+    try {
+      groqResponse = await fetch(GROQ_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: MODEL, messages, max_tokens: 384, temperature: 0.2 }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     const responseText = await groqResponse.text();
     if (!groqResponse.ok) {
-      console.error("[HAIVA] Groq API rejected request", { status: groqResponse.status });
-      return res.status(502).json({ response: `Groq connection error (${groqResponse.status}). Please check the Vercel API configuration, Master.` });
+      let providerMessage = "Unknown provider error.";
+      try { providerMessage = JSON.parse(responseText)?.error?.message || providerMessage; } catch (_) {}
+      console.error("[HAIVA] Groq rejected request", { status: groqResponse.status, message: providerMessage });
+      return res.status(502).json({ ok: false, code: "AI_PROVIDER_ERROR", response: `My AI provider returned an error (${groqResponse.status}). Please check the Groq API key, model access, and server configuration, Master.` });
     }
 
     let data;
     try { data = JSON.parse(responseText); }
-    catch (error) { return res.status(502).json({ response: "My AI system returned an invalid response, Master." }); }
+    catch (_) { return res.status(502).json({ ok: false, code: "AI_INVALID_RESPONSE", response: "My AI system returned an invalid response, Master." }); }
 
     const answer = data?.choices?.[0]?.message?.content?.trim();
-    if (!answer) return res.status(502).json({ response: "I received an empty response from my AI system, Master." });
+    if (!answer) return res.status(502).json({ ok: false, code: "AI_EMPTY_RESPONSE", response: "I received an empty response from my AI system, Master." });
 
-    return res.status(200).json({ response: answer, message: answer });
+    return res.status(200).json({ ok: true, response: answer, message: answer });
   } catch (error) {
+    const timedOut = error?.name === "AbortError";
     console.error("[HAIVA] Groq request failed", { name: error?.name, message: error?.message });
-    return res.status(500).json({ response: "Something went wrong while connecting to my Groq system, Master." });
+    return res.status(timedOut ? 504 : 500).json({ ok: false, code: timedOut ? "AI_TIMEOUT" : "AI_CONNECTION_ERROR", response: timedOut ? "My AI system took too long to respond. Please try again, Master." : "Something went wrong while connecting to my AI system, Master." });
   }
 }

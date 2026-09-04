@@ -2,6 +2,7 @@
 // H.A.I.V.A. MAIN APPLICATION
 // =========================================
 
+import "../ui/polish.js";
 import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
@@ -38,9 +39,26 @@ class HAIVA {
       this.setupRecognition();
       this.setupReminderNotifications();
       this.setState("READY");
+      this.checkAIConnection();
     } catch (error) {
       console.error("Initialization failed:", error);
       this.setState("ERROR");
+    }
+  }
+
+  async checkAIConnection() {
+    try {
+      const response = await fetch(CONFIG.api.chatEndpoint, { method: "GET", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.configured === false) {
+        console.warn("[HAIVA] AI backend is reachable but not configured.");
+        const heard = document.getElementById("heard");
+        if (!this.voiceActivated && heard) heard.textContent = "Core online. AI connection needs configuration.";
+        return;
+      }
+      console.log("[HAIVA] AI backend health check passed.");
+    } catch (error) {
+      console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
     }
   }
 
@@ -78,10 +96,12 @@ class HAIVA {
     if (state === "LISTENING") heard.textContent = "Listening for your command…";
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
-    else if (state === "STANDBY") heard.textContent = "Standing by. Say: Yi, H.A.I.V.A.";
-    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Tap the microphone, then say: Yi, H.A.I.V.A.";
+    else if (state === "STANDBY") heard.textContent = "Standing by. Say: Yo, H.A.I.V.A.";
+    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Tap the microphone, then say: Yo, H.A.I.V.A.";
     else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
     else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
+    else if (state === "VOICE ERROR") heard.textContent = "Voice input recovered. Listening again…";
+    else if (state === "ERROR") heard.textContent = "H.A.I.V.A. core failed to initialize.";
   }
 
   showTranscript(text) {
