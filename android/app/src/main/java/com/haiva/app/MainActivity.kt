@@ -16,6 +16,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.webkit.WebViewAssetLoader
+import com.haiva.bridge.HaivaBridge
 import java.util.Locale
 
 class MainActivity : Activity(), HaivaBridge {
@@ -86,12 +87,12 @@ class MainActivity : Activity(), HaivaBridge {
                 notifySpeechDone()
                 return@runOnUiThread
             }
-            textToSpeech?.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, "haiva-response")
             textToSpeech?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) = Unit
                 override fun onDone(utteranceId: String?) = notifySpeechDone()
                 override fun onError(utteranceId: String?) = notifySpeechDone()
             })
+            textToSpeech?.speak(utterance, TextToSpeech.QUEUE_FLUSH, null, "haiva-response")
         }
     }
 
