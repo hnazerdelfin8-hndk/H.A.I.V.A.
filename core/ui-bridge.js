@@ -23,6 +23,15 @@ export function setVoiceButtonActive(active) {
 }
 
 export function speak(text) {
+  const message = String(text);
+
+  if (window.HAIVA_ANDROID?.speak) {
+    return new Promise(resolve => {
+      window.haivaNativeSpeechDone = resolve;
+      window.HAIVA_ANDROID.speak(message);
+    });
+  }
+
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) {
       resolve();
@@ -31,7 +40,7 @@ export function speak(text) {
 
     speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(String(text));
+    const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = CONFIG.voice.speechLanguage;
     utterance.rate = CONFIG.voice.speechRate;
     utterance.pitch = CONFIG.voice.speechPitch;

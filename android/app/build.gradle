@@ -11,9 +11,27 @@ android {
         applicationId 'com.haiva.app'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0.0'
+        versionCode 2
+        versionName '2.0.0'
     }
 }
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+// Package the canonical web runtime into the Android APK at build time.
+tasks.register('syncHaivaWebAssets', Copy) {
+    from(rootProject.projectDir.parentFile) {
+        include 'index.html'
+        include 'core/**'
+        include 'ui/**'
+        include 'skills/**'
+        include 'api/**'
+    }
+    into(layout.projectDirectory.dir('src/main/assets'))
+}
+
+preBuild.dependsOn(syncHaivaWebAssets)
 
 kotlin { jvmToolchain(17) }
