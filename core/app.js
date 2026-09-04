@@ -32,6 +32,8 @@ class HAIVA {
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
       this.setupReminderNotifications();
+      this.setupChat();
+      this.setupSettings();
       this.setState("READY");
       this.checkAIConnection();
     } catch (error) {
@@ -44,15 +46,57 @@ class HAIVA {
     try {
       const response = await fetch(CONFIG.api.chatEndpoint, { method: "GET", cache: "no-store" });
       const data = await response.json().catch(() => ({}));
+      const micSetting = document.getElementById("mic-setting");
+      if (micSetting) micSetting.textContent = navigator.mediaDevices?.getUserMedia ? "Available" : "Unavailable";
       if (!response.ok || data.configured === false) {
         console.warn("[HAIVA] AI backend is reachable but not configured.");
-        const heard = document.getElementById("heard");
-        if (!this.voiceActivated && heard) heard.textContent = "Core online. AI connection needs configuration.";
         return;
       }
       console.log("[HAIVA] AI backend health check passed.");
     } catch (error) {
       console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
+    }
+  }
+
+  setupSettings() {
+    const toggle = document.getElementById("settings-toggle");
+    const panel = document.getElementById("settings-panel");
+    if (!toggle || !panel) return;
+    toggle.addEventListener("click", () => {
+      const open = panel.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+  }
+
+  setupChat() {
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("chat-input");
+    if (!form || !input) return;
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text || this.isProcessing) return;
+      input.value = "";
+      void this.handleTextCommand(text);
+    });
+  }
+
+  async handleTextCommand(command) {
+    this.isProcessing = true;
+    this.stopListening();
+    this.showTranscript(command);
+    this.setState("THINKING");
+    try {
+      const response = await this.assistant.respond(command);
+      this.showResponse(response || CONFIG.assistant.fallbackResponse);
+    } catch (error) {
+      console.error("Text command failed:", error);
+      this.showResponse(CONFIG.assistant.fallbackResponse);
+      this.setState("VOICE ERROR");
+      return;
+    } finally {
+      this.isProcessing = false;
+      if (!this.voiceActivated) this.setState("READY");
     }
   }
 
@@ -89,25 +133,23 @@ class HAIVA {
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
     else if (state === "STANDBY") heard.textContent = "Standing by. Say: Yo, H.A.I.V.A.";
-    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Tap the microphone, then say: Yo, H.A.I.V.A.";
+    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Ready. Type a message or tap the microphone.";
     else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
     else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
-    else if (state === "VOICE ERROR") heard.textContent = "Voice input recovered. Listening again…";
+    else if (state === "VOICE ERROR") heard.textContent = "Voice input recovered. Try again…";
     else if (state === "ERROR") heard.textContent = "H.A.I.V.A. core failed to initialize.";
   }
 
   showTranscript(text) {
-    const heard = document.getElementById("heard");
     const transcript = document.getElementById("transcript");
-    if (heard && text) heard.textContent = `Heard: ${text}`;
     if (transcript && text) transcript.textContent = text;
   }
 
   showResponse(text) {
-    const heard = document.getElementById("heard");
     const reply = document.getElementById("reply");
-    if (heard && text) heard.textContent = text;
     if (reply && text) reply.textContent = text;
+    const conversation = document.getElementById("conversation");
+    if (conversation) conversation.scrollTop = conversation.scrollHeight;
   }
 
   setupRecognition() {
@@ -146,7 +188,7 @@ class HAIVA {
       if (navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
-      }
+      } else throw new Error("Microphone API unavailable");
     } catch (error) {
       console.error("Microphone permission failed:", error);
       return this.setState("MICROPHONE DENIED");
@@ -267,10 +309,10 @@ class HAIVA {
     this.setState("THINKING");
     try {
       const response = await this.assistant.respond(command);
-      this.showResponse(response);
+      this.showResponse(response || CONFIG.assistant.fallbackResponse);
       this.isSpeaking = true;
       this.setState("SPEAKING");
-      await speak(response);
+      await speak(response || CONFIG.assistant.fallbackResponse);
     } catch (error) {
       console.error("Command failed:", error);
       this.setState("VOICE ERROR");
