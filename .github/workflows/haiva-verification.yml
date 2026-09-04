@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   canonical-verification:
-    name: Canonical verification through Stage 6H Autonomous Intelligence Hardening
+    name: Canonical verification through Stage 7H Agent Ecosystem Hardening
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -22,5 +22,5 @@ jobs:
         with:
           node-version: 24
       - name: Run canonical verification
-        run: npm run test:stage6
-      # Canonical Stage 6 verification trigger marker
+        run: npm run test:stage7
+      # Canonical Stage 7 verification trigger marker
