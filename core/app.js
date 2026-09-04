@@ -6,14 +6,8 @@ import "../ui/polish.js";
 import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
-import {
-  setUIState,
-  setVoiceButtonActive,
-  speak,
-  normalizeSpeech,
-  containsWakeWord,
-  removeWakeWord
-} from "./ui-bridge.js";
+import { createSpeechRecognition } from "./voice/speech-to-text.js";
+import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, containsWakeWord, removeWakeWord } from "./ui-bridge.js";
 
 class HAIVA {
   constructor() {
@@ -81,9 +75,7 @@ class HAIVA {
         if (this.voiceActivated && !this.isProcessing) {
           this.setState("STANDBY");
           this.scheduleRecognitionRestart();
-        } else if (!this.voiceActivated) {
-          this.setState("READY");
-        }
+        } else if (!this.voiceActivated) this.setState("READY");
       }
     });
   }
@@ -119,16 +111,8 @@ class HAIVA {
   }
 
   setupRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      this.setState("VOICE UNAVAILABLE");
-      return;
-    }
-    this.recognition = new SpeechRecognition();
-    this.recognition.lang = CONFIG.voice.recognitionLanguage || "en-US";
-    this.recognition.continuous = CONFIG.voice.continuous !== false;
-    this.recognition.interimResults = CONFIG.voice.interimResults !== false;
-    this.recognition.maxAlternatives = 5;
+    this.recognition = createSpeechRecognition(CONFIG.voice);
+    if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
 
     this.recognition.onstart = () => {
       this.isListening = true;
@@ -257,68 +241,55 @@ class HAIVA {
       }
       return;
     }
-
-    clearTimeout(this.commandTimer);
-    this.commandTimer = null;
-    this.awaitingCommand = false;
     void this.handleCommand(transcript);
   }
 
   async speakWakeAcknowledgement() {
-    if (this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
     this.isSpeaking = true;
-    this.stopListening();
     this.setState("SPEAKING");
-    try {
-      const response = CONFIG.assistant.defaultGreeting;
-      this.showResponse(response);
-      await speak(response);
-    } finally { this.isSpeaking = false; }
-    if (this.voiceActivated && !this.isProcessing) {
-      this.armForCommand();
-      this.scheduleRecognitionRestart();
+    try { await speak(CONFIG.assistant.greeting); }
+    catch (error) { console.warn("Wake acknowledgement failed:", error); }
+    finally {
+      this.isSpeaking = false;
+      if (this.voiceActivated && !this.isProcessing) {
+        this.setState("LISTENING");
+        this.startListening();
+      }
     }
   }
 
   async handleCommand(command) {
-    const text = String(command || "").trim();
-    if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
-    this.lastTranscript = "";
+    clearTimeout(this.commandTimer);
+    this.commandTimer = null;
+    this.awaitingCommand = false;
     this.isProcessing = true;
     this.stopListening();
     this.setState("THINKING");
     try {
-      const response = await this.assistant.respond(text);
-      if (response) {
-        this.setState("SPEAKING");
-        this.showResponse(response);
-        await speak(response);
-      }
-    } catch (error) {
-      console.error("Assistant response failed:", error);
+      const result = await this.assistant.process(command);
+      const response = result?.response || result?.message || String(result || "");
+      this.showResponse(response);
       this.isSpeaking = true;
       this.setState("SPEAKING");
-      try {
-        const response = "Sorry, Master. I could not process that request.";
-        this.showResponse(response);
-        await speak(response);
-      } finally { this.isSpeaking = false; }
+      await speak(response);
+    } catch (error) {
+      console.error("Command failed:", error);
+      this.setState("VOICE ERROR");
     } finally {
+      this.isSpeaking = false;
       this.isProcessing = false;
-      this.awaitingCommand = false;
-    }
-    if (this.voiceActivated) {
-      this.setState("STANDBY");
-      this.scheduleRecognitionRestart();
+      if (this.voiceActivated) {
+        this.setState("STANDBY");
+        this.scheduleRecognitionRestart();
+      } else this.setState("READY");
     }
   }
+
+  handleButtonClick() { void this.activateVoice(); }
 }
 
-const haiva = new HAIVA();
-window.HAIVA = haiva;
-
-document.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", () => {
+  const app = new HAIVA();
   const button = document.getElementById("activate-voice");
-  if (!button) return console.warn("Activate Voice button not found.");
-  button.addEventListener("click", () => void haiva.activateVoice());
+  if (button) button.addEventListener("click", () => app.handleButtonClick());
 });
