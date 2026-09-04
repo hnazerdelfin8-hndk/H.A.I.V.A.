@@ -45,7 +45,6 @@ TAGALOG / TAGLISH QUALITY:
 - If the user speaks English, answer in English.
 - Do not translate English word-for-word into awkward Filipino.
 - Use normal everyday Filipino sentence structure and vocabulary.
-- Avoid deep, archaic, overly formal, or unnatural Tagalog unless the user asks for it.
 - Keep technical terms in English when that is clearer and more natural.
 - Match the user's tone without copying mistakes that would make the answer harder to understand.
 
@@ -63,7 +62,7 @@ CONTEXT:
 - When a follow-up clearly refers to the previous topic, continue that topic instead of restarting from zero.
 
 LIMITATIONS:
-- The browser handles voice recognition, speech synthesis, and local conversation memory.
+- The client handles voice recognition, speech synthesis, and local conversation memory.
 - You handle reasoning and conversation.
 - If the user asks for an action that is not actually connected to H.A.I.V.A., explain the limitation honestly instead of pretending it happened.
 
@@ -89,7 +88,7 @@ The current message is the user's latest request. Respond directly and naturally
     const responseText = await groqResponse.text();
     if (!groqResponse.ok) {
       console.error("[HAIVA] Groq API rejected request", { status: groqResponse.status });
-      return res.status(502).json({ response: `Groq connection error (${groqResponse.status}). Please check the Vercel API configuration, Master.` });
+      return res.status(502).json({ response: `Groq connection error (${groqResponse.status}). Please check the AI Core configuration, Master.` });
     }
 
     let data;
