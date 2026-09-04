@@ -266,8 +266,7 @@ class HAIVA {
     this.stopListening();
     this.setState("THINKING");
     try {
-      const result = await this.assistant.process(command);
-      const response = result?.response || result?.message || String(result || "");
+      const response = await this.assistant.respond(command);
       this.showResponse(response);
       this.isSpeaking = true;
       this.setState("SPEAKING");
