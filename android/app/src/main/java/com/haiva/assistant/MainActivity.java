@@ -59,7 +59,10 @@ public class MainActivity extends Activity {
         tts = new TTSManager(this, value -> {
             speaking = value;
             if (value) setStatus("SPEAKING");
-            else if (voiceMode) scheduleStandby();
+            else if (voiceMode) {
+                if (commandMode) startCommandListening();
+                else scheduleStandby();
+            }
         });
         core = new CoreBridge(new HaivaBody(ai, memory, tools, tts));
         wakeWord = new WakeWordEngine();
@@ -172,7 +175,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams sp = lp(54, 54); sp.setMargins(6, 0, 0, 0); composer.addView(send, sp);
         root.addView(composer, lp(-1, 63));
 
-        TextView hint = label("WAKE WORD   •   “Yi, H.A.I.V.A.”", 9, muted());
+        TextView hint = label("WAKE WORD   •   “Yo, H.A.I.V.A.”", 9, muted());
         hint.setGravity(Gravity.CENTER);
         hint.setLetterSpacing(.08f);
         root.addView(hint, lp(-1, 24));
@@ -212,7 +215,7 @@ public class MainActivity extends Activity {
         page.addView(pageHeader("Settings", v -> { buildUi(); setupSpeechIfNeeded(); if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED) startVoiceMode(); }));
         page.addView(settingCard("AI", "HYBRID", "Chat + voice use the same H.A.I.V.A. Core"));
         page.addView(settingCard("MEMORY", "LOCAL • ON", "Persistent conversation memory on this device"));
-        page.addView(settingCard("VOICE", "WAKE WORD", "Yi, H.A.I.V.A.  •  Android speech + TTS"));
+        page.addView(settingCard("VOICE", "WAKE WORD", "Yo, H.A.I.V.A.  •  Android speech + TTS"));
         Button plugins = actionCard("🔌  PLUGIN MANAGER", "Google • GitHub • Notion • AI providers");
         plugins.setOnClickListener(v -> showPlugins()); page.addView(plugins, lp(-1,78));
         page.addView(settingCard("SECURITY", "LOCAL-FIRST", "Microphone permission and local runtime"));
@@ -247,26 +250,34 @@ public class MainActivity extends Activity {
         speech=new SpeechEngine(this,new SpeechEngine.Listener(){
             public void onReady(){if(voiceMode)setStatus(commandMode?"LISTENING":"STANDBY");}
             public void onResult(String value){handleVoiceText(value);}
-            public void onError(int code){if(voiceMode&&!speaking)scheduleStandby();}
-            public void onEnd(){if(voiceMode&&!speaking)scheduleStandby();}
+            public void onError(int code){if(voiceMode&&!speaking&&!commandMode)scheduleStandby();}
+            public void onEnd(){if(voiceMode&&!speaking&&!commandMode)scheduleStandby();}
         });
     }
     private void handleVoiceText(String raw){
-        String heard=raw==null?"":raw.trim(); if(heard.isEmpty()){scheduleStandby();return;}
+        String heard=raw==null?"":raw.trim(); if(heard.isEmpty()){if(commandMode)startCommandListening();else scheduleStandby();return;}
         if(!commandMode){
             if(!wakeWord.containsWakeWord(heard)){scheduleStandby();return;}
             String command=wakeWord.extractCommand(heard);
             if(!command.isEmpty()){processCommand(command);return;}
-            commandMode=true; setStatus("LISTENING"); speak("Yes, Master. I'm listening.");
-            handler.postDelayed(()->{if(voiceMode&&commandMode&&!speaking)speech.start();},1100); return;
+            commandMode=true;
+            setStatus("LISTENING");
+            speak("Yes, Master.");
+            return;
         }
         commandMode=false; processCommand(heard);
+    }
+    private void startCommandListening(){
+        if(!voiceMode||speaking||speech==null)return;
+        handler.removeCallbacksAndMessages(null);
+        setStatus("LISTENING");
+        speech.start();
     }
     private void processCommand(String command){
         if(command==null||command.trim().isEmpty())return; commandMode=false; setStatus("THINKING"); append("Master",command.trim());
         String response=core.dispatch(command.trim()); append("H.A.I.V.A.",response); speak(response);
     }
-    private void speak(String value){if(tts!=null&&tts.isReady())tts.speak(value);else if(voiceMode)scheduleStandby();else setStatus("STANDBY");}
+    private void speak(String value){if(tts!=null&&tts.isReady())tts.speak(value);else if(voiceMode){if(commandMode)startCommandListening();else scheduleStandby();}else setStatus("STANDBY");}
     private void toggleVoiceMode(){
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC_REQUEST);return;}
         if(voiceMode)stopVoiceMode();else startVoiceMode();
@@ -278,7 +289,7 @@ public class MainActivity extends Activity {
     private void stopVoiceMode(){
         voiceMode=false;commandMode=false;handler.removeCallbacksAndMessages(null);if(speech!=null)speech.cancel();if(tts!=null)tts.stop();if(micButton!=null)micButton.setText("◉");setStatus("STANDBY");
     }
-    private void scheduleStandby(){if(!voiceMode||speaking||speech==null)return;handler.removeCallbacksAndMessages(null);handler.postDelayed(()->{if(voiceMode&&!speaking)speech.start();},650);}
+    private void scheduleStandby(){if(!voiceMode||speaking||speech==null||commandMode)return;handler.removeCallbacksAndMessages(null);handler.postDelayed(()->{if(voiceMode&&!speaking&&!commandMode)speech.start();},650);}
     private void append(String who,String value){if(conversation==null)return;if(conversation.getText().length()>0)conversation.append("\n\n");conversation.append(who+"  ›  "+value);}
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==MIC_REQUEST){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startVoiceMode();else setStatus("MICROPHONE PERMISSION REQUIRED");}}
     @Override protected void onResume(){super.onResume();if(!voiceMode&&checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startVoiceMode();}
