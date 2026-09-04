@@ -15,7 +15,7 @@ import com.haiva.bridge.HaivaBridge
 class MainActivity : Activity(), HaivaBridge {
     private lateinit var webView: WebView
     private val voicePermissionRequestCode = 1001
-    private val coreUrl = "https://raw.githubusercontent.com/hnazerdelfin8-hndk/H.A.I.V.A./main/index.html"
+    private val coreUrl = "file:///android_asset/haiva/index.html"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,7 +24,7 @@ class MainActivity : Activity(), HaivaBridge {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            allowFileAccess = false
+            allowFileAccess = true
             allowContentAccess = true
             cacheMode = WebSettings.LOAD_DEFAULT
         }
