@@ -1,0 +1,32 @@
+name: H.A.I.V.A. CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  core-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate JavaScript syntax
+        shell: bash
+        run: |
+          set -e
+          find . -type f -name '*.js' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
+            node --check "$file"
+          done
+
+      - name: Validate orchestrator and router
+        run: |
+          node --check core/orchestrator/index.js
+          node --check core/router.js
