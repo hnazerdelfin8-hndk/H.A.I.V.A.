@@ -23,3 +23,4 @@ jobs:
           node-version: 24
       - name: Run canonical verification
         run: npm run test:stage5
+      # Canonical Stage 5 verification trigger marker
