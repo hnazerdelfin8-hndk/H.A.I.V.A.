@@ -58,6 +58,24 @@ test("main application calls the assistant's supported respond API", async () =>
   assert.doesNotMatch(source, /this\.assistant\.process\(command\)/);
 });
 
+test("chat and voice modes use separate response behavior", async () => {
+  const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
+  const chatHandler = source.match(/async handleTextCommand\(command\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const voiceHandler = source.match(/async handleCommand\(command\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(chatHandler, /this\.assistant\.respond\(command\)/);
+  assert.doesNotMatch(chatHandler, /await speak\(answer\)/);
+  assert.match(voiceHandler, /this\.assistant\.respond\(command\)/);
+  assert.match(voiceHandler, /await speak\(answer\)/);
+});
+
+test("AI orchestration has a bounded remote request and no retry storm", async () => {
+  const source = await readFile(new URL("../core/orchestrator/index.js", import.meta.url), "utf8");
+  assert.match(source, /const DEFAULT_MAX_RETRIES = 0/);
+  assert.match(source, /const AI_REQUEST_TIMEOUT_MS = 8000/);
+  assert.match(source, /new AbortController\(\)/);
+  assert.match(source, /signal: controller\.signal/);
+});
+
 test("orchestrator executes through the configured chat gateway", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
