@@ -24,7 +24,17 @@ class HAIVA {
     this.intentionalStop = false;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
-    this.initialize();
+
+    // Wire the user-facing shell BEFORE optional core initialization.
+    // A skill/brain failure must never leave chat or the microphone stuck on
+    // "Initializing".
+    this.setupChat();
+    this.setupSettings();
+    this.setupNativeVoiceEvents();
+    this.setupReminderNotifications();
+    this.setState("READY");
+
+    void this.initialize();
   }
 
   async initialize() {
@@ -32,15 +42,14 @@ class HAIVA {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
-      this.setupNativeVoiceEvents();
-      this.setupReminderNotifications();
-      this.setupChat();
-      this.setupSettings();
-      this.setState("READY");
+      this.setState(result.degraded ? "READY" : "READY");
       this.checkAIConnection();
     } catch (error) {
       console.error("Initialization failed:", error);
-      this.setState("ERROR");
+      // Keep the shell interactive even if a non-essential core module fails.
+      this.setupRecognition();
+      this.setState("READY");
+      this.checkAIConnection();
     }
   }
 
@@ -51,8 +60,8 @@ class HAIVA {
       const micSetting = document.getElementById("mic-setting");
       if (micSetting) micSetting.textContent = (navigator.mediaDevices?.getUserMedia || this.nativeVoice) ? "Available" : "Unavailable";
       if (!response.ok) console.warn("[HAIVA] AI backend health check returned", response.status);
-      else if (data.configured === false) console.warn("[HAIVA] AI backend is reachable but not configured.");
-      else console.log("[HAIVA] AI backend health check passed.");
+      else if (data.configuredBrains?.length === 0) console.warn("[HAIVA] AI backend is reachable but no brain is configured.");
+      else console.log("[HAIVA] AI backend health check passed.", data.configuredBrains);
     } catch (error) {
       console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
     }
@@ -90,7 +99,6 @@ class HAIVA {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
-      // Chat mode is text-only: deliberately do NOT call speak().
       this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
@@ -219,9 +227,6 @@ class HAIVA {
     }
     this.voiceActivated = true;
     this.intentionalStop = false;
-    // IMPORTANT: tapping the microphone is an explicit voice-command action.
-    // Do not require the wake word for the first command; otherwise a normal
-    // spoken command is captured and then discarded while the UI remains silent.
     this.awaitingCommand = true;
     this.lastTranscript = "";
     setVoiceButtonActive(true);
@@ -354,7 +359,6 @@ class HAIVA {
     try {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
-      // Voice mode keeps the text response visible as CC while speaking it aloud.
       this.showResponse(answer);
       this.isSpeaking = true;
       this.setState("SPEAKING");
