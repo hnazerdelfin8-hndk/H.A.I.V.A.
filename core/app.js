@@ -109,8 +109,9 @@ class HAIVA {
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.handleResultText(text);
     });
-    window.addEventListener("haiva:native-voice-error", () => {
+    window.addEventListener("haiva:native-voice-error", event => {
       this.isListening = false;
+      console.warn("[HAIVA] Native speech recognition error:", event.detail?.code);
       if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
         this.setState("VOICE ERROR");
         this.scheduleRecognitionRestart();
@@ -204,7 +205,6 @@ class HAIVA {
     if (this.voiceActivated) return this.deactivateVoice();
     try {
       if (this.nativeVoice) {
-        // Android owns microphone permission and native SpeechRecognizer in APK mode.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
           stream?.getTracks().forEach(track => track.stop());
@@ -219,10 +219,13 @@ class HAIVA {
     }
     this.voiceActivated = true;
     this.intentionalStop = false;
-    this.awaitingCommand = false;
+    // IMPORTANT: tapping the microphone is an explicit voice-command action.
+    // Do not require the wake word for the first command; otherwise a normal
+    // spoken command is captured and then discarded while the UI remains silent.
+    this.awaitingCommand = true;
     this.lastTranscript = "";
     setVoiceButtonActive(true);
-    this.setState("STANDBY");
+    this.setState("LISTENING");
     this.startListening();
   }
 
