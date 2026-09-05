@@ -147,9 +147,10 @@ class HAIVA {
       this.isListening = false;
       const code = Number(event.detail?.code);
       console.warn("[HAIVA] Native speech recognition error:", code);
-      if (this.voiceActivated && !this.isProcessing && !this.isSpeaking && !this.intentionalStop) {
+      if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
         this.setState("VOICE ERROR");
-        this.scheduleRecognitionRestart();
       }
     });
   }
@@ -168,10 +169,9 @@ class HAIVA {
       } catch (error) { console.warn("Reminder speech failed:", error); }
       finally {
         this.isSpeaking = false;
-        if (this.voiceActivated && !this.isProcessing) {
-          this.setState("LISTENING");
-          this.scheduleRecognitionRestart();
-        } else if (!this.voiceActivated) this.setState("READY");
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
+        this.setState("READY");
       }
     });
   }
@@ -185,10 +185,10 @@ class HAIVA {
     else if (state === "LISTENING") heard.textContent = "Listening… speak now.";
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
-    else if (state === "READY" && !this.voiceActivated) heard.textContent = "Ready. Type a message or tap the microphone.";
+    else if (state === "READY") heard.textContent = "Ready. Type a message or tap the microphone.";
     else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
     else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
-    else if (state === "VOICE ERROR") heard.textContent = "Voice input needs attention. Try the microphone again.";
+    else if (state === "VOICE ERROR") heard.textContent = "Voice input needs attention. Tap the microphone to try again.";
     else if (state === "ERROR") heard.textContent = "H.A.I.V.A. recovered. Ready for another message.";
   }
 
@@ -211,7 +211,7 @@ class HAIVA {
     this.recognition.onstart = () => {
       this.isListening = true;
       this.intentionalStop = false;
-      if (!this.isSpeaking && !this.isProcessing) this.setState("LISTENING");
+      if (!this.isSpeaking && !this.isProcessing && this.voiceActivated) this.setState("LISTENING");
     };
     this.recognition.onresult = event => this.handleResult(event);
     this.recognition.onerror = event => {
@@ -221,23 +221,26 @@ class HAIVA {
         this.voiceActivated = false;
         setVoiceButtonActive(false);
         this.setState("MICROPHONE DENIED");
-      } else if (event.error !== "no-speech" && event.error !== "aborted" && !this.intentionalStop) {
+      } else if (event.error !== "no-speech" && event.error !== "aborted") {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
         this.setState("VOICE ERROR");
-        this.scheduleRecognitionRestart();
       }
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      if (!this.intentionalStop && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        this.setState("LISTENING");
-        this.scheduleRecognitionRestart();
+      // One microphone tap = one listening cycle. Never auto-restart here.
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
+        this.setState("READY");
       }
     };
   }
 
   async activateVoice() {
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
-    if (this.voiceActivated) return this.deactivateVoice();
+    if (this.voiceActivated) return;
     try {
       if (this.nativeVoice) {
         if (navigator.mediaDevices?.getUserMedia) {
@@ -273,7 +276,7 @@ class HAIVA {
     setVoiceButtonActive(false);
     this.setState("READY");
     const heard = document.getElementById("heard");
-    if (heard) heard.textContent = "Voice paused";
+    if (heard) heard.textContent = "Ready. Type a message or tap the microphone.";
   }
 
   startListening() {
@@ -283,27 +286,19 @@ class HAIVA {
       this.isListening = true;
       this.setState("LISTENING");
       try { window.HaivaBridge.startVoiceCapture(); }
-      catch (error) { this.isListening = false; this.setState("VOICE ERROR"); }
+      catch (error) {
+        this.isListening = false;
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
+        this.setState("VOICE ERROR");
+      }
       return;
     }
     if (!this.recognition) return;
     try { this.recognition.start(); } catch (error) { console.debug("Recognition start skipped:", error?.message || error); }
   }
 
-  scheduleRecognitionRestart() {
-    if (!this.voiceActivated || this.isSpeaking || this.isProcessing || this.intentionalStop) return;
-    clearTimeout(this.restartTimer);
-    this.restartTimer = setTimeout(() => {
-      this.restartTimer = null;
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
-        this.startListening();
-      }
-    }, CONFIG.voice.restartDelay || 500);
-  }
-
   stopListening() {
-    clearTimeout(this.restartTimer);
-    this.restartTimer = null;
     this.intentionalStop = true;
     if (this.nativeVoice) {
       try { window.HaivaBridge.stopVoiceCapture(); } catch (error) { console.debug("Native recognition stop skipped:", error?.message || error); }
@@ -332,8 +327,6 @@ class HAIVA {
     let transcript = normalizeSpeech(rawText);
     if (!transcript || transcript === this.lastTranscript) return;
 
-    // Wake phrases are accepted, but they are not a gate anymore.
-    // If present, remove the phrase and process the actual command immediately.
     transcript = removeWakeWord(transcript) || transcript;
     this.lastTranscript = normalizeSpeech(rawText);
     this.showTranscript(transcript);
@@ -361,10 +354,9 @@ class HAIVA {
     } finally {
       this.isSpeaking = false;
       this.isProcessing = false;
-      if (this.voiceActivated) {
-        this.setState("LISTENING");
-        this.scheduleRecognitionRestart();
-      } else this.setState("READY");
+      this.voiceActivated = false;
+      setVoiceButtonActive(false);
+      this.setState("READY");
     }
   }
 }
