@@ -9,6 +9,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -28,10 +29,24 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private var pendingWebPermissionRequest: PermissionRequest? = null
     private var ttsReady = false
     private var pendingNativeVoiceStart = false
+    private var destroyed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         textToSpeech = TextToSpeech(this, this)
+        textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
+            }
+
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
+            }
+        })
+
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
                 setRecognitionListener(recognitionListener)
@@ -57,13 +72,16 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                     if (audioRequested && !microphoneGranted) {
                         pendingWebPermissionRequest = request
                         requestVoicePermission()
-                    } else request.grant(request.resources)
+                    } else {
+                        try { request.grant(request.resources) } catch (_: Exception) {}
+                    }
                 }
             }
         }
 
         setContentView(webView)
         webView.loadUrl(coreUrl)
+
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestVoicePermission()
         }
@@ -76,19 +94,25 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-ready'))", null)
+            dispatchJsEvent("haiva:native-voice-ready")
         }
+
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
-        override fun onError(error: Int) { dispatchVoiceError(error) }
+
+        override fun onError(error: Int) {
+            dispatchVoiceError(error)
+        }
+
         override fun onResults(results: Bundle?) {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoiceResult(text)
+            else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
         }
     }
 
@@ -101,19 +125,23 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != voicePermissionRequestCode) return
+
         val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
         val request = pendingWebPermissionRequest
         pendingWebPermissionRequest = null
+
         if (granted) {
-            request?.let { try { it.grant(it.resources) } catch (_: Exception) {} }
-            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:microphone-ready'))", null)
+            request?.let {
+                try { it.grant(it.resources) } catch (_: Exception) {}
+            }
+            dispatchJsEvent("haiva:microphone-ready")
             if (pendingNativeVoiceStart) {
                 pendingNativeVoiceStart = false
                 startNativeRecognition()
             }
         } else {
             pendingNativeVoiceStart = false
-            request?.deny()
+            request?.let { try { it.deny() } catch (_: Exception) {} }
             Toast.makeText(this, "Microphone permission is required for H.A.I.V.A. voice mode.", Toast.LENGTH_LONG).show()
             dispatchVoiceError(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
         }
@@ -122,6 +150,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     @JavascriptInterface
     override fun startVoiceCapture() {
         runOnUiThread {
+            if (destroyed) return@runOnUiThread
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 pendingNativeVoiceStart = true
                 requestVoicePermission()
@@ -136,12 +165,14 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT)
             return
         }
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
+
         try {
             recognizer.cancel()
             recognizer.startListening(intent)
@@ -161,15 +192,16 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     @JavascriptInterface
     override fun speak(text: String) {
         runOnUiThread {
-            if (!ttsReady) {
+            if (destroyed || !ttsReady) {
                 dispatchSpeechDone()
                 return@runOnUiThread
             }
+
             textToSpeech.language = Locale.US
             textToSpeech.setSpeechRate(1.0f)
             textToSpeech.setPitch(1.0f)
-            textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAIVA_RESPONSE")
-            webView.postDelayed({ dispatchSpeechDone() }, maxOf(800L, text.length * 85L))
+            val queued = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAIVA_RESPONSE")
+            if (queued == TextToSpeech.ERROR) dispatchSpeechDone()
         }
     }
 
@@ -180,19 +212,45 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private fun dispatchVoiceResult(text: String) {
         val quoted = org.json.JSONObject.quote(text)
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))", null)
+        runOnUiThread {
+            if (!destroyed) {
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))",
+                    null
+                )
+            }
+        }
     }
 
     private fun dispatchVoiceError(error: Int) {
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:$error}}))", null)
+        runOnUiThread {
+            if (!destroyed) {
+                val safeCode = error.toString()
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:$safeCode}}))",
+                    null
+                )
+            }
+        }
     }
 
     private fun dispatchSpeechDone() {
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-speech-done'))", null)
+        runOnUiThread {
+            if (!destroyed) dispatchJsEvent("haiva:native-speech-done")
+        }
+    }
+
+    private fun dispatchJsEvent(name: String) {
+        if (destroyed) return
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('$name'))",
+            null
+        )
     }
 
     override fun onDestroy() {
-        pendingWebPermissionRequest?.deny()
+        destroyed = true
+        pendingWebPermissionRequest?.let { try { it.deny() } catch (_: Exception) {} }
         pendingWebPermissionRequest = null
         pendingNativeVoiceStart = false
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
