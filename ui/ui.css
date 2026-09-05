@@ -1,226 +1,173 @@
-/* =========================================
-   H.A.I.V.A. UI
-   Main Interface Styling
-   ========================================= */
+/* H.A.I.V.A. UI template styles
+   Keep visual rules compatible with the live index.html UI.
+   Core behavior is intentionally not defined here. */
 
-* {
-  box-sizing: border-box;
+.haiva-ui,
+.hero,
+.conversation,
+.chat-form,
+.settings-panel {
+  width: 100%;
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: Arial, sans-serif;
-  background: #050505;
-  color: white;
-  display: flex;
-  justify-content: center;
+.hero {
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 28px;
+  background: linear-gradient(180deg,rgba(11,23,41,.74),rgba(4,9,17,.62));
+  padding: 13px;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-row { display: flex; justify-content: center; }
+.status-pill {
+  display: inline-flex;
   align-items: center;
-}
-
-.haiva-header {
-  text-align: center;
-  margin-top: 30px;
-}
-
-.haiva-header h1 {
-  margin: 0;
-  font-size: 42px;
-  letter-spacing: 6px;
-}
-
-.haiva-header p {
-  margin-top: 10px;
-  color: #aaa;
-  font-size: 13px;
+  gap: 8px;
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 8px;
+  font-weight: 800;
   letter-spacing: 2px;
 }
-
-.haiva-orb-section {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #48adff;
 }
 
-.orb {
-  width: 190px;
-  height: 190px;
-  border-radius: 50%;
-  border: 2px solid #777;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.orb-wrap {
+  height: 222px;
+  display: grid;
+  place-items: center;
   position: relative;
-  box-shadow: 0 0 35px rgba(255, 255, 255, 0.15);
-  transition: 0.3s;
 }
-
-.orb::before {
-  content: "";
-  width: 130px;
-  height: 130px;
+.orb {
+  width: 168px;
+  height: 168px;
   border-radius: 50%;
-  border: 1px solid #555;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(72,173,255,.68);
+  transition: transform .25s, box-shadow .25s, border-color .25s;
+}
+.orb-ring {
   position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px solid rgba(45,228,224,.08);
 }
-
-.orb.active {
-  animation: pulse 1.2s infinite;
-  box-shadow: 0 0 50px rgba(255, 255, 255, 0.45);
+.core {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  background: radial-gradient(circle,#d9f7ff 0,#55bdff 20%,#1a76d4 45%,rgba(26,118,212,.08) 72%,transparent 73%);
 }
-
-.orb.thinking {
-  animation: thinking 0.8s infinite;
-  box-shadow: 0 0 70px rgba(100, 180, 255, 0.5);
-}
-
-.orb.speaking {
-  animation: speaking 0.55s infinite;
-  box-shadow: 0 0 80px rgba(100, 180, 255, 0.65);
-}
-
-.orb-text {
-  z-index: 2;
-  font-size: 18px;
+.orb-label {
+  position: absolute;
+  bottom: 13px;
+  font-size: 8px;
+  font-weight: 700;
   letter-spacing: 3px;
 }
 
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.06);
-  }
-
-  100% {
-    transform: scale(1);
-  }
+.voice-copy { text-align: center; }
+.voice-copy .message {
+  margin: 4px auto 0;
+  min-height: 24px;
+  font-size: 12px;
+  line-height: 1.45;
 }
-
-@keyframes thinking {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.04);
-  }
-
-  100% {
-    transform: scale(1);
-  }
+.mic {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 1px solid rgba(72,173,255,.6);
+  background: linear-gradient(180deg,rgba(20,39,66,.92),rgba(8,17,31,.92));
+  display: grid;
+  place-items: center;
+  margin: 9px auto 0;
+  cursor: pointer;
 }
+.mic span { font-size: 22px; }
+.mic.active { border-color: #2de4e0; }
 
-@keyframes speaking {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.08);
-  }
-
-  100% {
-    transform: scale(1);
-  }
+.mode-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.mode-card {
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 15px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.025);
 }
+.mode-title { font-size: 8px; letter-spacing: 1.5px; font-weight: 800; }
+.mode-value { font-size: 10px; margin-top: 4px; }
 
 .conversation {
-  width: 100%;
-  min-height: 180px;
-  text-align: center;
-  font-size: 15px;
-  line-height: 1.5;
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 22px;
+  background: rgba(6,13,24,.7);
+  padding: 13px;
+  min-height: 185px;
+  max-height: 34vh;
+  overflow: auto;
 }
-
-.label {
-  color: #777;
+.conversation-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.conversation-title,
+.label { font-size: 8px; letter-spacing: 2px; font-weight: 800; }
+.online { font-size: 8px; }
+.bubble-block { margin-bottom: 12px; }
+.bubble {
+  margin-top: 5px;
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.035);
   font-size: 11px;
-  letter-spacing: 2px;
-  margin-bottom: 7px;
+  line-height: 1.55;
+  min-height: 36px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
+.bubble.user { background: rgba(72,173,255,.075); }
 
-#status {
-  color: #aaa;
-  margin-bottom: 18px;
+.chat-form { display: flex; gap: 8px; }
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 17px;
+  background: rgba(6,13,24,.9);
+  padding: 13px 14px;
+  outline: none;
+  font-size: 12px;
 }
-
-#transcript,
-#reply {
-  min-height: 40px;
-  padding: 0 10px;
-  margin-bottom: 15px;
-}
-
-#reply {
-  color: #ddd;
-}
-
-.mic-button {
-  width: 85px;
-  height: 85px;
-  border-radius: 50%;
-  border: 2px solid white;
-  background: transparent;
-  color: white;
-  font-size: 32px;
+.send-btn {
+  width: 50px;
+  border: 1px solid rgba(72,173,255,.45);
+  border-radius: 17px;
+  background: rgba(72,173,255,.1);
   cursor: pointer;
-  margin-bottom: 30px;
+  font-size: 18px;
 }
+.send-btn:disabled,
+.chat-input:disabled { opacity: .45; cursor: not-allowed; }
 
-.mic-button:active {
-  transform: scale(0.94);
+.settings-panel {
+  display: none;
+  border: 1px solid rgba(108,171,225,.18);
+  border-radius: 18px;
+  background: rgba(5,11,20,.97);
+  padding: 12px;
 }
-
-.mic-button.listening {
-  animation: micPulse 1s infinite;
+.settings-panel.open { display: block; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 2px;
+  border-bottom: 1px solid rgba(137,176,220,.08);
+  font-size: 11px;
 }
-
-.mic-button.active {
-  border-color: #66b6ff;
-  box-shadow: 0 0 30px rgba(100, 180, 255, 0.5);
-}
-
-@keyframes micPulse {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.08);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.hint {
-  color: #555;
-  font-size: 10px;
-  margin-top: -15px;
-  margin-bottom: 15px;
-  text-align: center;
-}
-
-@media (max-width: 500px) {
-  body {
-    align-items: stretch;
-  }
-
-  .haiva-header h1 {
-    font-size: 36px;
-  }
-
-  .orb {
-    width: 170px;
-    height: 170px;
-  }
-
-  .orb::before {
-    width: 115px;
-    height: 115px;
-  }
-}
+.setting-value { font-size: 9px; }

@@ -1,116 +1,84 @@
 // =========================================
 // H.A.I.V.A. UI Controller
 // =========================================
+// UI-only state helpers.
+// Core behavior remains in core/app.js and core/phase1-controls.js.
+// Keep these selectors synchronized with index.html and ui/ui.html.
 
-const orb = document.getElementById("orb");
-const status = document.getElementById("status");
-const transcript = document.getElementById("transcript");
-const reply = document.getElementById("reply");
-const micButton = document.getElementById("micButton");
-
-let listening = false;
-let conversationMode = false;
-
-// -----------------------------------------
-// UI State Controller
-// -----------------------------------------
+const get = id => document.getElementById(id);
 
 export function setStatus(message) {
-  if (status) {
-    status.textContent = message;
-  }
+  const status = get("haiva-status");
+  if (status) status.textContent = String(message ?? "");
 }
 
 export function setTranscript(message) {
-  if (transcript) {
-    transcript.textContent = message;
-  }
+  const transcript = get("transcript");
+  if (transcript) transcript.textContent = String(message ?? "");
 }
 
 export function setReply(message) {
-  if (reply) {
-    reply.textContent = message;
-  }
+  const reply = get("reply");
+  if (reply) reply.textContent = String(message ?? "");
+}
+
+export function setHeard(message) {
+  const heard = get("heard");
+  if (heard) heard.textContent = String(message ?? "");
 }
 
 export function setOrbState(state) {
+  const orb = get("orb");
   if (!orb) return;
 
-  orb.classList.remove(
-    "active",
-    "thinking",
-    "speaking"
-  );
+  orb.classList.remove("active", "thinking", "speaking", "listening");
 
   if (state) {
-    orb.classList.add(state);
+    orb.classList.add(String(state));
   }
 }
 
-// -----------------------------------------
-// Conversation State
-// -----------------------------------------
-
 export function setConversationMode(active) {
-  conversationMode = active;
+  const button = get("activate-voice");
+  if (!button) return;
 
-  if (!micButton) return;
-
-  if (active) {
-    micButton.textContent = "⏹️";
-    micButton.classList.add("active");
-    setStatus("Listening...");
-  } else {
-    micButton.textContent = "🎙️";
-    micButton.classList.remove("active");
-    micButton.classList.remove("listening");
-    setStatus("Ready");
-  }
+  const enabled = Boolean(active);
+  button.classList.toggle("active", enabled);
+  button.setAttribute("aria-pressed", String(enabled));
+  button.title = enabled
+    ? "Voice active — tap to pause"
+    : "Activate voice mode";
 }
 
 export function setListening(active) {
-  listening = active;
+  const button = get("activate-voice");
+  const enabled = Boolean(active);
 
-  if (!micButton) return;
-
-  if (active) {
-    micButton.classList.add("listening");
-    setOrbState("active");
-    setStatus("Listening...");
-  } else {
-    micButton.classList.remove("listening");
-    setOrbState(null);
+  if (button) {
+    button.classList.toggle("active", enabled);
+    button.classList.toggle("listening", enabled);
+    button.setAttribute("aria-pressed", String(enabled));
   }
+
+  setOrbState(enabled ? "active" : null);
 }
 
-// -----------------------------------------
-// Reset UI
-// -----------------------------------------
+export function setChatEnabled(enabled) {
+  const input = get("chat-input");
+  const send = get("send-message");
+  const active = Boolean(enabled);
+
+  if (input) input.disabled = !active;
+  if (send) send.disabled = !active;
+}
 
 export function resetUI() {
-  setConversationMode(false);
-
-  setListening(false);
-
   setStatus("Ready");
-
-  setTranscript(
-    'Say "Yo HAIVA" to begin.'
-  );
-
-  setReply(
-    "Standing by."
-  );
-
+  setHeard("Initializing H.A.I.V.A. core…");
+  setTranscript("—");
+  setReply("Standing by, Master.");
+  setConversationMode(false);
   setOrbState(null);
 }
 
-// -----------------------------------------
-// Initial State
-// -----------------------------------------
-
-resetUI();
-
-console.log(
-  "H.A.I.V.A. UI controller loaded."
-);
+console.log("H.A.I.V.A. UI controller loaded — synchronized contract.");
