@@ -24,6 +24,11 @@ const PROVIDERS = Object.freeze({
 
 export const MULTIBRAIN_ORDER = Object.freeze(["groq", "gemini", "openai"]);
 
+function getProviderApiKey(provider, env = process.env) {
+  if (provider.id === "gemini") return env?.GEMINI_API_KEY || env?.GOOGLE_API_KEY || "";
+  return env?.[provider.env] || "";
+}
+
 export function getProvider(id = "groq") {
   return PROVIDERS[String(id).toLowerCase()] || PROVIDERS.groq;
 }
@@ -32,17 +37,17 @@ export function listProviders(env = process.env) {
   return Object.values(PROVIDERS).map(provider => ({
     id: provider.id,
     model: provider.model,
-    configured: Boolean(env?.[provider.env])
+    configured: Boolean(getProviderApiKey(provider, env))
   }));
 }
 
 export function getConfiguredProviders(env = process.env) {
-  return MULTIBRAIN_ORDER.filter(id => Boolean(env?.[PROVIDERS[id].env]));
+  return MULTIBRAIN_ORDER.filter(id => Boolean(getProviderApiKey(PROVIDERS[id], env)));
 }
 
 export function buildProviderRequest(providerId, messages, options = {}, env = process.env) {
   const provider = getProvider(providerId);
-  const apiKey = env?.[provider.env];
+  const apiKey = getProviderApiKey(provider, env);
   if (!apiKey) {
     const error = new Error(`${provider.id} is not configured`);
     error.code = "PROVIDER_NOT_CONFIGURED";
