@@ -5,7 +5,9 @@
 
 import { CONFIG } from "../config.js";
 
-const DEFAULT_MAX_RETRIES = 2;
+// Remote AI must never block the voice/chat pipeline indefinitely.
+const DEFAULT_MAX_RETRIES = 0;
+const AI_REQUEST_TIMEOUT_MS = 8000;
 
 function analyzeTask(message, intent = {}) {
   const text = String(message || "").trim();
@@ -64,29 +66,37 @@ function routeTool(analysis) {
 async function executeAI(prompt) {
   if (!CONFIG.features.chat) throw new Error("Chat feature is disabled.");
 
-  const response = await fetch(CONFIG.api.chatEndpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: prompt.message,
-      history: prompt.context,
-      brain: {
-        intent: prompt.task.type,
-        complexity: prompt.task.complexity,
-        orchestrated: true,
-        agent: prompt.agent,
-        tool: prompt.tool
-      }
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
-  if (!response.ok) throw new Error(`AI server returned ${response.status}`);
+  try {
+    const response = await fetch(CONFIG.api.chatEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: prompt.message,
+        history: prompt.context,
+        brain: {
+          intent: prompt.task.type,
+          complexity: prompt.task.complexity,
+          orchestrated: true,
+          agent: prompt.agent,
+          tool: prompt.tool
+        }
+      }),
+      signal: controller.signal
+    });
 
-  const data = await response.json();
-  const answer = data.response || data.message;
-  if (!answer) throw new Error("AI returned an empty response.");
+    if (!response.ok) throw new Error(`AI server returned ${response.status}`);
 
-  return String(answer);
+    const data = await response.json();
+    const answer = data.response || data.message;
+    if (!answer) throw new Error("AI returned an empty response.");
+
+    return String(answer);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function evaluateResult(result) {
