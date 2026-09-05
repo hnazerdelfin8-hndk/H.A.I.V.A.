@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -37,6 +39,16 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private var pendingNativeVoiceStart = false
     private var destroyed = false
     private var fallbackVoiceActive = false
+
+    // Initial speech grace window only. This is NOT a speaking-duration timer.
+    private val voiceStartWindowHandler = Handler(Looper.getMainLooper())
+    private var waitingForInitialSpeech = false
+    private val initialSpeechWindow = Runnable {
+        if (destroyed || !waitingForInitialSpeech) return@Runnable
+        waitingForInitialSpeech = false
+        try { speechRecognizer?.cancel() } catch (_: Exception) {}
+        dispatchJsEvent("haiva:native-voice-timeout")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,7 +121,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) { dispatchJsEvent("haiva:native-voice-ready") }
-        override fun onBeginningOfSpeech() { dispatchJsEvent("haiva:native-voice-begin") }
+        override fun onBeginningOfSpeech() {
+            waitingForInitialSpeech = false
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
+            dispatchJsEvent("haiva:native-voice-begin")
+        }
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
@@ -120,10 +136,14 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
         override fun onEvent(eventType: Int, params: Bundle?) {}
         override fun onError(error: Int) {
+            waitingForInitialSpeech = false
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
             dispatchVoiceError(error)
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) createSpeechRecognizer()
         }
         override fun onResults(results: Bundle?) {
+            waitingForInitialSpeech = false
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
@@ -211,20 +231,23 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            // Basic one-tap voice timing: allow 3 seconds to begin speaking,
-            // then use 2 seconds of silence after speech to finish the utterance.
-            // There is intentionally no maximum speaking-duration timer.
+            // Voice flow: 3-second window to begin speaking, then no speaking-duration limit.
+            // Recognition ends after 2 seconds of silence once speech has begun.
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
         }
 
-        // IMPORTANT: do not cancel immediately before startListening().
-        // SpeechRecognizer.cancel() is asynchronous; the immediate restart can
-        // race with the cancellation and cause ERROR_CLIENT/ERROR_RECOGNIZER_BUSY.
+        // One tap starts one recognition cycle. There is no auto-restart.
+        // The initial 3-second grace window is separate from speaking duration.
         try {
             recognizer.startListening(intent)
+            waitingForInitialSpeech = true
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
+            voiceStartWindowHandler.postDelayed(initialSpeechWindow, 3000L)
         } catch (_: Exception) {
+            waitingForInitialSpeech = false
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
             startSystemVoiceFallback()
         }
     }
@@ -234,6 +257,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         runOnUiThread {
             pendingNativeVoiceStart = false
             fallbackVoiceActive = false
+            waitingForInitialSpeech = false
+            voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
             try { speechRecognizer?.stopListening() } catch (_: Exception) {}
             try { speechRecognizer?.cancel() } catch (_: Exception) {}
         }
@@ -293,6 +318,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         destroyed = true
+        waitingForInitialSpeech = false
+        voiceStartWindowHandler.removeCallbacks(initialSpeechWindow)
         pendingWebPermissionRequest?.let { try { it.deny() } catch (_: Exception) {} }
         pendingWebPermissionRequest = null
         pendingNativeVoiceStart = false
