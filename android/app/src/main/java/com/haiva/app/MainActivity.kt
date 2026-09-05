@@ -25,11 +25,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private lateinit var textToSpeech: TextToSpeech
     private var speechRecognizer: SpeechRecognizer? = null
     private val voicePermissionRequestCode = 1001
+    private val voiceFallbackRequestCode = 1002
     private val coreUrl = "file:///android_asset/haiva/index.html"
     private var pendingWebPermissionRequest: PermissionRequest? = null
     private var ttsReady = false
     private var pendingNativeVoiceStart = false
     private var destroyed = false
+    private var fallbackVoiceActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,11 +103,23 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onPartialResults(partialResults: Bundle?) {}
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val text = matches?.firstOrNull()?.trim().orEmpty()
+            if (text.isNotEmpty()) dispatchVoicePartial(text)
+        }
+
         override fun onEvent(eventType: Int, params: Bundle?) {}
 
         override fun onError(error: Int) {
             dispatchVoiceError(error)
+            // Some Samsung/Android recognition services can report a client/server
+            // error even though the system recognizer itself is available. Fall
+            // back to the system speech activity so voice input remains usable.
+            if (!fallbackVoiceActive && shouldUseSystemRecognizer(error)) {
+                startSystemVoiceFallback()
+            }
         }
 
         override fun onResults(results: Bundle?) {
@@ -114,6 +128,48 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             if (text.isNotEmpty()) dispatchVoiceResult(text)
             else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
         }
+    }
+
+    private fun shouldUseSystemRecognizer(error: Int): Boolean = when (error) {
+        SpeechRecognizer.ERROR_CLIENT,
+        SpeechRecognizer.ERROR_SERVER,
+        SpeechRecognizer.ERROR_NETWORK,
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> true
+        else -> false
+    }
+
+    private fun startSystemVoiceFallback() {
+        if (destroyed || fallbackVoiceActive) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        fallbackVoiceActive = true
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to H.A.I.V.A.")
+        }
+        try {
+            startActivityForResult(intent, voiceFallbackRequestCode)
+        } catch (_: Exception) {
+            fallbackVoiceActive = false
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != voiceFallbackRequestCode) return
+        fallbackVoiceActive = false
+        if (resultCode != RESULT_OK) {
+            dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT)
+            return
+        }
+        val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
+        if (text.isNotEmpty()) dispatchVoiceResult(text)
+        else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
     }
 
     private fun requestVoicePermission() {
@@ -156,28 +212,30 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 requestVoicePermission()
                 return@runOnUiThread
             }
+            fallbackVoiceActive = false
             startNativeRecognition()
         }
     }
 
     private fun startNativeRecognition() {
-        val recognizer = speechRecognizer ?: run {
-            dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT)
+        val recognizer = speechRecognizer
+        if (recognizer == null) {
+            startSystemVoiceFallback()
             return
         }
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
 
         try {
-            recognizer.cancel()
             recognizer.startListening(intent)
         } catch (_: Exception) {
-            dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT)
+            startSystemVoiceFallback()
         }
     }
 
@@ -185,6 +243,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun stopVoiceCapture() {
         runOnUiThread {
             pendingNativeVoiceStart = false
+            fallbackVoiceActive = false
             try { speechRecognizer?.stopListening() } catch (_: Exception) {}
         }
     }
@@ -208,6 +267,18 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     @JavascriptInterface
     override fun notify(title: String, message: String) {
         runOnUiThread { Toast.makeText(this, "$title: $message", Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun dispatchVoicePartial(text: String) {
+        val quoted = org.json.JSONObject.quote(text)
+        runOnUiThread {
+            if (!destroyed) {
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted}}))",
+                    null
+                )
+            }
+        }
     }
 
     private fun dispatchVoiceResult(text: String) {
@@ -253,6 +324,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         pendingWebPermissionRequest?.let { try { it.deny() } catch (_: Exception) {} }
         pendingWebPermissionRequest = null
         pendingNativeVoiceStart = false
+        fallbackVoiceActive = false
+        try { speechRecognizer?.cancel() } catch (_: Exception) {}
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = null
         try { textToSpeech.stop(); textToSpeech.shutdown() } catch (_: Exception) {}
