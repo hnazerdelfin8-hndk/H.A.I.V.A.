@@ -1,53 +1,70 @@
 // =========================================
-// H.A.I.V.A. PHASE 1 CONTROL WIRING
+// H.A.I.V.A. PHASE 1 — HARDENED CONTROL BRIDGE
 // =========================================
-// Surgical compatibility layer: keeps the existing UI untouched while
-// connecting the visible controls to the live HAIVA application instance.
+// This compatibility layer deliberately uses document-level capture listeners.
+// Android WebView can occasionally deliver touch/click events differently from
+// desktop browsers. Capturing the real controls here guarantees that the visible
+// UI is connected to the live HAIVA instance without changing the UI markup.
 
-function wirePhase1Controls() {
-  const app = window.HAIVA;
-  if (!app) {
-    console.warn("[HAIVA] Phase 1 controls: app instance not ready.");
-    return;
-  }
+(() => {
+  if (window.__HAIVA_PHASE1_CONTROLS__) return;
+  window.__HAIVA_PHASE1_CONTROLS__ = true;
 
-  // The current main app registers the mic button with handleButtonClick(),
-  // but that compatibility method was missing from the HAIVA class.
-  // Restore that contract without changing the UI or voice pipeline.
-  if (typeof app.handleButtonClick !== "function") {
-    app.handleButtonClick = function handleButtonClick() {
-      return this.activateVoice();
-    };
-  }
+  const getApp = () => window.HAIVA || null;
 
-  const mic = document.getElementById("activate-voice");
-  if (mic) {
-    mic.disabled = false;
-    mic.setAttribute("aria-disabled", "false");
-  }
+  document.addEventListener("click", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
 
-  // Keep chat usable even on WebViews where HTMLFormElement.requestSubmit()
-  // is unavailable. The existing submit handler remains the primary path.
-  const form = document.getElementById("chat-form");
-  const input = document.getElementById("chat-input");
-  const send = document.getElementById("send-message");
-  if (form && input && send && !send.dataset.haivaPhase1Wired) {
-    send.dataset.haivaPhase1Wired = "true";
-    send.addEventListener("click", event => {
-      if (typeof form.requestSubmit === "function") return;
+    const mic = target.closest("#activate-voice");
+    if (mic) {
       event.preventDefault();
-      const text = input.value.trim();
-      if (!text || app.isProcessing) return;
-      input.value = "";
-      void app.handleTextCommand(text);
-    });
-  }
+      event.stopImmediatePropagation();
+      const app = getApp();
+      if (app && typeof app.activateVoice === "function") {
+        Promise.resolve(app.activateVoice()).catch(error => {
+          console.error("[HAIVA] Microphone control failed:", error);
+          app.setState?.("VOICE ERROR");
+        });
+      } else {
+        console.warn("[HAIVA] Microphone pressed before core was ready.");
+      }
+      return;
+    }
 
-  console.log("[HAIVA] Phase 1 controls wired: microphone + chat.");
-}
+    const send = target.closest("#send-message");
+    if (send) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const form = document.getElementById("chat-form");
+      const input = document.getElementById("chat-input");
+      const app = getApp();
+      const text = input?.value?.trim();
+      if (app && input && text && !app.isProcessing) {
+        input.value = "";
+        void app.handleTextCommand(text);
+      } else if (!app) {
+        console.warn("[HAIVA] Chat pressed before core was ready.");
+      }
+      return;
+    }
+  }, true);
 
-if (document.readyState === "loading") {
-  window.addEventListener("DOMContentLoaded", wirePhase1Controls, { once: true });
-} else {
-  wirePhase1Controls();
-}
+  document.addEventListener("submit", event => {
+    const form = event.target instanceof HTMLFormElement ? event.target : null;
+    if (!form || form.id !== "chat-form") return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const input = document.getElementById("chat-input");
+    const app = getApp();
+    const text = input?.value?.trim();
+    if (!text || !app || app.isProcessing) return;
+
+    input.value = "";
+    void app.handleTextCommand(text);
+  }, true);
+
+  console.log("[HAIVA] Hardened controls installed: mic + chat capture bridge.");
+})();
