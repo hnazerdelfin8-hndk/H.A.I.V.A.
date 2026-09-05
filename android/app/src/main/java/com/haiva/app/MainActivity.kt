@@ -29,6 +29,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private val coreUrl = "file:///android_asset/haiva/index.html"
     private var pendingWebPermissionRequest: PermissionRequest? = null
     private var ttsReady = false
+    private var pendingSpeakText: String? = null
     private var pendingNativeVoiceStart = false
     private var destroyed = false
     private var fallbackVoiceActive = false
@@ -50,9 +51,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         })
 
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                setRecognitionListener(recognitionListener)
-            }
+            createSpeechRecognizer()
         }
 
         webView = WebView(this)
@@ -89,9 +88,26 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
     }
 
+    private fun createSpeechRecognizer() {
+        try {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        } catch (_: Exception) {}
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+            setRecognitionListener(recognitionListener)
+        }
+    }
+
     override fun onInit(status: Int) {
         ttsReady = status == TextToSpeech.SUCCESS
-        if (ttsReady) textToSpeech.language = Locale.US
+        if (ttsReady) {
+            textToSpeech.language = Locale.US
+            pendingSpeakText?.let {
+                pendingSpeakText = null
+                speakNow(it)
+            }
+        }
     }
 
     private val recognitionListener = object : RecognitionListener {
@@ -99,7 +115,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             dispatchJsEvent("haiva:native-voice-ready")
         }
 
-        override fun onBeginningOfSpeech() {}
+        override fun onBeginningOfSpeech() {
+            dispatchJsEvent("haiva:native-voice-begin")
+        }
+
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
@@ -114,9 +133,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
         override fun onError(error: Int) {
             dispatchVoiceError(error)
-            // Some Samsung/Android recognition services can report a client/server
-            // error even though the system recognizer itself is available. Fall
-            // back to the system speech activity so voice input remains usable.
             if (!fallbackVoiceActive && shouldUseSystemRecognizer(error)) {
                 startSystemVoiceFallback()
             }
@@ -135,7 +151,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         SpeechRecognizer.ERROR_SERVER,
         SpeechRecognizer.ERROR_NETWORK,
         SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> true
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+        SpeechRecognizer.ERROR_AUDIO,
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+        SpeechRecognizer.ERROR_NO_MATCH -> true
         else -> false
     }
 
@@ -218,12 +237,22 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     }
 
     private fun startNativeRecognition() {
-        val recognizer = speechRecognizer
-        if (recognizer == null) {
-            startSystemVoiceFallback()
+        if (destroyed) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingNativeVoiceStart = true
+            requestVoicePermission()
             return
         }
 
+        if (speechRecognizer == null) {
+            if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
+            else {
+                startSystemVoiceFallback()
+                return
+            }
+        }
+
+        val recognizer = speechRecognizer ?: return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
@@ -231,6 +260,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
+
+        try {
+            recognizer.cancel()
+        } catch (_: Exception) {}
 
         try {
             recognizer.startListening(intent)
@@ -245,23 +278,35 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             pendingNativeVoiceStart = false
             fallbackVoiceActive = false
             try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+            try { speechRecognizer?.cancel() } catch (_: Exception) {}
         }
     }
 
     @JavascriptInterface
     override fun speak(text: String) {
         runOnUiThread {
-            if (destroyed || !ttsReady) {
+            val value = text.trim()
+            if (destroyed || value.isEmpty()) {
                 dispatchSpeechDone()
                 return@runOnUiThread
             }
-
-            textToSpeech.language = Locale.US
-            textToSpeech.setSpeechRate(1.0f)
-            textToSpeech.setPitch(1.0f)
-            val queued = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAIVA_RESPONSE")
-            if (queued == TextToSpeech.ERROR) dispatchSpeechDone()
+            if (!ttsReady) {
+                // TTS initialization is asynchronous. Queue the response instead
+                // of falsely reporting completion and dropping the voice reply.
+                pendingSpeakText = value
+                return@runOnUiThread
+            }
+            speakNow(value)
         }
+    }
+
+    private fun speakNow(text: String) {
+        if (destroyed || !ttsReady) return
+        textToSpeech.language = Locale.US
+        textToSpeech.setSpeechRate(1.0f)
+        textToSpeech.setPitch(1.0f)
+        val queued = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAIVA_RESPONSE")
+        if (queued == TextToSpeech.ERROR) dispatchSpeechDone()
     }
 
     @JavascriptInterface
@@ -325,6 +370,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         pendingWebPermissionRequest = null
         pendingNativeVoiceStart = false
         fallbackVoiceActive = false
+        pendingSpeakText = null
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = null
