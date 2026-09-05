@@ -1,3 +1,5 @@
+import "./runtime-probe.js";
+
 // =========================================
 // H.A.I.V.A. PHASE 1 — RUNTIME-SAFE CONTROL BRIDGE
 // =========================================
