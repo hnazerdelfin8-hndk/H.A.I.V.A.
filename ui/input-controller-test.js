@@ -1,1 +1,0 @@
-// diagnostic wiring probe placeholder
