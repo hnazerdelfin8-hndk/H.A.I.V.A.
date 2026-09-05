@@ -44,19 +44,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         textToSpeech = TextToSpeech(this, this)
         textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
-
-            override fun onDone(utteranceId: String?) {
-                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
-            }
-
-            override fun onError(utteranceId: String?) {
-                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
-            }
+            override fun onDone(utteranceId: String?) { if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone() }
+            override fun onError(utteranceId: String?) { if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone() }
         })
 
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            createSpeechRecognizer()
-        }
+        if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
 
         webView = WebView(this)
         webView.setBackgroundColor(Color.rgb(2, 5, 11))
@@ -69,9 +61,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             cacheMode = WebSettings.LOAD_DEFAULT
             textZoom = 100
         }
-
-        // Android 15+ enforces edge-to-edge for targetSdk 35. Keep the existing
-        // web UI inside the safe system-bar area without changing its HTML/CSS.
         webView.setOnApplyWindowInsetsListener { view, insets ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val bars = insets.getInsets(WindowInsets.Type.systemBars())
@@ -98,7 +87,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 }
             }
         }
-
         setContentView(webView)
         webView.loadUrl(coreUrl)
     }
@@ -108,60 +96,37 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             speechRecognizer?.cancel()
             speechRecognizer?.destroy()
         } catch (_: Exception) {}
-
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-            setRecognitionListener(recognitionListener)
-        }
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply { setRecognitionListener(recognitionListener) }
     }
 
     override fun onInit(status: Int) {
         ttsReady = status == TextToSpeech.SUCCESS
         if (ttsReady) {
             textToSpeech.language = Locale.US
-            pendingSpeakText?.let {
-                pendingSpeakText = null
-                speakNow(it)
-            }
+            pendingSpeakText?.let { pendingSpeakText = null; speakNow(it) }
         }
     }
 
     private val recognitionListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {
-            dispatchJsEvent("haiva:native-voice-ready")
-        }
-
-        override fun onBeginningOfSpeech() {
-            dispatchJsEvent("haiva:native-voice-begin")
-        }
-
+        override fun onReadyForSpeech(params: Bundle?) { dispatchJsEvent("haiva:native-voice-ready") }
+        override fun onBeginningOfSpeech() { dispatchJsEvent("haiva:native-voice-begin") }
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-
         override fun onPartialResults(partialResults: Bundle?) {
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoicePartial(text)
         }
-
         override fun onEvent(eventType: Int, params: Bundle?) {}
-
         override fun onError(error: Int) {
-            // Never launch another Android Activity for a normal recognition
-            // error. That used to interrupt/recreate the WebView and made the
-            // UI appear to change whenever the voice pipeline was patched.
             dispatchVoiceError(error)
-            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-                error == SpeechRecognizer.ERROR_CLIENT) {
-                createSpeechRecognizer()
-            }
+            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) createSpeechRecognizer()
         }
-
         override fun onResults(results: Bundle?) {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchVoiceResult(text)
-            else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
+            if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
         }
     }
 
@@ -177,11 +142,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to H.A.I.V.A.")
         }
-        try {
-            startActivityForResult(intent, voiceFallbackRequestCode)
-        } catch (_: Exception) {
-            fallbackVoiceActive = false
-        }
+        try { startActivityForResult(intent, voiceFallbackRequestCode) } catch (_: Exception) { fallbackVoiceActive = false }
     }
 
     @Suppress("DEPRECATION")
@@ -189,38 +150,25 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != voiceFallbackRequestCode) return
         fallbackVoiceActive = false
-        if (resultCode != RESULT_OK) {
-            dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT)
-            return
-        }
+        if (resultCode != RESULT_OK) { dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT); return }
         val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
-        if (text.isNotEmpty()) dispatchVoiceResult(text)
-        else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
+        if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
     }
 
     private fun requestVoicePermission() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
-        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequestCode)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != voicePermissionRequestCode) return
-
         val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
         val request = pendingWebPermissionRequest
         pendingWebPermissionRequest = null
-
         if (granted) {
-            request?.let {
-                try { it.grant(it.resources) } catch (_: Exception) {}
-            }
+            request?.let { try { it.grant(it.resources) } catch (_: Exception) {} }
             dispatchJsEvent("haiva:microphone-ready")
-            if (pendingNativeVoiceStart) {
-                pendingNativeVoiceStart = false
-                startNativeRecognition()
-            }
+            if (pendingNativeVoiceStart) { pendingNativeVoiceStart = false; startNativeRecognition() }
         } else {
             pendingNativeVoiceStart = false
             request?.let { try { it.deny() } catch (_: Exception) {} }
@@ -250,15 +198,9 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             requestVoicePermission()
             return
         }
-
         if (speechRecognizer == null) {
-            if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
-            else {
-                startSystemVoiceFallback()
-                return
-            }
+            if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer() else { startSystemVoiceFallback(); return }
         }
-
         val recognizer = speechRecognizer ?: return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -268,14 +210,12 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
 
-        try {
-            recognizer.cancel()
-        } catch (_: Exception) {}
-
+        // IMPORTANT: do not cancel immediately before startListening().
+        // SpeechRecognizer.cancel() is asynchronous; the immediate restart can
+        // race with the cancellation and cause ERROR_CLIENT/ERROR_RECOGNIZER_BUSY.
         try {
             recognizer.startListening(intent)
         } catch (_: Exception) {
-            // Fallback is reserved for a recognizer that cannot start at all.
             startSystemVoiceFallback()
         }
     }
@@ -294,14 +234,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun speak(text: String) {
         runOnUiThread {
             val value = text.trim()
-            if (destroyed || value.isEmpty()) {
-                dispatchSpeechDone()
-                return@runOnUiThread
-            }
-            if (!ttsReady) {
-                pendingSpeakText = value
-                return@runOnUiThread
-            }
+            if (destroyed || value.isEmpty()) { dispatchSpeechDone(); return@runOnUiThread }
+            if (!ttsReady) { pendingSpeakText = value; return@runOnUiThread }
             speakNow(value)
         }
     }
@@ -322,52 +256,30 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private fun dispatchVoicePartial(text: String) {
         val quoted = org.json.JSONObject.quote(text)
-        runOnUiThread {
-            if (!destroyed) {
-                webView.evaluateJavascript(
-                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted}}))",
-                    null
-                )
-            }
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted}}))", null) }
     }
 
     private fun dispatchVoiceResult(text: String) {
         val quoted = org.json.JSONObject.quote(text)
-        runOnUiThread {
-            if (!destroyed) {
-                webView.evaluateJavascript(
-                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))",
-                    null
-                )
-            }
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))", null) }
     }
 
     private fun dispatchVoiceError(error: Int) {
         runOnUiThread {
             if (!destroyed) {
                 val safeCode = error.toString()
-                webView.evaluateJavascript(
-                    "window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:$safeCode}}))",
-                    null
-                )
+                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:$safeCode}}))", null)
             }
         }
     }
 
     private fun dispatchSpeechDone() {
-        runOnUiThread {
-            if (!destroyed) dispatchJsEvent("haiva:native-speech-done")
-        }
+        runOnUiThread { if (!destroyed) dispatchJsEvent("haiva:native-speech-done") }
     }
 
     private fun dispatchJsEvent(name: String) {
         if (destroyed) return
-        webView.evaluateJavascript(
-            "window.dispatchEvent(new CustomEvent('$name'))",
-            null
-        )
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name'))", null)
     }
 
     override fun onDestroy() {
