@@ -7,7 +7,15 @@ import { CONFIG } from "../config.js";
 
 // Remote AI must never block the voice/chat pipeline indefinitely.
 const DEFAULT_MAX_RETRIES = 0;
-const AI_REQUEST_TIMEOUT_MS = 8000;
+const AI_REQUEST_TIMEOUT_MS = 12000;
+
+function normalizeHistory(context) {
+  const source = Array.isArray(context) ? context : [];
+  return source
+    .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
+    .slice(-20)
+    .map(item => ({ role: item.role, content: item.content.trim() }));
+}
 
 function analyzeTask(message, intent = {}) {
   const text = String(message || "").trim();
@@ -38,7 +46,7 @@ function generatePrompt(message, context = {}, analysis = {}) {
     task: analysis,
     instructions: [
       "Answer the user's request directly.",
-      "Use the supplied context only when relevant.",
+      "Use the supplied conversation history only when relevant.",
       "Do not claim actions or facts that were not actually performed or verified.",
       "Prefer concise, useful, natural responses appropriate for H.A.I.V.A."
     ]
@@ -75,7 +83,10 @@ async function executeAI(prompt) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: prompt.message,
-        history: prompt.context,
+        // The API expects history to be an array of {role, content} objects.
+        // Previously the whole {context, reasoning, decision} object was sent,
+        // which silently discarded conversation history at the brain gateway.
+        history: normalizeHistory(prompt.context?.context),
         brain: {
           intent: prompt.task.type,
           complexity: prompt.task.complexity,
@@ -87,10 +98,16 @@ async function executeAI(prompt) {
       signal: controller.signal
     });
 
-    if (!response.ok) throw new Error(`AI server returned ${response.status}`);
+    const responseText = await response.text();
+    let data = null;
+    try { data = JSON.parse(responseText); } catch (_) {}
 
-    const data = await response.json();
-    const answer = data.response || data.message;
+    if (!response.ok) {
+      const detail = data?.response || data?.error || `AI server returned ${response.status}`;
+      throw new Error(String(detail));
+    }
+
+    const answer = data?.response || data?.message;
     if (!answer) throw new Error("AI returned an empty response.");
 
     return String(answer);
