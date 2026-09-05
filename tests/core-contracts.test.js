@@ -37,9 +37,9 @@ test("provider gateway rejects an unconfigured provider explicitly", () => {
   );
 });
 
-test("provider answer extraction supports Gemini and Anthropic", () => {
+test("provider answer extraction supports configured Gemini and OpenAI-compatible responses", () => {
   assert.equal(extractProviderAnswer("gemini", { candidates: [{ content: { parts: [{ text: "hello" }] } }] }), "hello");
-  assert.equal(extractProviderAnswer("anthropic", { content: [{ type: "text", text: "hello" }] }), "hello");
+  assert.equal(extractProviderAnswer("groq", { choices: [{ message: { content: "hello" } }] }), "hello");
 });
 
 test("provider registry exposes configuration state without secrets", () => {
