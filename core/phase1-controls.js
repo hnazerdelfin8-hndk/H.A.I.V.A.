@@ -11,13 +11,17 @@
 
   const getApp = () => window.HAIVA || null;
 
-  const reportCoreUnavailable = (control) => {
-    console.error(`[HAIVA] Phase 1 ${control} control: window.HAIVA is unavailable.`);
+  const showRuntimeError = (message) => {
+    console.error("[HAIVA][RUNTIME]", message);
     const status = document.getElementById("haiva-status");
     const heard = document.getElementById("heard");
     if (status) status.textContent = "CORE ERROR";
-    if (heard) heard.textContent = `Core runtime failed before ${control} control became active.`;
+    if (heard) heard.textContent = message;
     document.body.dataset.haivaState = "error";
+  };
+
+  const reportCoreUnavailable = (control) => {
+    showRuntimeError(`Core runtime failed before ${control} control became active.`);
   };
 
   const runText = (text) => {
@@ -30,6 +34,33 @@
     void app.handleTextCommand(text);
   };
 
+  // Runtime proof: Phase 1 records the first JavaScript/module failure and
+  // verifies that the core actually publishes window.HAIVA after boot.
+  window.addEventListener("error", event => {
+    const detail = event?.error?.stack || event?.message || "Unknown JavaScript error";
+    showRuntimeError(`JavaScript runtime error: ${String(detail).split("\n")[0]}`);
+  });
+
+  window.addEventListener("unhandledrejection", event => {
+    const reason = event?.reason?.stack || event?.reason?.message || event?.reason || "Unknown promise rejection";
+    showRuntimeError(`Initialization error: ${String(reason).split("\n")[0]}`);
+  });
+
+  const verifyCore = () => {
+    if (!getApp()) {
+      reportCoreUnavailable("Phase 1");
+      return false;
+    }
+    console.log("[HAIVA][RUNTIME] window.HAIVA verified; Phase 1 synced.");
+    return true;
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setTimeout(verifyCore, 0), { once: true });
+  } else {
+    setTimeout(verifyCore, 0);
+  }
+
   document.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
@@ -37,8 +68,6 @@
     const mic = target.closest("#activate-voice");
     if (mic) {
       const app = getApp();
-      // Do not swallow the event if the core failed to load. This keeps the
-      // failure observable instead of making the button appear silently dead.
       if (!app || typeof app.activateVoice !== "function") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -89,7 +118,6 @@
 
     event.preventDefault();
     event.stopImmediatePropagation();
-
     const input = document.getElementById("chat-input");
     const text = input?.value?.trim();
     if (!text || app.isProcessing) return;
