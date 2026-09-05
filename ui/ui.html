@@ -1,41 +1,86 @@
-<!-- H.A.I.V.A. UI -->
+<!-- H.A.I.V.A. UI template
+     Contract: keep these IDs synchronized with index.html and core/ui-bridge.js.
+     Behavior is owned by core/app.js + core/phase1-controls.js.
+-->
+<section class="hero" aria-label="H.A.I.V.A. voice control">
+  <div class="status-row">
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      <span id="haiva-status">BOOTING</span>
+    </div>
+  </div>
 
-<section class="haiva-header">
-  <h1>H.A.I.V.A.</h1>
-  <p>HNazer Artificial Intelligence Voice Assistant</p>
-</section>
+  <div class="orb-wrap">
+    <div class="orb" id="orb">
+      <div class="orb-ring"></div>
+      <div class="core"></div>
+      <div class="orb-label">H.A.I.V.A.</div>
+    </div>
+  </div>
 
-<section class="haiva-orb-section">
-  <div class="orb" id="orb">
-    <div class="orb-text">HAIVA</div>
+  <div class="voice-copy">
+    <div class="message" id="heard">Initializing H.A.I.V.A. core…</div>
+    <button
+      class="mic"
+      id="activate-voice"
+      type="button"
+      aria-label="Activate H.A.I.V.A."
+      aria-pressed="false">
+      <span aria-hidden="true">🎙️</span>
+    </button>
+  </div>
+
+  <div class="mode-bar">
+    <div class="mode-card voice">
+      <div class="mode-title">VOICE MODE</div>
+      <div class="mode-value">Mic → Voice response</div>
+    </div>
+    <div class="mode-card chat">
+      <div class="mode-title">CHAT MODE</div>
+      <div class="mode-value">Text → Chat response</div>
+    </div>
   </div>
 </section>
 
-<section class="conversation">
-
-  <div class="label">STATUS</div>
-  <div id="status">Ready</div>
-
-  <div class="label">YOU SAID</div>
-  <div id="transcript">
-    Say "Yo HAIVA" to begin.
+<section class="conversation" aria-label="Conversation" id="conversation">
+  <div class="conversation-head">
+    <span class="conversation-title">CONVERSATION</span>
+    <span class="online">● CORE READY</span>
   </div>
 
-  <div class="label">HAIVA</div>
-  <div id="reply">
-    Standing by.
+  <div class="bubble-block">
+    <div class="label">YOU</div>
+    <div class="bubble user" id="transcript">—</div>
   </div>
 
+  <div class="bubble-block">
+    <div class="label">H.A.I.V.A.</div>
+    <div class="bubble" id="reply">Standing by, Master.</div>
+  </div>
 </section>
 
-<button
-  class="mic-button"
-  id="micButton"
-  type="button"
-  aria-label="Start HAIVA">
-  🎙️
-</button>
+<form class="chat-form" id="chat-form">
+  <input
+    class="chat-input"
+    id="chat-input"
+    type="text"
+    autocomplete="off"
+    placeholder="Type a message — chat stays text-only"
+    aria-label="Message">
+  <button class="send-btn" id="send-message" type="submit" aria-label="Send">➤</button>
+</form>
 
-<div class="hint">
-  Tap once to activate conversation mode
-</div>
+<section class="settings-panel" id="settings-panel" aria-label="Settings">
+  <div class="setting-row">
+    <span>Voice mode</span>
+    <span class="setting-value" id="voice-setting">Tap + Wake Word</span>
+  </div>
+  <div class="setting-row">
+    <span>Wake word</span>
+    <span class="setting-value">Yo, H.A.I.V.A.</span>
+  </div>
+  <div class="setting-row">
+    <span>Microphone</span>
+    <span class="setting-value" id="mic-setting">Checking…</span>
+  </div>
+</section>
