@@ -25,9 +25,7 @@ class HAIVA {
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
-    // Wire the user-facing shell BEFORE optional core initialization.
-    // A skill/brain failure must never leave chat or the microphone stuck on
-    // "Initializing".
+    // Keep the user-facing shell independent from optional AI/core modules.
     this.setupChat();
     this.setupSettings();
     this.setupNativeVoiceEvents();
@@ -42,14 +40,14 @@ class HAIVA {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
-      this.setState(result.degraded ? "READY" : "READY");
-      this.checkAIConnection();
+      this.setState("READY");
+      void this.checkAIConnection();
     } catch (error) {
       console.error("Initialization failed:", error);
-      // Keep the shell interactive even if a non-essential core module fails.
+      // Chat and native voice must remain usable even if optional core setup fails.
       this.setupRecognition();
       this.setState("READY");
-      this.checkAIConnection();
+      void this.checkAIConnection();
     }
   }
 
@@ -60,10 +58,10 @@ class HAIVA {
       const micSetting = document.getElementById("mic-setting");
       if (micSetting) micSetting.textContent = (navigator.mediaDevices?.getUserMedia || this.nativeVoice) ? "Available" : "Unavailable";
       if (!response.ok) console.warn("[HAIVA] AI backend health check returned", response.status);
-      else if (data.configuredBrains?.length === 0) console.warn("[HAIVA] AI backend is reachable but no brain is configured.");
-      else console.log("[HAIVA] AI backend health check passed.", data.configuredBrains);
+      else console.log("[HAIVA] AI backend health:", data.configuredBrains || []);
     } catch (error) {
-      console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
+      // A missing/offline API is not a UI failure; local conversation remains available.
+      console.warn("[HAIVA] AI backend health check unavailable:", error?.message || error);
     }
   }
 
@@ -102,24 +100,36 @@ class HAIVA {
       this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
-      this.showResponse(CONFIG.assistant.connectionError || CONFIG.assistant.fallbackResponse);
+      this.showResponse(CONFIG.assistant.fallbackResponse);
       this.setState("ERROR");
     } finally {
       this.isSpeaking = false;
       this.isProcessing = false;
+      if (this.state === "ERROR") this.setState("READY");
     }
   }
 
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
+
+    window.addEventListener("haiva:native-voice-ready", () => {
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.isListening = true;
+        this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
+      }
+    });
+
     window.addEventListener("haiva:native-voice-result", event => {
       const text = event.detail?.text?.trim();
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
+      this.isListening = false;
       this.handleResultText(text);
     });
+
     window.addEventListener("haiva:native-voice-error", event => {
       this.isListening = false;
-      console.warn("[HAIVA] Native speech recognition error:", event.detail?.code);
+      const code = Number(event.detail?.code);
+      console.warn("[HAIVA] Native speech recognition error:", code);
       if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
         this.setState("VOICE ERROR");
         this.scheduleRecognitionRestart();
@@ -162,8 +172,8 @@ class HAIVA {
     else if (state === "READY" && !this.voiceActivated) heard.textContent = "Ready. Type a message or tap the microphone.";
     else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
     else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
-    else if (state === "VOICE ERROR") heard.textContent = "Voice input recovered. Try again…";
-    else if (state === "ERROR") heard.textContent = "H.A.I.V.A. core failed to initialize.";
+    else if (state === "VOICE ERROR") heard.textContent = "Voice input needs attention. Try the microphone again.";
+    else if (state === "ERROR") heard.textContent = "H.A.I.V.A. recovered. Ready for another message.";
   }
 
   showTranscript(text) {
@@ -211,8 +221,10 @@ class HAIVA {
   async activateVoice() {
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (this.voiceActivated) return this.deactivateVoice();
+
     try {
       if (this.nativeVoice) {
+        // Native Android voice owns the microphone. Browser permission is optional.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
           stream?.getTracks().forEach(track => track.stop());
@@ -222,9 +234,13 @@ class HAIVA {
         stream.getTracks().forEach(track => track.stop());
       } else throw new Error("Microphone API unavailable");
     } catch (error) {
-      console.error("Microphone permission failed:", error);
-      return this.setState("MICROPHONE DENIED");
+      if (!this.nativeVoice) {
+        console.error("Microphone permission failed:", error);
+        return this.setState("MICROPHONE DENIED");
+      }
+      console.warn("Browser microphone permission unavailable; continuing with native Android voice.");
     }
+
     this.voiceActivated = true;
     this.intentionalStop = false;
     this.awaitingCommand = true;
@@ -253,10 +269,11 @@ class HAIVA {
   startListening() {
     if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
-    if (this.nativeVoice && !this.recognition) {
+    if (this.nativeVoice) {
       this.isListening = true;
       this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
-      try { window.HaivaBridge.startVoiceCapture(); } catch (error) { this.isListening = false; this.setState("VOICE ERROR"); }
+      try { window.HaivaBridge.startVoiceCapture(); }
+      catch (error) { this.isListening = false; this.setState("VOICE ERROR"); }
       return;
     }
     if (!this.recognition) return;
@@ -279,7 +296,7 @@ class HAIVA {
     clearTimeout(this.restartTimer);
     this.restartTimer = null;
     this.intentionalStop = true;
-    if (this.nativeVoice && !this.recognition) {
+    if (this.nativeVoice) {
       try { window.HaivaBridge.stopVoiceCapture(); } catch (error) { console.debug("Native recognition stop skipped:", error?.message || error); }
     }
     if (this.recognition) {
@@ -328,7 +345,7 @@ class HAIVA {
       } else {
         this.lastTranscript = "";
         this.setState("STANDBY");
-        if (this.nativeVoice) this.scheduleRecognitionRestart();
+        this.scheduleRecognitionRestart();
       }
       return;
     }
