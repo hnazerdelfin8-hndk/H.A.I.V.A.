@@ -7,7 +7,7 @@ import { CONFIG } from "../config.js";
 
 // Remote AI must never block the voice/chat pipeline indefinitely.
 const DEFAULT_MAX_RETRIES = 0;
-const AI_REQUEST_TIMEOUT_MS = 12000;
+const AI_REQUEST_TIMEOUT_MS = 8000;
 
 function normalizeHistory(context) {
   const source = Array.isArray(context) ? context : [];
@@ -83,9 +83,6 @@ async function executeAI(prompt) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: prompt.message,
-        // The API expects history to be an array of {role, content} objects.
-        // Previously the whole {context, reasoning, decision} object was sent,
-        // which silently discarded conversation history at the brain gateway.
         history: normalizeHistory(prompt.context?.context),
         brain: {
           intent: prompt.task.type,
@@ -98,9 +95,17 @@ async function executeAI(prompt) {
       signal: controller.signal
     });
 
-    const responseText = await response.text();
     let data = null;
-    try { data = JSON.parse(responseText); } catch (_) {}
+    try {
+      if (typeof response.json === "function") {
+        data = await response.json();
+      } else if (typeof response.text === "function") {
+        const responseText = await response.text();
+        try { data = JSON.parse(responseText); } catch (_) {}
+      }
+    } catch (_) {
+      data = null;
+    }
 
     if (!response.ok) {
       const detail = data?.response || data?.error || `AI server returned ${response.status}`;
