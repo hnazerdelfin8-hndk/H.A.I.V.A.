@@ -4,12 +4,16 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.view.View
+import android.view.WindowInsets
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -55,6 +59,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
 
         webView = WebView(this)
+        webView.setBackgroundColor(Color.rgb(2, 5, 11))
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -62,6 +67,20 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             allowFileAccess = true
             allowContentAccess = true
             cacheMode = WebSettings.LOAD_DEFAULT
+            textZoom = 100
+        }
+
+        // Android 15+ enforces edge-to-edge for targetSdk 35. Keep the existing
+        // web UI inside the safe system-bar area without changing its HTML/CSS.
+        webView.setOnApplyWindowInsetsListener { view, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                view.setPadding(0, bars.top, 0, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                view.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            }
+            insets
         }
         webView.addJavascriptInterface(this, "HaivaBridge")
         webView.webViewClient = WebViewClient()
@@ -82,10 +101,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
         setContentView(webView)
         webView.loadUrl(coreUrl)
-
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestVoicePermission()
-        }
     }
 
     private fun createSpeechRecognizer() {
@@ -132,9 +147,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onEvent(eventType: Int, params: Bundle?) {}
 
         override fun onError(error: Int) {
+            // Never launch another Android Activity for a normal recognition
+            // error. That used to interrupt/recreate the WebView and made the
+            // UI appear to change whenever the voice pipeline was patched.
             dispatchVoiceError(error)
-            if (!fallbackVoiceActive && shouldUseSystemRecognizer(error)) {
-                startSystemVoiceFallback()
+            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                error == SpeechRecognizer.ERROR_CLIENT) {
+                createSpeechRecognizer()
             }
         }
 
@@ -144,18 +163,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             if (text.isNotEmpty()) dispatchVoiceResult(text)
             else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
         }
-    }
-
-    private fun shouldUseSystemRecognizer(error: Int): Boolean = when (error) {
-        SpeechRecognizer.ERROR_CLIENT,
-        SpeechRecognizer.ERROR_SERVER,
-        SpeechRecognizer.ERROR_NETWORK,
-        SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-        SpeechRecognizer.ERROR_AUDIO,
-        SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
-        SpeechRecognizer.ERROR_NO_MATCH -> true
-        else -> false
     }
 
     private fun startSystemVoiceFallback() {
@@ -268,6 +275,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         try {
             recognizer.startListening(intent)
         } catch (_: Exception) {
+            // Fallback is reserved for a recognizer that cannot start at all.
             startSystemVoiceFallback()
         }
     }
@@ -291,8 +299,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 return@runOnUiThread
             }
             if (!ttsReady) {
-                // TTS initialization is asynchronous. Queue the response instead
-                // of falsely reporting completion and dropping the voice reply.
                 pendingSpeakText = value
                 return@runOnUiThread
             }
