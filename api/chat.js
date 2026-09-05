@@ -1,8 +1,9 @@
 // =========================================
 // H.A.I.V.A. AI CHAT API
+// Multi-Brain: Groq → Gemini → OpenAI
 // =========================================
 
-import { buildProviderRequest, extractProviderAnswer, listProviders } from "./provider-gateway.js";
+import { buildProviderRequest, extractProviderAnswer, listProviders, getConfiguredProviders, MULTIBRAIN_ORDER } from "./provider-gateway.js";
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
@@ -10,7 +11,9 @@ export default async function handler(req, res) {
       ok: true,
       service: "H.A.I.V.A. AI API",
       providers: listProviders(),
-      defaultProvider: "groq"
+      multibrain: MULTIBRAIN_ORDER,
+      configuredBrains: getConfiguredProviders(),
+      routing: "groq → gemini → openai"
     });
   }
 
@@ -18,7 +21,7 @@ export default async function handler(req, res) {
 
   const message = req.body?.message;
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
-  const requestedProvider = req.body?.provider || "groq";
+  const requestedProvider = req.body?.provider;
   if (typeof message !== "string" || !message.trim()) {
     return res.status(400).json({ ok: false, response: "Please provide a message." });
   }
@@ -67,42 +70,68 @@ Respond directly to the user's latest message.`;
     { role: "user", content: message.trim() }
   ];
 
-  try {
-    const request = buildProviderRequest(requestedProvider, messages, { maxTokens: 384, temperature: 0.2 });
+  const candidates = requestedProvider
+    ? [requestedProvider, ...MULTIBRAIN_ORDER.filter(id => id !== requestedProvider)]
+    : MULTIBRAIN_ORDER;
+
+  const errors = [];
+
+  for (const providerId of candidates) {
+    let request;
+    try {
+      request = buildProviderRequest(providerId, messages, { maxTokens: 384, temperature: 0.2 });
+    } catch (error) {
+      errors.push({ provider: providerId, code: error?.code || "PROVIDER_ERROR", message: error?.message });
+      continue;
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
-    let providerResponse;
     try {
-      providerResponse = await fetch(request.url, {
+      const providerResponse = await fetch(request.url, {
         method: "POST",
         headers: request.headers,
         body: request.body,
         signal: controller.signal
       });
+      const responseText = await providerResponse.text();
+      let data = null;
+      try { data = JSON.parse(responseText); } catch (_) {}
+
+      if (!providerResponse.ok) {
+        const providerMessage = data?.error?.message || "Unknown provider error.";
+        console.error("[HAIVA] multibrain provider rejected request", { provider: request.provider.id, status: providerResponse.status, message: providerMessage });
+        errors.push({ provider: request.provider.id, code: "AI_PROVIDER_ERROR", status: providerResponse.status });
+        continue;
+      }
+
+      const answer = extractProviderAnswer(request.provider.id, data);
+      if (!answer) {
+        errors.push({ provider: request.provider.id, code: "AI_EMPTY_RESPONSE" });
+        continue;
+      }
+
+      return res.status(200).json({
+        ok: true,
+        provider: request.provider.id,
+        model: request.provider.model,
+        response: answer,
+        message: answer,
+        multibrain: { attempted: errors.map(item => item.provider).concat(request.provider.id), fallbackUsed: errors.length > 0 }
+      });
+    } catch (error) {
+      const timedOut = error?.name === "AbortError";
+      console.error("[HAIVA] multibrain provider request failed", { provider: request.provider.id, name: error?.name, message: error?.message });
+      errors.push({ provider: request.provider.id, code: timedOut ? "AI_TIMEOUT" : "AI_CONNECTION_ERROR" });
     } finally {
       clearTimeout(timeout);
     }
-
-    const responseText = await providerResponse.text();
-    let data = null;
-    try { data = JSON.parse(responseText); } catch (_) {}
-
-    if (!providerResponse.ok) {
-      const providerMessage = data?.error?.message || "Unknown provider error.";
-      console.error("[HAIVA] provider rejected request", { provider: request.provider.id, status: providerResponse.status, message: providerMessage });
-      return res.status(502).json({ ok: false, code: "AI_PROVIDER_ERROR", provider: request.provider.id, response: `My AI provider returned an error (${providerResponse.status}). Please check the provider configuration, Master.` });
-    }
-
-    const answer = extractProviderAnswer(request.provider.id, data);
-    if (!answer) return res.status(502).json({ ok: false, code: "AI_EMPTY_RESPONSE", response: "I received an empty response from my AI system, Master." });
-
-    return res.status(200).json({ ok: true, provider: request.provider.id, model: request.provider.model, response: answer, message: answer });
-  } catch (error) {
-    if (error?.code === "PROVIDER_NOT_CONFIGURED") {
-      return res.status(503).json({ ok: false, code: "PROVIDER_NOT_CONFIGURED", provider: error.provider, response: `The ${error.provider} provider is not configured yet, Master.` });
-    }
-    const timedOut = error?.name === "AbortError";
-    console.error("[HAIVA] provider request failed", { name: error?.name, message: error?.message });
-    return res.status(timedOut ? 504 : 500).json({ ok: false, code: timedOut ? "AI_TIMEOUT" : "AI_CONNECTION_ERROR", response: timedOut ? "My AI system took too long to respond. Please try again, Master." : "Something went wrong while connecting to my AI system, Master." });
   }
+
+  return res.status(503).json({
+    ok: false,
+    code: "MULTIBRAIN_UNAVAILABLE",
+    response: "All configured H.A.I.V.A. AI brains are currently unavailable, Master.",
+    multibrain: { order: candidates, errors: errors.map(({ provider, code, status }) => ({ provider, code, status })) }
+  });
 }
