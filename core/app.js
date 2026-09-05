@@ -7,12 +7,13 @@ import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { createSpeechRecognition } from "./voice/speech-to-text.js";
-import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, containsWakeWord, removeWakeWord } from "./ui-bridge.js";
+import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, containsWakeWord, removeWakeWord, hasNativeVoiceBridge } from "./ui-bridge.js";
 
 class HAIVA {
   constructor() {
     this.state = "BOOTING";
     this.recognition = null;
+    this.nativeVoice = hasNativeVoiceBridge();
     this.voiceActivated = false;
     this.isListening = false;
     this.isSpeaking = false;
@@ -31,6 +32,7 @@ class HAIVA {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
       this.setupRecognition();
+      this.setupNativeVoiceEvents();
       this.setupReminderNotifications();
       this.setupChat();
       this.setupSettings();
@@ -47,12 +49,9 @@ class HAIVA {
       const response = await fetch(CONFIG.api.chatEndpoint, { method: "GET", cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       const micSetting = document.getElementById("mic-setting");
-      if (micSetting) micSetting.textContent = navigator.mediaDevices?.getUserMedia ? "Available" : "Unavailable";
-      if (!response.ok) {
-        console.warn("[HAIVA] AI backend health check returned", response.status);
-        return;
-      }
-      if (data.configured === false) console.warn("[HAIVA] AI backend is reachable but not configured.");
+      if (micSetting) micSetting.textContent = (navigator.mediaDevices?.getUserMedia || this.nativeVoice) ? "Available" : "Unavailable";
+      if (!response.ok) console.warn("[HAIVA] AI backend health check returned", response.status);
+      else if (data.configured === false) console.warn("[HAIVA] AI backend is reachable but not configured.");
       else console.log("[HAIVA] AI backend health check passed.");
     } catch (error) {
       console.warn("[HAIVA] AI backend health check failed:", error?.message || error);
@@ -91,18 +90,32 @@ class HAIVA {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
-      this.isSpeaking = true;
-      this.setState("SPEAKING");
-      await speak(answer);
+      // Chat mode is text-only: deliberately do NOT call speak().
+      this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
       this.showResponse(CONFIG.assistant.connectionError || CONFIG.assistant.fallbackResponse);
-      this.setState("VOICE ERROR");
+      this.setState("ERROR");
     } finally {
       this.isSpeaking = false;
       this.isProcessing = false;
-      if (!this.voiceActivated) this.setState("READY");
     }
+  }
+
+  setupNativeVoiceEvents() {
+    if (!this.nativeVoice) return;
+    window.addEventListener("haiva:native-voice-result", event => {
+      const text = event.detail?.text?.trim();
+      if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
+      this.handleResultText(text);
+    });
+    window.addEventListener("haiva:native-voice-error", () => {
+      this.isListening = false;
+      if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
+        this.setState("VOICE ERROR");
+        this.scheduleRecognitionRestart();
+      }
+    });
   }
 
   setupReminderNotifications() {
@@ -116,9 +129,8 @@ class HAIVA {
         const response = `Reminder: ${message}.`;
         this.showResponse(response);
         await speak(response);
-      } catch (error) {
-        console.warn("Reminder speech failed:", error);
-      } finally {
+      } catch (error) { console.warn("Reminder speech failed:", error); }
+      finally {
         this.isSpeaking = false;
         this.awaitingCommand = false;
         if (this.voiceActivated && !this.isProcessing) {
@@ -159,7 +171,8 @@ class HAIVA {
 
   setupRecognition() {
     this.recognition = createSpeechRecognition(CONFIG.voice);
-    if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
+    if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
+    if (!this.recognition) return;
 
     this.recognition.onstart = () => {
       this.isListening = true;
@@ -187,10 +200,16 @@ class HAIVA {
   }
 
   async activateVoice() {
-    if (!this.recognition) return this.setState("VOICE UNAVAILABLE");
+    if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (this.voiceActivated) return this.deactivateVoice();
     try {
-      if (navigator.mediaDevices?.getUserMedia) {
+      if (this.nativeVoice) {
+        // Android owns microphone permission and native SpeechRecognizer in APK mode.
+        if (navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+          stream?.getTracks().forEach(track => track.stop());
+        }
+      } else if (navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
       } else throw new Error("Microphone API unavailable");
@@ -224,8 +243,15 @@ class HAIVA {
   }
 
   startListening() {
-    if (!this.voiceActivated || !this.recognition || this.isListening || this.isSpeaking || this.isProcessing) return;
+    if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
+    if (this.nativeVoice && !this.recognition) {
+      this.isListening = true;
+      this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
+      try { window.HaivaBridge.startVoiceCapture(); } catch (error) { this.isListening = false; this.setState("VOICE ERROR"); }
+      return;
+    }
+    if (!this.recognition) return;
     try { this.recognition.start(); } catch (error) { console.debug("Recognition start skipped:", error?.message || error); }
   }
 
@@ -245,8 +271,12 @@ class HAIVA {
     clearTimeout(this.restartTimer);
     this.restartTimer = null;
     this.intentionalStop = true;
-    if (!this.recognition) return;
-    try { this.recognition.stop(); } catch (error) { console.debug("Recognition stop skipped:", error?.message || error); }
+    if (this.nativeVoice && !this.recognition) {
+      try { window.HaivaBridge.stopVoiceCapture(); } catch (error) { console.debug("Native recognition stop skipped:", error?.message || error); }
+    }
+    if (this.recognition) {
+      try { this.recognition.stop(); } catch (error) { console.debug("Recognition stop skipped:", error?.message || error); }
+    }
     this.isListening = false;
   }
 
@@ -273,9 +303,14 @@ class HAIVA {
     const displayText = normalizeSpeech(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
     if (this.isSpeaking || this.isProcessing || !finalText.trim()) return;
-    const transcript = normalizeSpeech(finalText);
+    this.handleResultText(finalText);
+  }
+
+  handleResultText(rawText) {
+    const transcript = normalizeSpeech(rawText);
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
+    this.showTranscript(transcript);
 
     if (!this.awaitingCommand) {
       if (!CONFIG.features.wakeWord || containsWakeWord(transcript)) {
@@ -285,6 +320,7 @@ class HAIVA {
       } else {
         this.lastTranscript = "";
         this.setState("STANDBY");
+        if (this.nativeVoice) this.scheduleRecognitionRestart();
       }
       return;
     }
@@ -300,7 +336,7 @@ class HAIVA {
       this.isSpeaking = false;
       if (this.voiceActivated && !this.isProcessing) {
         this.setState("LISTENING");
-        this.startListening();
+        this.scheduleRecognitionRestart();
       }
     }
   }
@@ -315,6 +351,7 @@ class HAIVA {
     try {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
+      // Voice mode keeps the text response visible as CC while speaking it aloud.
       this.showResponse(answer);
       this.isSpeaking = true;
       this.setState("SPEAKING");
