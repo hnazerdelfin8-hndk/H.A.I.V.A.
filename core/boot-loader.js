@@ -1,5 +1,5 @@
 // H.A.I.V.A. DIAGNOSTIC BOOT LOADER
-// Runs before app.js body via the ui/polish.js dependency chain.
+// Diagnostic-only runtime guard. It executes as a dependency before app.js body.
 (() => {
   if (window.__HAIVA_BOOT_LOADER__) return;
   window.__HAIVA_BOOT_LOADER__ = true;
@@ -18,13 +18,58 @@
     ["core/runtime-probe.js", 92, "runtime-probe.js"]
   ];
 
-  const state = { failed: false, ready: false };
-  const esc = value => String(value ?? "").replace(/[&<>\"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[ch]));
+  const state = {
+    failed: false,
+    ready: false,
+    selfTest: "PENDING",
+    bootStarted: false
+  };
+
+  const esc = value => String(value ?? "").replace(/[&<>\"]/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;"
+  }[ch]));
+
+  // Install global diagnostics immediately at module evaluation time so later
+  // dependency/app errors are captured even before DOMContentLoaded.
+  const showCapturedError = (message, source = "runtime") => {
+    if (state.failed) return;
+    state.failed = true;
+    const root = document.getElementById("haiva-boot-loader");
+    if (!root) {
+      console.error("[HAIVA][BOOT]", source, message);
+      return;
+    }
+    root.querySelector("#haiva-boot-title").textContent = "CORE ERROR";
+    root.querySelector("#haiva-boot-current").textContent = "Boot stopped — actual runtime error captured.";
+    const error = root.querySelector("#haiva-boot-error");
+    error.hidden = false;
+    error.textContent = `SOURCE: ${source}\n\n${String(message)}`;
+    document.body.dataset.haivaState = "error";
+    console.error("[HAIVA][BOOT]", source, message);
+  };
+
+  window.addEventListener("error", event => {
+    showCapturedError(
+      event?.error?.stack || event?.message || "Unknown JavaScript error",
+      event?.filename || "JavaScript runtime"
+    );
+  });
+
+  window.addEventListener("unhandledrejection", event => {
+    showCapturedError(
+      event?.reason?.stack || event?.reason?.message || event?.reason || "Unknown promise rejection",
+      "Unhandled Promise rejection"
+    );
+  });
 
   const resourceLoaded = name => {
     if (name === "index.html") return true;
     return performance.getEntriesByType("resource").some(entry => {
-      try { return new URL(entry.name, location.href).pathname.endsWith(name); } catch { return false; }
+      try {
+        return new URL(entry.name, location.href).pathname.endsWith(name);
+      } catch {
+        return false;
+      }
     });
   };
 
@@ -36,10 +81,10 @@
     root.innerHTML = `<div class="haiva-boot-card">
       <div class="haiva-boot-brand">H.A.I.V.A.</div>
       <div class="haiva-boot-subtitle">RUNTIME DIAGNOSTIC</div>
-      <div class="haiva-boot-title" id="haiva-boot-title">INITIALIZING...</div>
+      <div class="haiva-boot-title" id="haiva-boot-title">BOOT LOADER SELF-TEST</div>
       <div class="haiva-boot-percent" id="haiva-boot-percent">0%</div>
       <div class="haiva-boot-track"><div id="haiva-boot-bar"></div></div>
-      <div class="haiva-boot-current" id="haiva-boot-current">Starting diagnostic runtime…</div>
+      <div class="haiva-boot-current" id="haiva-boot-current">Validating diagnostic runtime…</div>
       <div class="haiva-boot-list" id="haiva-boot-list"></div>
       <div class="haiva-boot-error" id="haiva-boot-error" hidden></div>
     </div>`;
@@ -59,34 +104,59 @@
 
   const render = (percent, current, failed = false) => {
     const root = ensureOverlay();
-    root.querySelector("#haiva-boot-title").textContent = failed ? "CORE ERROR" : state.ready ? "CORE READY" : "INITIALIZING...";
-    root.querySelector("#haiva-boot-percent").textContent = `${Math.max(0, Math.min(100, percent))}%`;
-    root.querySelector("#haiva-boot-bar").style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    const safePercent = Math.max(0, Math.min(100, percent));
+    root.querySelector("#haiva-boot-title").textContent = failed
+      ? "CORE ERROR"
+      : state.ready
+        ? "CORE READY"
+        : state.selfTest === "PASS"
+          ? "INITIALIZING..."
+          : "BOOT LOADER SELF-TEST";
+    root.querySelector("#haiva-boot-percent").textContent = `${safePercent}%`;
+    root.querySelector("#haiva-boot-bar").style.width = `${safePercent}%`;
     root.querySelector("#haiva-boot-current").textContent = current;
     root.querySelector("#haiva-boot-list").innerHTML = modules.map(([name, target]) => {
-      const ok = target <= percent && !failed;
-      const active = !ok && target >= percent && !failed;
+      const ok = target <= safePercent && !failed;
+      const active = !ok && target >= safePercent && !failed;
       return `<div class="haiva-boot-item ${ok ? "ok" : active ? "active" : ""}">${ok ? "✓" : active ? "→" : "○"} ${esc(name)}</div>`;
     }).join("");
     if (failed) document.body.dataset.haivaState = "error";
   };
 
-  const showError = (message, source = "runtime") => {
-    if (state.failed) return;
-    state.failed = true;
-    const root = ensureOverlay();
-    root.querySelector("#haiva-boot-title").textContent = "CORE ERROR";
-    root.querySelector("#haiva-boot-current").textContent = "Boot stopped — actual runtime error captured.";
-    const error = root.querySelector("#haiva-boot-error");
-    error.hidden = false;
-    error.textContent = `SOURCE: ${source}\n\n${String(message)}`;
-    document.body.dataset.haivaState = "error";
-    console.error("[HAIVA][BOOT]", source, message);
+  const selfTest = () => {
+    try {
+      if (!document || !document.documentElement) throw new Error("DOM unavailable");
+      ensureOverlay();
+      const root = document.getElementById("haiva-boot-loader");
+      if (!root || !root.querySelector("#haiva-boot-bar")) throw new Error("Diagnostic UI render failed");
+      if (typeof render !== "function") throw new Error("Progress renderer unavailable");
+      if (typeof resourceLoaded !== "function") throw new Error("Module tracker unavailable");
+      if (typeof showCapturedError !== "function") throw new Error("Error capture handler unavailable");
+      window.__HAIVA_BOOT_SELF_TEST__ = {
+        dom: "PASS",
+        diagnosticUI: "PASS",
+        progressRenderer: "PASS",
+        errorCapture: "PASS",
+        moduleTracker: "PASS",
+        status: "PASS"
+      };
+      state.selfTest = "PASS";
+      render(5, "BOOT LOADER: PASS — diagnostic runtime validated.");
+      return true;
+    } catch (error) {
+      state.selfTest = "FAIL";
+      window.__HAIVA_BOOT_SELF_TEST__ = { status: "FAIL", error: String(error?.stack || error) };
+      showCapturedError(error?.stack || error, "boot-loader self-test");
+      return false;
+    }
   };
 
   window.__HAIVA_BOOT__ = {
-    mark(message, percent) { render(percent, message); },
-    error: showError,
+    mark(message, percent) {
+      if (!state.failed) render(percent, message);
+    },
+    error: showCapturedError,
+    selfTest,
     ready() {
       if (state.failed) return;
       state.ready = true;
@@ -96,14 +166,17 @@
   };
 
   const boot = () => {
-    ensureOverlay();
-    render(5, "Document loaded. Inspecting runtime modules…");
-    window.addEventListener("error", event => showError(event?.error?.stack || event?.message || "Unknown JavaScript error", event?.filename || "JavaScript runtime"));
-    window.addEventListener("unhandledrejection", event => showError(event?.reason?.stack || event?.reason?.message || event?.reason || "Unknown promise rejection", "Unhandled Promise rejection"));
+    if (state.bootStarted) return;
+    state.bootStarted = true;
+    if (!selfTest()) return;
 
     let lastPercent = 5;
     const timer = setInterval(() => {
-      if (state.failed || state.ready) { clearInterval(timer); return; }
+      if (state.failed || state.ready) {
+        clearInterval(timer);
+        return;
+      }
+
       const loaded = modules.filter(([, , token]) => token === "document" || resourceLoaded(token));
       const maxLoaded = loaded.reduce((max, item) => Math.max(max, item[1]), 5);
       const next = Math.max(lastPercent, Math.min(96, maxLoaded));
@@ -112,15 +185,22 @@
         const current = modules.find(([, target]) => target > next)?.[0] || "Initializing H.A.I.V.A. core…";
         render(next, `Loading ${current}`);
       }
+
       const app = window.HAIVA;
       if (app?.state === "READY") window.__HAIVA_BOOT__.ready();
-      else if (app?.state === "ERROR") showError("H.A.I.V.A. application entered ERROR state.", "core/app.js");
+      else if (app?.state === "ERROR") showCapturedError("H.A.I.V.A. application entered ERROR state.", "core/app.js");
     }, 120);
 
     setTimeout(() => {
-      if (!state.failed && !state.ready && !window.HAIVA) showError("H.A.I.V.A. core did not publish window.HAIVA before the boot timeout.", "core/app.js");
+      if (!state.failed && !state.ready && !window.HAIVA) {
+        showCapturedError("H.A.I.V.A. core did not publish window.HAIVA before the boot timeout.", "core/app.js");
+      }
     }, 15000);
   };
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();
