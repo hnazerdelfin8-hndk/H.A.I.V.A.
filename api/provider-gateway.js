@@ -9,8 +9,8 @@ const PROVIDERS = Object.freeze({
   gemini: {
     id: "gemini",
     env: "GEMINI_API_KEY",
-    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
-    model: "gemini-3.6-flash",
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+    model: "gemini-3.8-flash",
     protocol: "gemini"
   },
   openai: {
@@ -60,6 +60,7 @@ export function buildProviderRequest(providerId, messages, options = {}, env = p
     headers.Authorization = `Bearer ${apiKey}`;
     body = JSON.stringify({ model: provider.model, messages, max_tokens: maxTokens, temperature });
   } else {
+    headers["x-goog-api-key"] = apiKey;
     const system = messages.find(item => item.role === "system")?.content || "";
     const contents = messages.filter(item => item.role !== "system").map(item => ({
       role: item.role === "assistant" ? "model" : "user",
@@ -70,7 +71,6 @@ export function buildProviderRequest(providerId, messages, options = {}, env = p
       contents,
       generationConfig: { maxOutputTokens: maxTokens, temperature }
     });
-    url = `${provider.url}?key=${encodeURIComponent(apiKey)}`;
   }
 
   return { provider, url, headers, body };
