@@ -130,6 +130,7 @@ Respond directly to the user's latest message.`;
     }
   }
 
+  console.error("[HAIVA] all multibrain providers unavailable", { errors: errors.map(({ provider, code, status }) => ({ provider, code, status })) });
   return res.status(503).json({
     ok: false,
     code: "MULTIBRAIN_UNAVAILABLE",
