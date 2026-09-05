@@ -1,11 +1,10 @@
 import "./runtime-probe.js";
 
 // =========================================
-// H.A.I.V.A. PHASE 1 — RUNTIME-SAFE CONTROL BRIDGE
+// H.A.I.V.A. PHASE 1 — RUNTIME-SAFE VOICE CONTROL
 // =========================================
-// Phase 1 owns the visible mic/chat controls, but it must never hide a
-// core-load failure. Controls delegate to the live HAIVA instance only when
-// the runtime is actually initialized.
+// Phase 1 owns the visible microphone control only.
+// Chat remains owned by core/app.js so Voice and Chat each have one owner.
 
 (() => {
   if (window.__HAIVA_PHASE1_CONTROLS__) return;
@@ -22,22 +21,10 @@ import "./runtime-probe.js";
     document.body.dataset.haivaState = "error";
   };
 
-  const reportCoreUnavailable = (control) => {
-    showRuntimeError(`Core runtime failed before ${control} control became active.`);
+  const reportCoreUnavailable = () => {
+    showRuntimeError("Core runtime failed before microphone control became active.");
   };
 
-  const runText = (text) => {
-    const app = getApp();
-    if (!app || typeof app.handleTextCommand !== "function") {
-      reportCoreUnavailable("chat");
-      return;
-    }
-    if (!text || app.isProcessing) return;
-    void app.handleTextCommand(text);
-  };
-
-  // Runtime proof: Phase 1 records the first JavaScript/module failure and
-  // verifies that the core actually publishes window.HAIVA after boot.
   window.addEventListener("error", event => {
     const detail = event?.error?.stack || event?.message || "Unknown JavaScript error";
     showRuntimeError(`JavaScript runtime error: ${String(detail).split("\n")[0]}`);
@@ -50,7 +37,7 @@ import "./runtime-probe.js";
 
   const verifyCore = () => {
     if (!getApp()) {
-      reportCoreUnavailable("Phase 1");
+      reportCoreUnavailable();
       return false;
     }
     console.log("[HAIVA][RUNTIME] window.HAIVA verified; Phase 1 synced.");
@@ -68,65 +55,23 @@ import "./runtime-probe.js";
     if (!target) return;
 
     const mic = target.closest("#activate-voice");
-    if (mic) {
-      const app = getApp();
-      if (!app || typeof app.activateVoice !== "function") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        reportCoreUnavailable("microphone");
-        return;
-      }
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      Promise.resolve(app.activateVoice()).catch(error => {
-        console.error("[HAIVA] Microphone control failed:", error);
-        app.setState?.("VOICE ERROR");
-      });
-      return;
-    }
-
-    const send = target.closest("#send-message");
-    if (send) {
-      const app = getApp();
-      if (!app || typeof app.handleTextCommand !== "function") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        reportCoreUnavailable("chat");
-        return;
-      }
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const input = document.getElementById("chat-input");
-      const text = input?.value?.trim();
-      if (input && text && !app.isProcessing) {
-        input.value = "";
-        runText(text);
-      }
-      return;
-    }
-  }, true);
-
-  document.addEventListener("submit", event => {
-    const form = event.target instanceof HTMLFormElement ? event.target : null;
-    if (!form || form.id !== "chat-form") return;
+    if (!mic) return;
 
     const app = getApp();
-    if (!app || typeof app.handleTextCommand !== "function") {
+    if (!app || typeof app.activateVoice !== "function") {
       event.preventDefault();
       event.stopImmediatePropagation();
-      reportCoreUnavailable("chat");
+      reportCoreUnavailable();
       return;
     }
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    const input = document.getElementById("chat-input");
-    const text = input?.value?.trim();
-    if (!text || app.isProcessing) return;
-
-    input.value = "";
-    runText(text);
+    Promise.resolve(app.activateVoice()).catch(error => {
+      console.error("[HAIVA] Microphone control failed:", error);
+      app.setState?.("VOICE ERROR");
+    });
   }, true);
 
-  console.log("[HAIVA] Phase 1 runtime-safe controls installed: mic + chat.");
+  console.log("[HAIVA] Phase 1 runtime-safe voice control installed.");
 })();
