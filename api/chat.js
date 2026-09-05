@@ -5,7 +5,23 @@
 
 import { buildProviderRequest, extractProviderAnswer, listProviders, getConfiguredProviders, MULTIBRAIN_ORDER } from "./provider-gateway.js";
 
+function setCors(res) {
+  // The Android APK loads the UI from file://, so the remote brain endpoint
+  // must explicitly allow the WebView origin. This does not expose API keys;
+  // provider credentials remain server-side in Vercel environment variables.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
+
 export default async function handler(req, res) {
+  setCors(res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
@@ -59,7 +75,7 @@ VOICE:
 - Avoid unnecessary headings, tables, disclaimers, and filler.
 
 LIMITATIONS:
-- The browser handles voice recognition, speech synthesis, and local UI state.
+- The browser/Android shell handles voice recognition, speech synthesis, and local UI state.
 - You handle reasoning and conversation.
 
 Respond directly to the user's latest message.`;
