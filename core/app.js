@@ -143,6 +143,14 @@ class HAIVA {
       this.isListening = false;
       void this.handleResultText(text);
     });
+    window.addEventListener("haiva:native-voice-timeout", () => {
+      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      this.isListening = false;
+      this.voiceActivated = false;
+      this.intentionalStop = false;
+      setVoiceButtonActive(false);
+      this.setState("READY");
+    });
     window.addEventListener("haiva:native-voice-error", event => {
       this.isListening = false;
       const code = Number(event.detail?.code);
