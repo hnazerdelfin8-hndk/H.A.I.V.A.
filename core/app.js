@@ -30,25 +30,42 @@ class HAIVA {
     this.setupSettings();
     this.setupNativeVoiceEvents();
     this.setupReminderNotifications();
-    this.setState("READY");
+    this.setState("BOOTING");
 
+    // Boot is asynchronous, but the UI must always receive a deterministic
+    // completion signal when initialization finishes.
     void this.initialize();
   }
 
   async initialize() {
+    this.setState("BOOTING");
+    this.setBootMessage("Initializing H.A.I.V.A. core…");
+
     try {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
+
       this.setupRecognition();
       this.setState("READY");
+      this.setBootMessage("H.A.I.V.A. core is online. Standing by, Master.");
+      this.showResponse("Core initialized successfully. H.A.I.V.A. is online and ready, Master.");
       void this.checkAIConnection();
     } catch (error) {
       console.error("Initialization failed:", error);
-      // Chat and native voice must remain usable even if optional core setup fails.
+
+      // The shell remains usable even if an optional module fails. Make that
+      // recovery visible instead of silently leaving the user at a dead screen.
       this.setupRecognition();
       this.setState("READY");
+      this.setBootMessage("Core recovered. H.A.I.V.A. is ready, Master.");
+      this.showResponse("H.A.I.V.A. core recovered successfully. I am ready for your command, Master.");
       void this.checkAIConnection();
     }
+  }
+
+  setBootMessage(message) {
+    const heard = document.getElementById("heard");
+    if (heard && message) heard.textContent = message;
   }
 
   async checkAIConnection() {
@@ -165,7 +182,8 @@ class HAIVA {
     setUIState(state);
     const heard = document.getElementById("heard");
     if (!heard) return;
-    if (state === "LISTENING") heard.textContent = "Listening for your command…";
+    if (state === "BOOTING") heard.textContent = "Initializing H.A.I.V.A. core…";
+    else if (state === "LISTENING") heard.textContent = "Listening for your command…";
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
     else if (state === "STANDBY") heard.textContent = "Standing by. Say: Yo, H.A.I.V.A.";
@@ -224,7 +242,6 @@ class HAIVA {
 
     try {
       if (this.nativeVoice) {
-        // Native Android voice owns the microphone. Browser permission is optional.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
           stream?.getTracks().forEach(track => track.stop());
