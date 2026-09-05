@@ -25,26 +25,20 @@ class HAIVA {
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
-    // Keep the user-facing shell independent from optional AI/core modules.
     this.setupChat();
     this.setupSettings();
     this.setupNativeVoiceEvents();
     this.setupReminderNotifications();
     this.setState("BOOTING");
-
-    // Boot is asynchronous, but the UI must always receive a deterministic
-    // completion signal when initialization finishes.
     void this.initialize();
   }
 
   async initialize() {
     this.setState("BOOTING");
     this.setBootMessage("Initializing H.A.I.V.A. core…");
-
     try {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
-
       this.setupRecognition();
       this.setState("READY");
       this.setBootMessage("H.A.I.V.A. core is online. Standing by, Master.");
@@ -52,9 +46,6 @@ class HAIVA {
       void this.checkAIConnection();
     } catch (error) {
       console.error("Initialization failed:", error);
-
-      // The shell remains usable even if an optional module fails. Make that
-      // recovery visible instead of silently leaving the user at a dead screen.
       this.setupRecognition();
       this.setState("READY");
       this.setBootMessage("Core recovered. H.A.I.V.A. is ready, Master.");
@@ -77,7 +68,6 @@ class HAIVA {
       if (!response.ok) console.warn("[HAIVA] AI backend health check returned", response.status);
       else console.log("[HAIVA] AI backend health:", data.configuredBrains || []);
     } catch (error) {
-      // A missing/offline API is not a UI failure; local conversation remains available.
       console.warn("[HAIVA] AI backend health check unavailable:", error?.message || error);
     }
   }
@@ -95,13 +85,21 @@ class HAIVA {
   setupChat() {
     const form = document.getElementById("chat-form");
     const input = document.getElementById("chat-input");
+    const send = document.getElementById("send-message");
     if (!form || !input) return;
-    form.addEventListener("submit", event => {
+    const submit = event => {
       event.preventDefault();
       const text = input.value.trim();
       if (!text || this.isProcessing) return;
       input.value = "";
       void this.handleTextCommand(text);
+    };
+    form.addEventListener("submit", submit);
+    send?.addEventListener("click", event => {
+      // The form submit handler is the single source of truth; prevent a
+      // second path from firing twice on Android WebView.
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      form.requestSubmit?.();
     });
   }
 
@@ -114,6 +112,9 @@ class HAIVA {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
+      this.isSpeaking = true;
+      this.setState("SPEAKING");
+      await speak(answer);
       this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
@@ -128,21 +129,28 @@ class HAIVA {
 
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
-
     window.addEventListener("haiva:native-voice-ready", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.isListening = true;
         this.setState(this.awaitingCommand ? "LISTENING" : "STANDBY");
       }
     });
-
+    window.addEventListener("haiva:native-voice-begin", () => {
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.isListening = true;
+        this.setState("LISTENING");
+      }
+    });
+    window.addEventListener("haiva:native-voice-partial", event => {
+      const text = event.detail?.text?.trim();
+      if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) this.showTranscript(normalizeSpeech(text));
+    });
     window.addEventListener("haiva:native-voice-result", event => {
       const text = event.detail?.text?.trim();
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.isListening = false;
       this.handleResultText(text);
     });
-
     window.addEventListener("haiva:native-voice-error", event => {
       this.isListening = false;
       const code = Number(event.detail?.code);
@@ -183,7 +191,7 @@ class HAIVA {
     const heard = document.getElementById("heard");
     if (!heard) return;
     if (state === "BOOTING") heard.textContent = "Initializing H.A.I.V.A. core…";
-    else if (state === "LISTENING") heard.textContent = "Listening for your command…";
+    else if (state === "LISTENING") heard.textContent = "Listening… speak now.";
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
     else if (state === "STANDBY") heard.textContent = "Standing by. Say: Yo, H.A.I.V.A.";
@@ -210,7 +218,6 @@ class HAIVA {
     this.recognition = createSpeechRecognition(CONFIG.voice);
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (!this.recognition) return;
-
     this.recognition.onstart = () => {
       this.isListening = true;
       this.intentionalStop = false;
@@ -239,9 +246,10 @@ class HAIVA {
   async activateVoice() {
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (this.voiceActivated) return this.deactivateVoice();
-
     try {
       if (this.nativeVoice) {
+        // Android owns the real microphone permission. getUserMedia is only a
+        // browser/WebView capability probe and must never block native voice.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
           stream?.getTracks().forEach(track => track.stop());
@@ -257,7 +265,6 @@ class HAIVA {
       }
       console.warn("Browser microphone permission unavailable; continuing with native Android voice.");
     }
-
     this.voiceActivated = true;
     this.intentionalStop = false;
     this.awaitingCommand = true;
@@ -353,7 +360,6 @@ class HAIVA {
     if (!transcript || transcript === this.lastTranscript) return;
     this.lastTranscript = transcript;
     this.showTranscript(transcript);
-
     if (!this.awaitingCommand) {
       if (!CONFIG.features.wakeWord || containsWakeWord(transcript)) {
         const commandAfterWake = removeWakeWord(transcript);
