@@ -96,8 +96,6 @@ class HAIVA {
     };
     form.addEventListener("submit", submit);
     send?.addEventListener("click", event => {
-      // The form submit handler is the single source of truth; prevent a
-      // second path from firing twice on Android WebView.
       if (typeof event.preventDefault === "function") event.preventDefault();
       form.requestSubmit?.();
     });
@@ -112,16 +110,12 @@ class HAIVA {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
-      this.isSpeaking = true;
-      this.setState("SPEAKING");
-      await speak(answer);
       this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
       this.showResponse(CONFIG.assistant.fallbackResponse);
       this.setState("ERROR");
     } finally {
-      this.isSpeaking = false;
       this.isProcessing = false;
       if (this.state === "ERROR") this.setState("READY");
     }
@@ -248,8 +242,6 @@ class HAIVA {
     if (this.voiceActivated) return this.deactivateVoice();
     try {
       if (this.nativeVoice) {
-        // Android owns the real microphone permission. getUserMedia is only a
-        // browser/WebView capability probe and must never block native voice.
         if (navigator.mediaDevices?.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
           stream?.getTracks().forEach(track => track.stop());
@@ -385,16 +377,17 @@ class HAIVA {
       if (this.voiceActivated && !this.isProcessing) {
         this.setState("LISTENING");
         this.scheduleRecognitionRestart();
-      }
+      } else if (!this.voiceActivated) this.setState("READY");
     }
   }
 
   async handleCommand(command) {
+    this.isProcessing = true;
+    this.isListening = false;
     clearTimeout(this.commandTimer);
     this.commandTimer = null;
-    this.awaitingCommand = false;
-    this.isProcessing = true;
     this.stopListening();
+    this.showTranscript(command);
     this.setState("THINKING");
     try {
       const response = await this.assistant.respond(command);
@@ -406,22 +399,25 @@ class HAIVA {
     } catch (error) {
       console.error("Command failed:", error);
       this.showResponse(CONFIG.assistant.fallbackResponse);
-      this.setState("VOICE ERROR");
     } finally {
       this.isSpeaking = false;
       this.isProcessing = false;
+      this.awaitingCommand = false;
       if (this.voiceActivated) {
         this.setState("STANDBY");
         this.scheduleRecognitionRestart();
       } else this.setState("READY");
     }
   }
-
-  handleButtonClick() { void this.activateVoice(); }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
   const app = new HAIVA();
   const button = document.getElementById("activate-voice");
   if (button) button.addEventListener("click", () => app.handleButtonClick());
+  window.HAIVA = app;
 });
+
+HAIVA.prototype.handleButtonClick = function handleButtonClick() {
+  void this.activateVoice();
+};
