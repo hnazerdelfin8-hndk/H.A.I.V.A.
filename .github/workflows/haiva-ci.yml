@@ -7,6 +7,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Build current main exactly as packaged for Android verification.
 jobs:
   core-validation:
     runs-on: ubuntu-latest
