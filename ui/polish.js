@@ -1,5 +1,3 @@
-import "../core/boot-loader.js";
-
 // H.A.I.V.A. visual/UX polish layer.
 // Keeps the main shell modular so the UI can be replaced without touching the core engine.
 
