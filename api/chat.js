@@ -1,14 +1,12 @@
 // =========================================
 // H.A.I.V.A. AI CHAT API
 // Multi-Brain: Groq → Gemini → OpenAI
+// Android WebView bridge: CORS + remote brain routing
 // =========================================
 
 import { buildProviderRequest, extractProviderAnswer, listProviders, getConfiguredProviders, MULTIBRAIN_ORDER } from "./provider-gateway.js";
 
 function setCors(res) {
-  // The Android APK loads the UI from file://, so the remote brain endpoint
-  // must explicitly allow the WebView origin. This does not expose API keys;
-  // provider credentials remain server-side in Vercel environment variables.
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -17,11 +15,7 @@ function setCors(res) {
 
 export default async function handler(req, res) {
   setCors(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
@@ -32,15 +26,12 @@ export default async function handler(req, res) {
       routing: "groq → gemini → openai"
     });
   }
-
   if (req.method !== "POST") return res.status(405).json({ ok: false, response: "Method not allowed." });
 
   const message = req.body?.message;
   const history = Array.isArray(req.body?.history) ? req.body.history : [];
   const requestedProvider = req.body?.provider;
-  if (typeof message !== "string" || !message.trim()) {
-    return res.status(400).json({ ok: false, response: "Please provide a message." });
-  }
+  if (typeof message !== "string" || !message.trim()) return res.status(400).json({ ok: false, response: "Please provide a message." });
 
   const safeHistory = history
     .filter(item => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string" && item.content.trim())
@@ -85,11 +76,9 @@ Respond directly to the user's latest message.`;
     ...safeHistory,
     { role: "user", content: message.trim() }
   ];
-
   const candidates = requestedProvider
     ? [requestedProvider, ...MULTIBRAIN_ORDER.filter(id => id !== requestedProvider)]
     : MULTIBRAIN_ORDER;
-
   const errors = [];
 
   for (const providerId of candidates) {
@@ -113,20 +102,17 @@ Respond directly to the user's latest message.`;
       const responseText = await providerResponse.text();
       let data = null;
       try { data = JSON.parse(responseText); } catch (_) {}
-
       if (!providerResponse.ok) {
         const providerMessage = data?.error?.message || "Unknown provider error.";
         console.error("[HAIVA] multibrain provider rejected request", { provider: request.provider.id, status: providerResponse.status, message: providerMessage });
         errors.push({ provider: request.provider.id, code: "AI_PROVIDER_ERROR", status: providerResponse.status });
         continue;
       }
-
       const answer = extractProviderAnswer(request.provider.id, data);
       if (!answer) {
         errors.push({ provider: request.provider.id, code: "AI_EMPTY_RESPONSE" });
         continue;
       }
-
       return res.status(200).json({
         ok: true,
         provider: request.provider.id,
