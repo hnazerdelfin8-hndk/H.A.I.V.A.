@@ -6,28 +6,23 @@ const PROVIDERS = Object.freeze({
     model: "openai/gpt-oss-20b",
     protocol: "openai-compatible"
   },
+  gemini: {
+    id: "gemini",
+    env: "GEMINI_API_KEY",
+    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+    model: "gemini-3.6-flash",
+    protocol: "gemini"
+  },
   openai: {
     id: "openai",
     env: "OPENAI_API_KEY",
     url: "https://api.openai.com/v1/chat/completions",
     model: "gpt-4o-mini",
     protocol: "openai-compatible"
-  },
-  gemini: {
-    id: "gemini",
-    env: "GEMINI_API_KEY",
-    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-    model: "gemini-2.5-flash",
-    protocol: "gemini"
-  },
-  anthropic: {
-    id: "anthropic",
-    env: "ANTHROPIC_API_KEY",
-    url: "https://api.anthropic.com/v1/messages",
-    model: "claude-3-5-haiku-latest",
-    protocol: "anthropic"
   }
 });
+
+export const MULTIBRAIN_ORDER = Object.freeze(["groq", "gemini", "openai"]);
 
 export function getProvider(id = "groq") {
   return PROVIDERS[String(id).toLowerCase()] || PROVIDERS.groq;
@@ -39,6 +34,10 @@ export function listProviders(env = process.env) {
     model: provider.model,
     configured: Boolean(env?.[provider.env])
   }));
+}
+
+export function getConfiguredProviders(env = process.env) {
+  return MULTIBRAIN_ORDER.filter(id => Boolean(env?.[PROVIDERS[id].env]));
 }
 
 export function buildProviderRequest(providerId, messages, options = {}, env = process.env) {
@@ -60,8 +59,7 @@ export function buildProviderRequest(providerId, messages, options = {}, env = p
   if (provider.protocol === "openai-compatible") {
     headers.Authorization = `Bearer ${apiKey}`;
     body = JSON.stringify({ model: provider.model, messages, max_tokens: maxTokens, temperature });
-  } else if (provider.protocol === "gemini") {
-    url = `${provider.url}?key=${encodeURIComponent(apiKey)}`;
+  } else {
     const system = messages.find(item => item.role === "system")?.content || "";
     const contents = messages.filter(item => item.role !== "system").map(item => ({
       role: item.role === "assistant" ? "model" : "user",
@@ -72,12 +70,7 @@ export function buildProviderRequest(providerId, messages, options = {}, env = p
       contents,
       generationConfig: { maxOutputTokens: maxTokens, temperature }
     });
-  } else {
-    headers["x-api-key"] = apiKey;
-    headers["anthropic-version"] = "2023-06-01";
-    const system = messages.find(item => item.role === "system")?.content || "";
-    const contents = messages.filter(item => item.role !== "system");
-    body = JSON.stringify({ model: provider.model, max_tokens: maxTokens, temperature, system, messages: contents });
+    url = `${provider.url}?key=${encodeURIComponent(apiKey)}`;
   }
 
   return { provider, url, headers, body };
@@ -85,7 +78,6 @@ export function buildProviderRequest(providerId, messages, options = {}, env = p
 
 export function extractProviderAnswer(providerId, data) {
   const provider = getProvider(providerId);
-  if (provider.protocol === "anthropic") return data?.content?.find(item => item.type === "text")?.text?.trim() || "";
   if (provider.protocol === "gemini") return data?.candidates?.[0]?.content?.parts?.map(part => part.text || "").join("").trim() || "";
   return data?.choices?.[0]?.message?.content?.trim() || "";
 }
