@@ -83,8 +83,24 @@ test("voice synchronization contract is centralized and shared", async () => {
   assert.match(android, /Core\/app\.js is the single owner/);
   assert.match(android, /haiva:native-voice-end/);
   assert.match(android, /EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L/);
+  assert.match(android, /nativeVoiceWatchdogMs = 5000L/);
+  assert.match(android, /haiva:native-voice-timeout/);
   assert.doesNotMatch(android, /postDelayed\(initialSpeechWindow, 3000L\)/);
   assert.doesNotMatch(android, /private val initialSpeechWindow/);
+});
+
+test("voice connector events have one Android producer and bounded recovery paths", async () => {
+  const app = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
+  const controls = await readFile(new URL("../core/phase1-controls.js", import.meta.url), "utf8");
+  const android = await readFile(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
+
+  assert.match(app, /haiva:native-voice-timeout/);
+  assert.match(app, /setState\("VOICE UNAVAILABLE"\)/);
+  assert.match(controls, /haiva:native-voice-unavailable/);
+  assert.match(controls, /app\.deactivateVoice/);
+  assert.match(android, /haiva:native-voice-timeout/);
+  assert.match(android, /haiva:native-voice-unavailable/);
+  assert.match(android, /cancelNativeVoiceWatchdog\(\)/);
 });
 
 test("voice state machine has one core orchestration path", async () => {
