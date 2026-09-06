@@ -21,8 +21,6 @@ class HAIVA {
     this.intentionalStop = false;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
-
-    // Single orchestration owner for the voice state machine.
     this.voiceStartTimer = null;
     this.voiceSilenceTimer = null;
     this.voiceHasStarted = false;
@@ -182,8 +180,6 @@ class HAIVA {
     });
     window.addEventListener("haiva:native-voice-end", () => {
       if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
-      // Android's recognizer is configured with the same canonical 2-second
-      // post-speech silence window. This event marks that window as complete.
       this.isListening = false;
       this.setState("LISTENING");
     });
@@ -298,7 +294,9 @@ class HAIVA {
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
+      // Do not terminate a completed speech cycle here. The orchestrator's
+      // canonical 2-second silence timer owns browser completion.
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop && !this.voiceHasStarted) {
         this.voiceActivated = false;
         this.clearVoiceTimers();
         setVoiceButtonActive(false);
