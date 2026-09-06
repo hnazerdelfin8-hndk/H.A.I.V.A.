@@ -68,6 +68,36 @@ test("chat and voice modes use separate response behavior", async () => {
   assert.match(voiceHandler, /await speak\(answer\)/);
 });
 
+test("voice synchronization contract is centralized and shared", async () => {
+  const config = await readFile(new URL("../core/config.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
+  const android = await readFile(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
+
+  assert.match(config, /initialSpeechGraceMs:\s*3000/);
+  assert.match(config, /postSpeechSilenceMs:\s*2000/);
+  assert.match(app, /this\.voiceTiming = CONFIG\.voice\.timing/);
+  assert.match(app, /initialSpeechGraceMs/);
+  assert.match(app, /postSpeechSilenceMs/);
+
+  // Android is an adapter, not a second orchestrator.
+  assert.match(android, /Core\/app\.js is the single owner/);
+  assert.match(android, /haiva:native-voice-end/);
+  assert.match(android, /EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L/);
+  assert.doesNotMatch(android, /postDelayed\(initialSpeechWindow, 3000L\)/);
+  assert.doesNotMatch(android, /private val initialSpeechWindow/);
+});
+
+test("voice state machine has one core orchestration path", async () => {
+  const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
+  assert.match(source, /this\.setState\("LISTENING"\)/);
+  assert.match(source, /this\.setState\("THINKING"\)/);
+  assert.match(source, /this\.setState\("SPEAKING"\)/);
+  assert.match(source, /this\.setState\("READY"\)/);
+  assert.match(source, /await speak\(answer\)/);
+  assert.match(source, /this\.setState\("READY"\);/);
+  assert.doesNotMatch(source, /recognition\.start\(\).*recognition\.start\(/s);
+});
+
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
   const source = await readFile(new URL("../core/orchestrator/index.js", import.meta.url), "utf8");
   assert.match(source, /const DEFAULT_MAX_RETRIES = 0/);
