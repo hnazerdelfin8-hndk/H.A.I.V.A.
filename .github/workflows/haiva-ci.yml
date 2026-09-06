@@ -62,6 +62,16 @@ jobs:
           cp -R ui android/app/src/main/assets/haiva/
           if [ -d skills ]; then cp -R skills android/app/src/main/assets/haiva/; fi
 
+      - name: Build source manifest
+        shell: bash
+        run: |
+          set -e
+          : > /tmp/haiva-source-manifest.sha256
+          find index.html core ui skills -type f -print | sort | while IFS= read -r file; do
+            sha256sum "$file"
+          done | awk '{print $1"  assets/haiva/"$2}' > /tmp/haiva-source-manifest.sha256
+          echo "Source manifest entries: $(wc -l < /tmp/haiva-source-manifest.sha256)"
+
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon
@@ -69,6 +79,25 @@ jobs:
       - name: Verify APK exists
         shell: bash
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Verify source to APK asset synchronization
+        shell: bash
+        run: |
+          set -e
+          rm -rf /tmp/haiva-apk-extract
+          mkdir -p /tmp/haiva-apk-extract
+          unzip -q android/app/build/outputs/apk/debug/app-debug.apk -d /tmp/haiva-apk-extract
+          : > /tmp/haiva-apk-manifest.sha256
+          find /tmp/haiva-apk-extract/assets/haiva -type f -print | sort | while IFS= read -r file; do
+            rel="${file#/tmp/haiva-apk-extract/}"
+            sha256sum "$file" | awk -v rel="$rel" '{print $1"  "rel}'
+          done > /tmp/haiva-apk-manifest.sha256
+          if ! diff -u /tmp/haiva-source-manifest.sha256 /tmp/haiva-apk-manifest.sha256; then
+            echo "ERROR: Source and APK web assets are not synchronized. Artifact rejected."
+            exit 1
+          fi
+          echo "SOURCE ↔ APK synchronization: PASS"
+          echo "Matched assets: $(wc -l < /tmp/haiva-source-manifest.sha256)"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
