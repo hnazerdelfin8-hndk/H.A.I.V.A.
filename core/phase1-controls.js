@@ -5,12 +5,19 @@ import "./runtime-probe.js";
 // =========================================
 // Phase 1 owns the visible microphone control only.
 // Chat remains owned by core/app.js so Voice and Chat each have one owner.
+// Connector recovery/boot diagnostics live here as a boundary observer;
+// Core/app.js remains the owner of the canonical voice state machine.
 
 (() => {
   if (window.__HAIVA_PHASE1_CONTROLS__) return;
   window.__HAIVA_PHASE1_CONTROLS__ = true;
 
   const getApp = () => window.HAIVA || null;
+
+  const setBootCheckpoint = (name, ok, detail = "") => {
+    document.body.dataset[`haiva${name}`] = ok ? "ok" : "error";
+    console.log(`[HAIVA][BOOT] ${name} ${ok ? "OK" : "ERROR"}${detail ? ` — ${detail}` : ""}`);
+  };
 
   const showRuntimeError = (message) => {
     console.error("[HAIVA][RUNTIME]", message);
@@ -22,6 +29,7 @@ import "./runtime-probe.js";
   };
 
   const reportCoreUnavailable = () => {
+    setBootCheckpoint("BootCore", false, "window.HAIVA was not created");
     showRuntimeError("Core runtime failed before microphone control became active.");
   };
 
@@ -35,19 +43,46 @@ import "./runtime-probe.js";
     showRuntimeError(`Initialization error: ${String(reason).split("\n")[0]}`);
   });
 
-  const verifyCore = () => {
-    if (!getApp()) {
-      reportCoreUnavailable();
-      return false;
+  const verifyRuntimeBoundary = () => {
+    setBootCheckpoint("BootHtml", true, "DOM available");
+    const app = getApp();
+    if (!app) return reportCoreUnavailable();
+
+    setBootCheckpoint("BootCore", true, "window.HAIVA available");
+    const connectorAvailable = !!window.HaivaBridge;
+    setBootCheckpoint("BootConnector", connectorAvailable, connectorAvailable ? "HaivaBridge available" : "HaivaBridge unavailable");
+
+    if (!connectorAvailable) {
+      console.warn("[HAIVA][BOOT] Connector unavailable; browser voice path may still be available.");
     }
-    console.log("[HAIVA][RUNTIME] window.HAIVA verified; Phase 1 synced.");
-    return true;
   };
 
+  window.addEventListener("haiva:native-voice-unavailable", event => {
+    const app = getApp();
+    const reason = String(event.detail?.reason || "native_voice_unavailable");
+    console.warn("[HAIVA][CONNECTOR] Native voice unavailable:", reason);
+    if (app?.deactivateVoice) app.deactivateVoice();
+    if (app?.setState) app.setState("VOICE UNAVAILABLE");
+    document.body.dataset.haivaVoiceCapability = "unavailable";
+  });
+
+  window.addEventListener("haiva:native-voice-timeout", () => {
+    document.body.dataset.haivaVoiceCapability = "timeout";
+    console.warn("[HAIVA][CONNECTOR] Native voice watchdog timeout; Core recovery will return to READY.");
+  });
+
+  window.addEventListener("haiva:microphone-ready", () => {
+    document.body.dataset.haivaMicrophone = "ready";
+  });
+
+  window.addEventListener("haiva:native-voice-ready", () => {
+    document.body.dataset.haivaNativeVoice = "ready";
+  });
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(verifyCore, 0), { once: true });
+    document.addEventListener("DOMContentLoaded", () => setTimeout(verifyRuntimeBoundary, 0), { once: true });
   } else {
-    setTimeout(verifyCore, 0);
+    setTimeout(verifyRuntimeBoundary, 0);
   }
 
   document.addEventListener("click", event => {
