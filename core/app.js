@@ -18,10 +18,16 @@ class HAIVA {
     this.isListening = false;
     this.isSpeaking = false;
     this.isProcessing = false;
-    this.restartTimer = null;
     this.intentionalStop = false;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
+
+    // Single orchestration owner for the voice state machine.
+    this.voiceStartTimer = null;
+    this.voiceSilenceTimer = null;
+    this.voiceHasStarted = false;
+    this.pendingVoiceResult = "";
+    this.voiceTiming = CONFIG.voice.timing;
 
     this.setupChat();
     this.setupSettings();
@@ -119,39 +125,93 @@ class HAIVA {
     }
   }
 
+  clearVoiceTimers() {
+    if (this.voiceStartTimer) clearTimeout(this.voiceStartTimer);
+    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
+    this.voiceStartTimer = null;
+    this.voiceSilenceTimer = null;
+  }
+
+  beginVoiceCycle() {
+    this.clearVoiceTimers();
+    this.voiceHasStarted = false;
+    this.pendingVoiceResult = "";
+    this.voiceStartTimer = setTimeout(() => {
+      if (!this.voiceActivated || this.voiceHasStarted || this.isProcessing || this.isSpeaking) return;
+      this.stopListening();
+      this.voiceActivated = false;
+      setVoiceButtonActive(false);
+      this.setState("READY");
+    }, this.voiceTiming.initialSpeechGraceMs);
+  }
+
+  markSpeechStarted() {
+    this.voiceHasStarted = true;
+    if (this.voiceStartTimer) clearTimeout(this.voiceStartTimer);
+    this.voiceStartTimer = null;
+    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
+    this.voiceSilenceTimer = null;
+  }
+
+  scheduleBrowserSilenceCompletion() {
+    if (!this.voiceHasStarted || this.nativeVoice || !this.voiceActivated) return;
+    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
+    this.voiceSilenceTimer = setTimeout(() => {
+      this.voiceSilenceTimer = null;
+      if (!this.voiceActivated || this.isProcessing || this.isSpeaking) return;
+      this.stopListening();
+      if (this.pendingVoiceResult) {
+        const result = this.pendingVoiceResult;
+        this.pendingVoiceResult = "";
+        void this.handleResultText(result);
+      }
+    }, this.voiceTiming.postSpeechSilenceMs);
+  }
+
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
     window.addEventListener("haiva:native-voice-ready", () => {
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        this.isListening = true;
-        this.setState("LISTENING");
-      }
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) this.setState("LISTENING");
     });
     window.addEventListener("haiva:native-voice-begin", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.markSpeechStarted();
         this.isListening = true;
         this.setState("LISTENING");
       }
     });
+    window.addEventListener("haiva:native-voice-end", () => {
+      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      // Android's recognizer is configured with the same canonical 2-second
+      // post-speech silence window. This event marks that window as complete.
+      this.isListening = false;
+      this.setState("LISTENING");
+    });
     window.addEventListener("haiva:native-voice-partial", event => {
       const text = event.detail?.text?.trim();
-      if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) this.showTranscript(normalizeSpeech(text));
+      if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.markSpeechStarted();
+        this.showTranscript(normalizeSpeech(text));
+      }
     });
     window.addEventListener("haiva:native-voice-result", event => {
       const text = event.detail?.text?.trim();
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.isListening = false;
+      this.pendingVoiceResult = "";
       void this.handleResultText(text);
     });
     window.addEventListener("haiva:native-voice-timeout", () => {
       if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      this.clearVoiceTimers();
       this.isListening = false;
       this.voiceActivated = false;
-      this.intentionalStop = false;
+      this.voiceHasStarted = false;
       setVoiceButtonActive(false);
       this.setState("READY");
     });
     window.addEventListener("haiva:native-voice-error", event => {
+      this.clearVoiceTimers();
       this.isListening = false;
       const code = Number(event.detail?.code);
       console.warn("[HAIVA] Native speech recognition error:", code);
@@ -223,6 +283,7 @@ class HAIVA {
     };
     this.recognition.onresult = event => this.handleResult(event);
     this.recognition.onerror = event => {
+      this.clearVoiceTimers();
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -237,9 +298,9 @@ class HAIVA {
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      // One microphone tap = one listening cycle. Never auto-restart here.
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
         this.voiceActivated = false;
+        this.clearVoiceTimers();
         setVoiceButtonActive(false);
         this.setState("READY");
       }
@@ -277,6 +338,9 @@ class HAIVA {
   deactivateVoice() {
     this.voiceActivated = false;
     this.lastTranscript = "";
+    this.clearVoiceTimers();
+    this.voiceHasStarted = false;
+    this.pendingVoiceResult = "";
     this.stopListening();
     window.speechSynthesis?.cancel?.();
     this.isSpeaking = false;
@@ -290,11 +354,13 @@ class HAIVA {
   startListening() {
     if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
+    this.beginVoiceCycle();
     if (this.nativeVoice) {
       this.isListening = true;
       this.setState("LISTENING");
       try { window.HaivaBridge.startVoiceCapture(); }
       catch (error) {
+        this.clearVoiceTimers();
         this.isListening = false;
         this.voiceActivated = false;
         setVoiceButtonActive(false);
@@ -327,8 +393,18 @@ class HAIVA {
     }
     const displayText = normalizeSpeech(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
-    if (this.isSpeaking || this.isProcessing || !finalText.trim()) return;
-    void this.handleResultText(finalText);
+    if (this.isSpeaking || this.isProcessing) return;
+
+    if (interimText.trim()) {
+      this.markSpeechStarted();
+      this.pendingVoiceResult = finalText.trim() || interimText.trim();
+      this.scheduleBrowserSilenceCompletion();
+    }
+    if (finalText.trim()) {
+      this.markSpeechStarted();
+      this.pendingVoiceResult = finalText.trim();
+      this.scheduleBrowserSilenceCompletion();
+    }
   }
 
   async handleResultText(rawText) {
@@ -340,6 +416,7 @@ class HAIVA {
     this.showTranscript(transcript);
     if (!transcript || this.isSpeaking || this.isProcessing) return;
 
+    this.clearVoiceTimers();
     await this.handleCommand(transcript);
   }
 
@@ -363,6 +440,9 @@ class HAIVA {
       this.isSpeaking = false;
       this.isProcessing = false;
       this.voiceActivated = false;
+      this.clearVoiceTimers();
+      this.voiceHasStarted = false;
+      this.pendingVoiceResult = "";
       setVoiceButtonActive(false);
       this.setState("READY");
     }
