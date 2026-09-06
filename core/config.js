@@ -26,6 +26,14 @@ export const CONFIG = {
     speechPitch: 1.0,
     speechVolume: 1.0,
     restartDelay: 650,
+
+    // CANONICAL VOICE SYNCHRONIZATION CONTRACT.
+    // All voice adapters must use these values; core/app.js owns the state flow.
+    timing: {
+      initialSpeechGraceMs: 3000,
+      postSpeechSilenceMs: 2000
+    },
+
     wakeWords: [
       "yo haiva",
       "yo h a i v a",
