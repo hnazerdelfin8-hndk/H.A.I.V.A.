@@ -1,6 +1,6 @@
 // H.A.I.V.A. Boot Loader
-// Responsibility: own the isolated loading phase and startup handoff.
-// The main H.A.I.V.A. UI stays hidden until the runtime reaches READY.
+// Responsibility: own only the isolated loading presentation and handoff.
+// core/boot.js is the single startup authority for timeout/failure/READY.
 
 import { bootCheckpoint } from "./boot-diagnostics.js";
 
@@ -8,8 +8,6 @@ const status = document.getElementById("haiva-status");
 const heard = document.getElementById("heard");
 const conversationState = document.querySelector(".online");
 
-const BOOT_TIMEOUT_MS = 15000;
-let bootTimer = null;
 let finished = false;
 let loadingOverlay = null;
 
@@ -49,11 +47,9 @@ function createLoadingOverlay() {
   overlay.appendChild(style);
   document.body.appendChild(overlay);
   loadingOverlay = overlay;
-  return overlay;
 }
 
 function setLoadingUI(message = "Loading H.A.I.V.A. core…", step = "Loading H.A.I.V.A. core") {
-  document.body.dataset.haivaState = "loading";
   if (status) status.textContent = "LOADING";
   if (heard) heard.textContent = message;
   if (conversationState) conversationState.textContent = "● LOADING";
@@ -68,7 +64,6 @@ function setLoadingUI(message = "Loading H.A.I.V.A. core…", step = "Loading H.
 function showError(reason, stage = "BOOT_FAILED") {
   if (finished) return;
   finished = true;
-  if (bootTimer) clearTimeout(bootTimer);
   const message = reason?.message || String(reason || "Unknown startup error");
   bootCheckpoint(stage, message);
   console.error("[HAIVA-BOOT]", stage, reason);
@@ -76,7 +71,6 @@ function showError(reason, stage = "BOOT_FAILED") {
   if (status) status.textContent = "ERROR";
   if (heard) heard.textContent = `H.A.I.V.A. failed to start: ${message}`;
   if (conversationState) conversationState.textContent = "● CORE ERROR";
-
   const overlayStatus = document.getElementById("haiva-boot-status");
   const overlayMessage = document.getElementById("haiva-boot-message");
   const overlayError = document.getElementById("haiva-boot-error");
@@ -96,12 +90,9 @@ function showError(reason, stage = "BOOT_FAILED") {
 function finishReady() {
   if (finished || document.body.dataset.haivaState !== "ready") return;
   finished = true;
-  if (bootTimer) clearTimeout(bootTimer);
   bootCheckpoint("BOOT_LOADER_READY", "runtime reached READY; revealing H.A.I.V.A. UI");
-  if (loadingOverlay) {
-    loadingOverlay.remove();
-    loadingOverlay = null;
-  }
+  loadingOverlay?.remove();
+  loadingOverlay = null;
 }
 
 bootCheckpoint("BOOT_LOADER_STARTED");
@@ -109,29 +100,15 @@ createLoadingOverlay();
 setLoadingUI();
 bootCheckpoint("LOADING_UI_READY");
 
-window.addEventListener("error", event => {
-  if (finished) return;
-  const target = event.target;
-  if (target && target.tagName === "SCRIPT") showError(new Error(event.message || `Failed to load ${target.src}`), "SCRIPT_LOAD_FAILED");
-  else if (event.error) showError(event.error, "RUNTIME_ERROR");
+window.addEventListener("haiva:boot-failure", event => {
+  showError(event.detail?.message || "H.A.I.V.A. core failed during startup.", event.detail?.stage || "BOOT_FAILED");
 }, true);
-
-window.addEventListener("unhandledrejection", event => {
-  if (!finished) showError(event.reason || "Unhandled promise rejection", "UNHANDLED_REJECTION");
-});
 
 const observer = new MutationObserver(() => {
   const state = document.body.dataset.haivaState || "unknown";
   if (state === "ready") finishReady();
-  else if (state === "error") showError("Runtime entered ERROR state", "RUNTIME_ERROR_STATE");
 });
 observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiva-state"] });
-
-bootTimer = setTimeout(() => {
-  if (!finished && document.body.dataset.haivaState !== "ready") {
-    showError(new Error(`Boot did not reach READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
-  }
-}, BOOT_TIMEOUT_MS);
 
 async function handoffToBoot() {
   bootCheckpoint("BOOT_LOADER_HANDOFF");
@@ -144,8 +121,7 @@ async function handoffToBoot() {
   }
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => void handoffToBoot(), { once: true });
-} else {
-  void handoffToBoot();
-}
+// index.html loads this module at the end of <body>, so handoff can begin
+// immediately. Waiting for DOMContentLoaded here would delay app.js until
+// after the event, causing app.js's own startup listener to miss the event.
+void handoffToBoot();

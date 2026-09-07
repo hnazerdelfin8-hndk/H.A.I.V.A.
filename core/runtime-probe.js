@@ -1,8 +1,7 @@
 // =========================================
 // H.A.I.V.A. RUNTIME PROBE — PHASE 1
 // =========================================
-// Loaded before the application modules so Android WebView failures are
-// observable even when app.js fails during module evaluation/import.
+// Records runtime visibility only. Startup errors are owned by core/boot.js.
 (() => {
   if (window.__HAIVA_RUNTIME_PROBE__) return;
   window.__HAIVA_RUNTIME_PROBE__ = true;
@@ -12,38 +11,16 @@
     lastError: null
   };
 
-  const report = (message) => {
-    window.__HAIVA_RUNTIME__.lastError = String(message);
-    console.error("[HAIVA][RUNTIME-PROBE]", message);
-    const status = document.getElementById("haiva-status");
-    const heard = document.getElementById("heard");
-    if (status) status.textContent = "CORE ERROR";
-    if (heard) heard.textContent = `Runtime diagnostic: ${String(message)}`;
-    if (document.body) document.body.dataset.haivaState = "error";
-  };
-
-  window.addEventListener("error", event => {
-    const message = event?.error?.message || event?.message || "Unknown JavaScript error";
-    report(message);
-  });
-
-  window.addEventListener("unhandledrejection", event => {
-    const reason = event?.reason?.message || event?.reason || "Unknown promise rejection";
-    report(reason);
-  });
-
   const verify = () => {
     if (window.HAIVA) {
       window.__HAIVA_RUNTIME__.appCreated = true;
       console.log("[HAIVA][RUNTIME-PROBE] window.HAIVA created.");
-    } else if (!window.__HAIVA_RUNTIME__.lastError) {
-      report("window.HAIVA was not created after DOMContentLoaded.");
+    } else {
+      console.log("[HAIVA][RUNTIME-PROBE] app instance not visible yet; boot controller remains authoritative.");
     }
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(verify, 0), { once: true });
-  } else {
-    setTimeout(verify, 0);
-  }
+  // Observation only. Never declare startup failure from this probe because
+  // module evaluation and the DOM lifecycle can complete at different times.
+  setTimeout(verify, 100);
 })();
