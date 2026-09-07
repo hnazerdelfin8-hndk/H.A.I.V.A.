@@ -58,13 +58,7 @@ class HAIVA {
     } catch (error) {
       bootCheckpoint("INITIALIZER_FAILED", error?.message || error);
       console.error("Initialization failed:", error);
-      this.setupRecognition();
-      bootCheckpoint("UI_BRIDGE_READY", "recovery path");
-      this.setState("READY");
-      bootCheckpoint("RUNTIME_READY", "recovered from initialization failure");
-      this.setBootMessage("Core recovered. H.A.I.V.A. is ready, Master.");
-      this.showResponse("H.A.I.V.A. core recovered successfully. I am ready for your command, Master.");
-      void this.checkAIConnection();
+      throw error;
     }
   }
 
@@ -397,74 +391,37 @@ class HAIVA {
     let finalText = "";
     let interimText = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
-      const text = event.results[i][0]?.transcript || "";
-      if (event.results[i].isFinal) finalText += ` ${text}`;
-      else interimText += ` ${text}`;
+      const result = event.results[i];
+      const text = result[0]?.transcript || "";
+      if (result.isFinal) finalText += text;
+      else interimText += text;
     }
-    const displayText = normalizeSpeech(`${finalText} ${interimText}`);
-    if (displayText) this.showTranscript(displayText);
-    if (this.isSpeaking || this.isProcessing) return;
-    if (interimText.trim()) {
+    const normalizedInterim = normalizeSpeech(interimText.trim());
+    if (normalizedInterim) {
       this.markSpeechStarted();
-      this.pendingVoiceResult = finalText.trim() || interimText.trim();
-      this.scheduleBrowserSilenceCompletion();
+      this.showTranscript(normalizedInterim);
     }
-    if (finalText.trim()) {
+    const normalizedFinal = normalizeSpeech(finalText.trim());
+    if (normalizedFinal) {
       this.markSpeechStarted();
-      this.pendingVoiceResult = finalText.trim();
+      this.pendingVoiceResult = normalizedFinal;
+      this.showTranscript(normalizedFinal);
       this.scheduleBrowserSilenceCompletion();
     }
   }
 
-  async handleResultText(rawText) {
-    let transcript = normalizeSpeech(rawText);
-    if (!transcript || transcript === this.lastTranscript) return;
-    transcript = removeWakeWord(transcript) || transcript;
-    this.lastTranscript = normalizeSpeech(rawText);
-    this.showTranscript(transcript);
-    if (!transcript || this.isSpeaking || this.isProcessing) return;
-    this.clearVoiceTimers();
-    await this.handleCommand(transcript);
-  }
-
-  async handleCommand(command) {
-    this.isProcessing = true;
-    this.isListening = false;
-    this.stopListening();
-    this.showTranscript(command);
-    this.setState("THINKING");
-    try {
-      const response = await this.assistant.respond(command);
-      const answer = response || CONFIG.assistant.fallbackResponse;
-      this.showResponse(answer);
-      this.isSpeaking = true;
-      this.setState("SPEAKING");
-      await speak(answer);
-    } catch (error) {
-      console.error("Command failed:", error);
-      this.showResponse(CONFIG.assistant.fallbackResponse);
-    } finally {
-      this.isSpeaking = false;
-      this.isProcessing = false;
+  async handleResultText(text) {
+    const command = removeWakeWord(text).trim();
+    if (!command) {
       this.voiceActivated = false;
-      this.nativeVoiceReady = false;
-      this.clearVoiceTimers();
-      this.voiceHasStarted = false;
-      this.pendingVoiceResult = "";
       setVoiceButtonActive(false);
       this.setState("READY");
+      return;
     }
+    await this.handleTextCommand(command);
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  bootCheckpoint("DOM_CONTENT_LOADED");
-  const app = new HAIVA();
-  const button = document.getElementById("activate-voice");
-  if (button) button.addEventListener("click", () => app.handleButtonClick());
-  window.HAIVA = app;
-});
-
-HAIVA.prototype.handleButtonClick = function handleButtonClick() {
-  void this.activateVoice();
-};
+const app = new HAIVA();
+window.HAIVA = app;
+bootCheckpoint("APP_INSTANCE_EXPOSED", "window.HAIVA available");
