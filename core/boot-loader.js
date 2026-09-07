@@ -1,5 +1,6 @@
 // H.A.I.V.A. Boot Loader
 // Owns the isolated boot presentation and hands off to core/boot.js.
+// core/boot.js is the single startup authority for the H.A.I.V.A. boot chain.
 
 import { bootCheckpoint } from "./boot-diagnostics.js";
 
