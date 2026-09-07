@@ -23,45 +23,80 @@ android {
     }
 }
 
-// Package the web core during every Gradle build, not only in CI.
-// MainActivity loads file:///android_asset/haiva/index.html, so the APK
-// must always contain a synchronized copy of the root web application.
+// H.A.I.V.A. web runtime transport boundary.
+// The Android APK must contain a complete, synchronized copy of the web core
+// before MainActivity attempts to load index.html from android_asset.
+// Do not rely on a manually committed duplicate under src/main/assets.
+
+def haivaWebRoot = rootProject.projectDir.parentFile
+
+def haivaIndex = new File(haivaWebRoot, 'index.html')
+def haivaCore = new File(haivaWebRoot, 'core')
+def haivaUi = new File(haivaWebRoot, 'ui')
+def haivaSkills = new File(haivaWebRoot, 'skills')
+
 tasks.register('syncHaivaWebAssets') {
-    inputs.files(
-        rootProject.file('../index.html'),
-        fileTree(rootProject.file('../core')),
-        fileTree(rootProject.file('../ui')),
-        fileTree(rootProject.file('../skills'))
-    )
+    inputs.file(haivaIndex)
+    inputs.dir(haivaCore)
+    inputs.dir(haivaUi)
+    if (haivaSkills.exists()) inputs.dir(haivaSkills)
+
     outputs.dir(file('src/main/assets/haiva'))
 
     doLast {
+        if (!haivaIndex.isFile()) {
+            throw new GradleException("H.A.I.V.A. asset transport failed: missing ${haivaIndex}")
+        }
+        if (!haivaCore.isDirectory()) {
+            throw new GradleException("H.A.I.V.A. asset transport failed: missing ${haivaCore}")
+        }
+        if (!new File(haivaCore, 'boot-loader.js').isFile()) {
+            throw new GradleException("H.A.I.V.A. asset transport failed: missing core/boot-loader.js")
+        }
+        if (!new File(haivaCore, 'boot.js').isFile()) {
+            throw new GradleException("H.A.I.V.A. asset transport failed: missing core/boot.js")
+        }
+
         def assetRoot = file('src/main/assets/haiva')
         delete assetRoot
         mkdir assetRoot
 
         copy {
-            from rootProject.file('../index.html')
+            from haivaIndex
             into assetRoot
         }
         copy {
-            from rootProject.file('../core')
+            from haivaCore
             into new File(assetRoot, 'core')
         }
-        copy {
-            from rootProject.file('../ui')
-            into new File(assetRoot, 'ui')
-        }
-        def skillsDir = rootProject.file('../skills')
-        if (skillsDir.exists()) {
+        if (haivaUi.isDirectory()) {
             copy {
-                from skillsDir
+                from haivaUi
+                into new File(assetRoot, 'ui')
+            }
+        }
+        if (haivaSkills.isDirectory()) {
+            copy {
+                from haivaSkills
                 into new File(assetRoot, 'skills')
             }
         }
+
+        def requiredAssets = [
+            new File(assetRoot, 'index.html'),
+            new File(assetRoot, 'core/boot-loader.js'),
+            new File(assetRoot, 'core/boot.js')
+        ]
+        def missing = requiredAssets.findAll { !it.isFile() }
+        if (!missing.isEmpty()) {
+            throw new GradleException("H.A.I.V.A. asset transport verification failed. Missing APK assets: ${missing.join(', ')}")
+        }
+
+        logger.lifecycle("HAIVA_ASSET_TRANSPORT_OK: ${assetRoot} contains index.html + core boot chain")
     }
 }
 
+// Asset sync is a hard prerequisite for every Android build variant.
 preBuild.dependsOn(tasks.named('syncHaivaWebAssets'))
 
 kotlin { jvmToolchain(17) }
