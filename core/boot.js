@@ -16,7 +16,16 @@ let bootReadyConfirmed = false;
 let fatalBoot = false;
 let timeout = null;
 
+function progress(percent, message, step) {
+  try {
+    window.haivaBootProgress?.(percent, message, step);
+  } catch (error) {
+    console.warn("[HAIVA-BOOT] progress update failed", error);
+  }
+}
+
 bootCheckpoint("BOOT_MODULE_STARTED");
+progress(38, "H.A.I.V.A. boot runtime loaded.", 1);
 
 function setBootUI(state, message, conversation) {
   document.body.dataset.haivaState = state.toLowerCase();
@@ -37,6 +46,7 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   fatalBoot = true;
   const message = reason?.message || String(reason || "Unknown boot failure");
   bootCheckpoint(stage, message);
+  progress(0, `Startup failed: ${message}`, 0);
   console.error("[HAIVA-BOOT] Boot failure:", reason);
   setBootUI("ERROR", message, "● CORE ERROR");
   syncControls();
@@ -44,10 +54,12 @@ function failBoot(reason, stage = "BOOT_FAILED") {
 
 function confirmBootReady() {
   if (fatalBoot || bootReadyConfirmed || document.body.dataset.haivaState !== "ready") return;
+  progress(92, "Core initialized. Finalizing H.A.I.V.A. interface…", 3);
   bootReadyConfirmed = true;
   if (timeout) clearTimeout(timeout);
   bootCheckpoint("BOOT_READY", "runtime state READY confirmed");
   bootCheckpoint("CORE_READY", "H.A.I.V.A. core startup gate passed");
+  progress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
   if (conversationState) conversationState.textContent = "● CORE READY";
   syncControls();
 }
@@ -55,6 +67,7 @@ function confirmBootReady() {
 setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
 syncControls();
 bootCheckpoint("BOOT_UI_INITIALIZED");
+progress(42, "Initializing H.A.I.V.A. core…", 1);
 
 window.addEventListener("haiva:boot-failure", event => {
   const stage = event.detail?.stage || "BOOT_FAILED";
@@ -62,6 +75,7 @@ window.addEventListener("haiva:boot-failure", event => {
   fatalBoot = true;
   bootReadyConfirmed = false;
   if (timeout) clearTimeout(timeout);
+  progress(0, `Startup failed: ${message}`, 0);
   console.error("[HAIVA-BOOT] Fatal checkpoint:", stage, message);
   setBootUI("ERROR", message, "● CORE ERROR");
   syncControls();
@@ -101,6 +115,7 @@ timeout = setTimeout(() => {
 import("./app.js")
   .then(() => {
     bootCheckpoint("APP_MODULE_LOADED");
+    progress(68, "H.A.I.V.A. core module loaded. Preparing runtime…", 2);
     syncControls();
     if (!fatalBoot && document.body.dataset.haivaState === "ready") confirmBootReady();
   })
