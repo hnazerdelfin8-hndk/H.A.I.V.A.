@@ -168,8 +168,6 @@ class HAIVA {
     window.addEventListener("haiva:native-voice-ready", () => {
       this.nativeVoiceReady = true;
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        // Native adapter timing starts only after the connector reports readiness.
-        // This keeps the shared 3-second grace window from racing adapter startup.
         this.beginVoiceCycle(true);
         this.isListening = true;
         this.setState("LISTENING");
@@ -300,8 +298,6 @@ class HAIVA {
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      // Do not terminate a completed speech cycle here. The orchestrator's
-      // canonical 2-second silence timer owns browser completion.
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop && !this.voiceHasStarted) {
         this.voiceActivated = false;
         this.clearVoiceTimers();
@@ -314,23 +310,23 @@ class HAIVA {
   async activateVoice() {
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (this.voiceActivated) return;
-    try {
-      if (this.nativeVoice) {
+
+    // Platform boundary: APK/native voice never requests WebView getUserMedia.
+    // Browser voice owns getUserMedia exclusively; Android voice owns RECORD_AUDIO.
+    if (!this.nativeVoice) {
+      try {
         if (navigator.mediaDevices?.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-          stream?.getTracks().forEach(track => track.stop());
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+        } else {
+          throw new Error("Microphone API unavailable");
         }
-      } else if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-      } else throw new Error("Microphone API unavailable");
-    } catch (error) {
-      if (!this.nativeVoice) {
+      } catch (error) {
         console.error("Microphone permission failed:", error);
         return this.setState("MICROPHONE DENIED");
       }
-      console.warn("Browser microphone permission unavailable; continuing with native Android voice.");
     }
+
     this.voiceActivated = true;
     this.intentionalStop = false;
     this.lastTranscript = "";
@@ -360,8 +356,6 @@ class HAIVA {
     if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
     if (this.nativeVoice) {
-      // Adapter startup is outside the shared grace window. The 3-second
-      // Core grace timer is armed by the native-ready connector event.
       this.beginVoiceCycle(false);
       this.isListening = true;
       this.setState("LISTENING");
