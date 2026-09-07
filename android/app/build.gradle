@@ -15,8 +15,6 @@ android {
         versionName '1.0.2'
     }
 
-    // CI debug builds use a dedicated test application ID.
-    // Release/application production identity remains com.haiva.app.
     buildTypes {
         debug {
             applicationIdSuffix '.debug'
@@ -24,5 +22,46 @@ android {
         }
     }
 }
+
+// Package the web core during every Gradle build, not only in CI.
+// MainActivity loads file:///android_asset/haiva/index.html, so the APK
+// must always contain a synchronized copy of the root web application.
+tasks.register('syncHaivaWebAssets') {
+    inputs.files(
+        rootProject.file('../index.html'),
+        fileTree(rootProject.file('../core')),
+        fileTree(rootProject.file('../ui')),
+        fileTree(rootProject.file('../skills'))
+    )
+    outputs.dir(file('src/main/assets/haiva'))
+
+    doLast {
+        def assetRoot = file('src/main/assets/haiva')
+        delete assetRoot
+        mkdir assetRoot
+
+        copy {
+            from rootProject.file('../index.html')
+            into assetRoot
+        }
+        copy {
+            from rootProject.file('../core')
+            into new File(assetRoot, 'core')
+        }
+        copy {
+            from rootProject.file('../ui')
+            into new File(assetRoot, 'ui')
+        }
+        def skillsDir = rootProject.file('../skills')
+        if (skillsDir.exists()) {
+            copy {
+                from skillsDir
+                into new File(assetRoot, 'skills')
+            }
+        }
+    }
+}
+
+preBuild.dependsOn(tasks.named('syncHaivaWebAssets'))
 
 kotlin { jvmToolchain(17) }
