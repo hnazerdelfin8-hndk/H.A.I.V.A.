@@ -2,7 +2,21 @@
 // Owns the isolated boot presentation and hands off to core/boot.js.
 // core/boot.js is the single startup authority for the H.A.I.V.A. boot chain.
 
-import { bootCheckpoint } from "./boot-diagnostics.js";
+// Keep the first entrypoint as a classic script. This lets the loading screen
+// execute even if a WebView has trouble evaluating a module entrypoint.
+// Diagnostics are optional at this boundary; boot.js remains the authoritative
+// runtime gate and will report a diagnostics-module failure through the catch.
+function bootCheckpoint(stage, message) {
+  try {
+    void import("./boot-diagnostics.js").then(module => {
+      module.bootCheckpoint(stage, message);
+    }).catch(() => {
+      console.info("[HAIVA-BOOT]", stage, message || "");
+    });
+  } catch (_) {
+    console.info("[HAIVA-BOOT]", stage, message || "");
+  }
+}
 
 let finished = false;
 let loadingOverlay = null;
