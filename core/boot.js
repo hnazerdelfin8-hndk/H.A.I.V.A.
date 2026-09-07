@@ -12,6 +12,9 @@ const input = document.getElementById("chat-input");
 const send = document.getElementById("send-message");
 const mic = document.getElementById("activate-voice");
 
+let bootReadyConfirmed = false;
+let timeout = null;
+
 bootCheckpoint("BOOT_MODULE_STARTED");
 
 function setBootUI(state, message, conversation) {
@@ -22,17 +25,28 @@ function setBootUI(state, message, conversation) {
 }
 
 function syncControls() {
-  const ready = document.body.dataset.haivaState === "ready";
+  const ready = document.body.dataset.haivaState === "ready" && bootReadyConfirmed;
   if (input) input.disabled = !ready;
   if (send) send.disabled = !ready;
   if (mic) mic.disabled = !ready;
 }
 
 function failBoot(reason, stage = "BOOT_FAILED") {
+  if (bootReadyConfirmed) return;
   const message = reason?.message || String(reason || "Unknown boot failure");
   bootCheckpoint(stage, message);
   console.error("[HAIVA-BOOT] Boot failure:", reason);
   setBootUI("ERROR", "H.A.I.V.A. core failed to start. Check the runtime error and rebuild.", "● CORE ERROR");
+  syncControls();
+}
+
+function confirmBootReady() {
+  if (bootReadyConfirmed || document.body.dataset.haivaState !== "ready") return;
+  bootReadyConfirmed = true;
+  if (timeout) clearTimeout(timeout);
+  bootCheckpoint("BOOT_READY", "runtime state READY confirmed");
+  bootCheckpoint("CORE_READY", "H.A.I.V.A. core startup gate passed");
+  if (conversationState) conversationState.textContent = "● CORE READY";
   syncControls();
 }
 
@@ -49,28 +63,32 @@ window.addEventListener("error", event => {
 window.addEventListener("unhandledrejection", event => failBoot(event.reason || "Unhandled promise rejection", "UNHANDLED_REJECTION"));
 
 const observer = new MutationObserver(() => {
-  syncControls();
   const state = document.body.dataset.haivaState || "unknown";
   const last = sessionStorage.getItem("haiva.boot.last.state");
   if (last !== state) {
     try { sessionStorage.setItem("haiva.boot.last.state", state); } catch {}
     bootCheckpoint(`STATE_${state.toUpperCase()}`);
   }
-  if (state === "ready") bootCheckpoint("RUNTIME_READY_CONFIRMED");
-  if (state === "error") bootCheckpoint("RUNTIME_ERROR_STATE");
+  if (state === "ready") confirmBootReady();
+  if (state === "error") {
+    bootCheckpoint("RUNTIME_ERROR_STATE");
+    syncControls();
+  } else if (!bootReadyConfirmed) {
+    syncControls();
+  }
 });
 observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiva-state"] });
 
-const timeout = setTimeout(() => {
-  if (document.body.dataset.haivaState === "booting") {
+timeout = setTimeout(() => {
+  if (!bootReadyConfirmed && document.body.dataset.haivaState !== "ready") {
     failBoot(new Error(`Boot did not reach READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
   }
 }, BOOT_TIMEOUT_MS);
 
 import("./app.js")
   .then(() => {
-    clearTimeout(timeout);
     bootCheckpoint("APP_MODULE_LOADED");
     syncControls();
+    if (document.body.dataset.haivaState === "ready") confirmBootReady();
   })
   .catch(error => failBoot(error, "APP_MODULE_LOAD_FAILED"));
