@@ -14,10 +14,15 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import android.view.WindowInsets
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -85,8 +90,42 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             insets
         }
         webView.addJavascriptInterface(this, "HaivaBridge")
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                Log.i("HAIVA-BOOT", "PAGE_FINISHED url=$url")
+                super.onPageFinished(view, url)
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                Log.e(
+                    "HAIVA-BOOT",
+                    "RESOURCE_ERROR main=${request?.isForMainFrame} url=${request?.url} code=${error?.errorCode} desc=${error?.description}"
+                )
+                super.onReceivedError(view, request, error)
+            }
+
+            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                Log.e(
+                    "HAIVA-BOOT",
+                    "HTTP_ERROR main=${request?.isForMainFrame} url=${request?.url} status=${errorResponse?.statusCode} reason=${errorResponse?.reasonPhrase}"
+                )
+                super.onReceivedHttpError(view, request, errorResponse)
+            }
+        }
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                if (consoleMessage == null) return true
+                val message = consoleMessage.message()
+                val source = consoleMessage.sourceId()
+                val line = consoleMessage.lineNumber()
+                when (consoleMessage.messageLevel()) {
+                    ConsoleMessage.MessageLevel.ERROR -> Log.e("HAIVA-BOOT", "JS_ERROR line=$line source=$source message=$message")
+                    ConsoleMessage.MessageLevel.WARNING -> Log.w("HAIVA-BOOT", "JS_WARN line=$line source=$source message=$message")
+                    else -> Log.i("HAIVA-BOOT", "JS_LOG line=$line source=$source message=$message")
+                }
+                return true
+            }
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val audioRequested = request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
@@ -101,6 +140,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             }
         }
         setContentView(webView)
+        Log.i("HAIVA-BOOT", "LOAD_START url=$coreUrl")
         webView.loadUrl(coreUrl)
     }
 
