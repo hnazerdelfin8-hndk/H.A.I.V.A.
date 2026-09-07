@@ -19,7 +19,7 @@ function createLoadingOverlay() {
   overlay.innerHTML = `
     <div class="haiva-boot-card">
       <div class="haiva-boot-name">H.A.I.V.A.</div>
-      <div class="haiva-boot-subtitle">HNazer Artificial Intelligence Voice Assistant</div>
+      <div class="haiva-boot-subtitle">Hnazer Artificial Intelligence Voice Assistant</div>
       <div class="haiva-boot-status" id="haiva-boot-status">INITIALIZING</div>
       <div class="haiva-boot-message" id="haiva-boot-message">Loading H.A.I.V.A. core…</div>
       <div class="haiva-boot-steps" id="haiva-boot-steps">
