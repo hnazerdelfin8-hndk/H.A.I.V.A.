@@ -23,9 +23,15 @@ android {
     }
 }
 
+// AndroidX WebKit provides a stable HTTPS-like origin for packaged web assets.
+// This is required for reliable ES-module execution inside Android WebView.
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
 // H.A.I.V.A. web runtime transport boundary.
 // The Android APK must contain a complete, synchronized copy of the web core
-// before MainActivity attempts to load index.html from android_asset.
+// before MainActivity attempts to load index.html from the WebView asset loader.
 // Do not rely on a manually committed duplicate under src/main/assets.
 
 def haivaWebRoot = rootProject.projectDir.parentFile
