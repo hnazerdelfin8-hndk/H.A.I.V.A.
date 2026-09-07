@@ -4,6 +4,7 @@
 
 const STORAGE_KEY = "haiva.boot.checkpoints.v1";
 const MAX_CHECKPOINTS = 50;
+const FATAL_STAGE_PATTERN = /(?:FAILED|ERROR|TIMEOUT|REJECTED|LOAD_FAILED)/;
 
 function readCheckpoints() {
   try {
@@ -29,6 +30,20 @@ export function bootCheckpoint(stage, detail = "") {
   }
 
   console.log(`[HAIVA-BOOT] ${stage}`, detail || "");
+
+  // Fatal boot checkpoints must be visible to the outer boot guard. This is
+  // deliberately one-way: a fatal boundary cannot be overwritten by a later
+  // READY state emitted by a recovery path.
+  if (FATAL_STAGE_PATTERN.test(String(stage))) {
+    try {
+      window.dispatchEvent(new CustomEvent("haiva:boot-failure", {
+        detail: { stage: String(stage), message: String(detail || "Boot failure") }
+      }));
+    } catch (error) {
+      console.warn("[HAIVA-BOOT] failure event dispatch failed:", error);
+    }
+  }
+
   return entry;
 }
 
