@@ -1,12 +1,13 @@
 import "./runtime-probe.js";
 
 // =========================================
-// H.A.I.V.A. PHASE 1 — RUNTIME-SAFE VOICE CONTROL
+// H.A.I.V.A. PHASE 1 — RUNTIME-SAFE VOICE BOUNDARY
 // =========================================
-// Phase 1 owns the visible microphone control only.
+// Phase 1 provides runtime-safe boot/connector diagnostics and recovery
+// boundary observation.
+// The visible microphone control and canonical voice state machine are
+// owned by core/app.js.
 // Chat remains owned by core/app.js so Voice and Chat each have one owner.
-// Connector recovery/boot diagnostics live here as a boundary observer;
-// Core/app.js remains the owner of the canonical voice state machine.
 
 (() => {
   if (window.__HAIVA_PHASE1_CONTROLS__) return;
@@ -85,28 +86,5 @@ import "./runtime-probe.js";
     setTimeout(verifyRuntimeBoundary, 0);
   }
 
-  document.addEventListener("click", event => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-
-    const mic = target.closest("#activate-voice");
-    if (!mic) return;
-
-    const app = getApp();
-    if (!app || typeof app.activateVoice !== "function") {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      reportCoreUnavailable();
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    Promise.resolve(app.activateVoice()).catch(error => {
-      console.error("[HAIVA] Microphone control failed:", error);
-      app.setState?.("VOICE ERROR");
-    });
-  }, true);
-
-  console.log("[HAIVA] Phase 1 runtime-safe voice control installed.");
+  console.log("[HAIVA] Phase 1 runtime-safe voice boundary installed.");
 })();
