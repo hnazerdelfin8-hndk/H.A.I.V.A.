@@ -2,7 +2,9 @@ name: H.A.I.V.A. CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'upgrade/**'
   pull_request:
     branches: [main]
   workflow_dispatch:

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createAdvancedMemoryStore } from "../core/memory/advanced-memory.js";
-import { containsWakeWord } from "../core/voice/wake-word.js";
+import { containsWakeWord, removeWakeWords } from "../core/voice/wake-word.js";
 import { orchestrate } from "../core/orchestrator/index.js";
 import { buildProviderRequest, extractProviderAnswer, listProviders } from "../api/provider-gateway.js";
 import { getCanonicalSkills } from "../skills/registry.js";
@@ -17,9 +17,16 @@ test("advanced memory stores, recalls and forgets typed entries", () => {
   assert.equal(store.size(), 0);
 });
 
-test("wake word matching is case insensitive", () => {
+test("wake word matching is case insensitive and boundary safe", () => {
   assert.equal(containsWakeWord("YO HAIVA, are you there?", ["yo haiva"]), true);
   assert.equal(containsWakeWord("hello there", ["yo haiva"]), false);
+  assert.equal(containsWakeWord("haivan is a name", ["haiva"]), false);
+  assert.equal(containsWakeWord("Hey, HAIVA!", ["haiva"]), true);
+});
+
+test("wake words can be removed without corrupting surrounding words", () => {
+  assert.equal(removeWakeWords("Yo Haiva, open my notes", ["yo haiva"]), "open my notes");
+  assert.equal(removeWakeWords("haivan please wait", ["haiva"]), "haivan please wait");
 });
 
 test("provider gateway builds Groq-compatible requests", () => {
