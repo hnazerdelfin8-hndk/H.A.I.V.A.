@@ -3,11 +3,8 @@ import "./runtime-probe.js";
 // =========================================
 // H.A.I.V.A. PHASE 1 — RUNTIME-SAFE VOICE BOUNDARY
 // =========================================
-// Phase 1 provides runtime-safe boot/connector diagnostics and recovery
-// boundary observation.
-// The visible microphone control and canonical voice state machine are
-// owned by core/app.js.
-// Chat remains owned by core/app.js so Voice and Chat each have one owner.
+// Phase 1 observes connector capability only. core/app.js owns voice/chat
+// behavior and core/boot.js owns startup failure/READY decisions.
 
 (() => {
   if (window.__HAIVA_PHASE1_CONTROLS__) return;
@@ -20,34 +17,15 @@ import "./runtime-probe.js";
     console.log(`[HAIVA][BOOT] ${name} ${ok ? "OK" : "ERROR"}${detail ? ` — ${detail}` : ""}`);
   };
 
-  const showRuntimeError = (message) => {
-    console.error("[HAIVA][RUNTIME]", message);
-    const status = document.getElementById("haiva-status");
-    const heard = document.getElementById("heard");
-    if (status) status.textContent = "CORE ERROR";
-    if (heard) heard.textContent = message;
-    document.body.dataset.haivaState = "error";
-  };
-
-  const reportCoreUnavailable = () => {
-    setBootCheckpoint("BootCore", false, "window.HAIVA was not created");
-    showRuntimeError("Core runtime failed before microphone control became active.");
-  };
-
-  window.addEventListener("error", event => {
-    const detail = event?.error?.stack || event?.message || "Unknown JavaScript error";
-    showRuntimeError(`JavaScript runtime error: ${String(detail).split("\n")[0]}`);
-  });
-
-  window.addEventListener("unhandledrejection", event => {
-    const reason = event?.reason?.stack || event?.reason?.message || event?.reason || "Unknown promise rejection";
-    showRuntimeError(`Initialization error: ${String(reason).split("\n")[0]}`);
-  });
-
   const verifyRuntimeBoundary = () => {
     setBootCheckpoint("BootHtml", true, "DOM available");
     const app = getApp();
-    if (!app) return reportCoreUnavailable();
+    if (!app) {
+      // Do not turn a timing observation into a fatal error. boot.js remains
+      // responsible for the authoritative timeout and failure state.
+      console.log("[HAIVA][BOOT] Core instance not visible yet; boot controller continues startup.");
+      return;
+    }
 
     setBootCheckpoint("BootCore", true, "window.HAIVA available");
     const connectorAvailable = !!window.HaivaBridge;
@@ -69,7 +47,7 @@ import "./runtime-probe.js";
 
   window.addEventListener("haiva:native-voice-timeout", () => {
     document.body.dataset.haivaVoiceCapability = "timeout";
-    console.warn("[HAIVA][CONNECTOR] Native voice watchdog timeout; Core recovery will return to READY.");
+    console.warn("[HAIVA][CONNECTOR] Native voice watchdog timeout; Core handles voice recovery.");
   });
 
   window.addEventListener("haiva:microphone-ready", () => {
