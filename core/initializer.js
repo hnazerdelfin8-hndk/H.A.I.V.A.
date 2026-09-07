@@ -15,7 +15,8 @@ export async function initializeHAIVA() {
   const warnings = [];
 
   try {
-    // Optional skills must never prevent the core conversation UI from booting.
+    // Optional skills may degrade startup, but they must not silently become
+    // a fatal core failure. The core initialization contract is explicit.
     try {
       registerDefaultSkills();
     } catch (error) {
@@ -34,9 +35,15 @@ export async function initializeHAIVA() {
     };
   } catch (error) {
     console.error("H.A.I.V.A. initialization failed:", error);
-    // Core boot is intentionally resilient: the chat/voice shell can still
-    // operate and report backend errors without getting stuck on Initializing.
-    initialized = true;
-    return { ready: true, degraded: true, warnings: [error], version: CONFIG.app.version };
+    const message = error?.message || String(error || "Unknown initialization error");
+    try {
+      window.dispatchEvent(new CustomEvent("haiva:boot-failure", {
+        detail: { stage: "INITIALIZER_FAILED", message }
+      }));
+    } catch (dispatchError) {
+      console.warn("[HAIVA-BOOT] Failed to dispatch initializer failure:", dispatchError);
+    }
+    // Never convert a core initialization failure into READY.
+    throw error;
   }
 }
