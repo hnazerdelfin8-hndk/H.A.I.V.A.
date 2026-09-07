@@ -87,7 +87,6 @@ class HAIVA {
   setupChat() {
     const form = document.getElementById("chat-form");
     const input = document.getElementById("chat-input");
-    const send = document.getElementById("send-message");
     if (!form || !input) return;
     const submit = event => {
       event.preventDefault();
@@ -97,10 +96,6 @@ class HAIVA {
       void this.handleTextCommand(text);
     };
     form.addEventListener("submit", submit);
-    send?.addEventListener("click", event => {
-      if (typeof event.preventDefault === "function") event.preventDefault();
-      form.requestSubmit?.();
-    });
   }
 
   async handleTextCommand(command) {
