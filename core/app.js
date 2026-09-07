@@ -8,9 +8,13 @@ import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { createSpeechRecognition } from "./voice/speech-to-text.js";
 import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, removeWakeWord, hasNativeVoiceBridge } from "./ui-bridge.js";
+import { bootCheckpoint } from "./boot-diagnostics.js";
+
+bootCheckpoint("JS_ENTRY_STARTED", "core/app.js module evaluated");
 
 class HAIVA {
   constructor() {
+    bootCheckpoint("HAIVA_CONSTRUCTOR_STARTED");
     this.state = "BOOTING";
     this.recognition = null;
     this.nativeVoice = hasNativeVoiceBridge();
@@ -37,20 +41,27 @@ class HAIVA {
   }
 
   async initialize() {
+    bootCheckpoint("INITIALIZER_STARTED");
     this.setState("BOOTING");
     this.setBootMessage("Initializing H.A.I.V.A. core…");
     try {
       const result = await initializeHAIVA();
       if (!result?.ready) throw new Error("HAIVA initialization failed");
+      bootCheckpoint("INITIALIZER_READY", result.degraded ? "degraded" : "normal");
       this.setupRecognition();
+      bootCheckpoint("UI_BRIDGE_READY");
       this.setState("READY");
+      bootCheckpoint("RUNTIME_READY");
       this.setBootMessage("H.A.I.V.A. core is online. Ready, Master.");
       this.showResponse("Core initialized successfully. H.A.I.V.A. is online and ready, Master.");
       void this.checkAIConnection();
     } catch (error) {
+      bootCheckpoint("INITIALIZER_FAILED", error?.message || error);
       console.error("Initialization failed:", error);
       this.setupRecognition();
+      bootCheckpoint("UI_BRIDGE_READY", "recovery path");
       this.setState("READY");
+      bootCheckpoint("RUNTIME_READY", "recovered from initialization failure");
       this.setBootMessage("Core recovered. H.A.I.V.A. is ready, Master.");
       this.showResponse("H.A.I.V.A. core recovered successfully. I am ready for your command, Master.");
       void this.checkAIConnection();
@@ -310,9 +321,6 @@ class HAIVA {
   async activateVoice() {
     if (!this.recognition && !this.nativeVoice) return this.setState("VOICE UNAVAILABLE");
     if (this.voiceActivated) return;
-
-    // Platform boundary: APK/native voice never requests WebView getUserMedia.
-    // Browser voice owns getUserMedia exclusively; Android voice owns RECORD_AUDIO.
     if (!this.nativeVoice) {
       try {
         if (navigator.mediaDevices?.getUserMedia) {
@@ -326,7 +334,6 @@ class HAIVA {
         return this.setState("MICROPHONE DENIED");
       }
     }
-
     this.voiceActivated = true;
     this.intentionalStop = false;
     this.lastTranscript = "";
@@ -397,7 +404,6 @@ class HAIVA {
     const displayText = normalizeSpeech(`${finalText} ${interimText}`);
     if (displayText) this.showTranscript(displayText);
     if (this.isSpeaking || this.isProcessing) return;
-
     if (interimText.trim()) {
       this.markSpeechStarted();
       this.pendingVoiceResult = finalText.trim() || interimText.trim();
@@ -413,12 +419,10 @@ class HAIVA {
   async handleResultText(rawText) {
     let transcript = normalizeSpeech(rawText);
     if (!transcript || transcript === this.lastTranscript) return;
-
     transcript = removeWakeWord(transcript) || transcript;
     this.lastTranscript = normalizeSpeech(rawText);
     this.showTranscript(transcript);
     if (!transcript || this.isSpeaking || this.isProcessing) return;
-
     this.clearVoiceTimers();
     await this.handleCommand(transcript);
   }
@@ -454,6 +458,7 @@ class HAIVA {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  bootCheckpoint("DOM_CONTENT_LOADED");
   const app = new HAIVA();
   const button = document.getElementById("activate-voice");
   if (button) button.addEventListener("click", () => app.handleButtonClick());
