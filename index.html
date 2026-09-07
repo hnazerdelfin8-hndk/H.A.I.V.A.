@@ -18,6 +18,7 @@
     <form class="chat-form" id="chat-form"><input id="chat-input" type="text" autocomplete="off" placeholder="Type a message" aria-label="Message" disabled><button id="send-message" type="submit" aria-label="Send" disabled>➤</button></form>
     <section class="settings"><button id="settings-toggle" type="button" aria-expanded="false">⚙ Settings</button><div id="settings-panel" aria-label="Settings"><div class="setting-row"><span>Voice mode</span><span class="setting-value" id="voice-setting">Tap + Wake Word</span></div><div class="setting-row"><span>Wake word</span><span class="setting-value">Yo, H.A.I.V.A.</span></div><div class="setting-row"><span>Microphone</span><span class="setting-value" id="mic-setting">Checking…</span></div></div></section>
   </main>
-  <script type="module" src="./core/boot-loader.js"></script>
+  <!-- Classic script is intentional: it must execute the first boot handoff even when WebView module startup is fragile. -->
+  <script src="./core/boot-loader.js"></script>
 </body>
 </html>
