@@ -13,6 +13,7 @@ const send = document.getElementById("send-message");
 const mic = document.getElementById("activate-voice");
 
 let bootReadyConfirmed = false;
+let fatalBoot = false;
 let timeout = null;
 
 bootCheckpoint("BOOT_MODULE_STARTED");
@@ -25,23 +26,24 @@ function setBootUI(state, message, conversation) {
 }
 
 function syncControls() {
-  const ready = document.body.dataset.haivaState === "ready" && bootReadyConfirmed;
+  const ready = document.body.dataset.haivaState === "ready" && bootReadyConfirmed && !fatalBoot;
   if (input) input.disabled = !ready;
   if (send) send.disabled = !ready;
   if (mic) mic.disabled = !ready;
 }
 
 function failBoot(reason, stage = "BOOT_FAILED") {
-  if (bootReadyConfirmed) return;
+  if (bootReadyConfirmed || fatalBoot) return;
+  fatalBoot = true;
   const message = reason?.message || String(reason || "Unknown boot failure");
   bootCheckpoint(stage, message);
   console.error("[HAIVA-BOOT] Boot failure:", reason);
-  setBootUI("ERROR", "H.A.I.V.A. core failed to start. Check the runtime error and rebuild.", "● CORE ERROR");
+  setBootUI("ERROR", message, "● CORE ERROR");
   syncControls();
 }
 
 function confirmBootReady() {
-  if (bootReadyConfirmed || document.body.dataset.haivaState !== "ready") return;
+  if (fatalBoot || bootReadyConfirmed || document.body.dataset.haivaState !== "ready") return;
   bootReadyConfirmed = true;
   if (timeout) clearTimeout(timeout);
   bootCheckpoint("BOOT_READY", "runtime state READY confirmed");
@@ -53,6 +55,17 @@ function confirmBootReady() {
 setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
 syncControls();
 bootCheckpoint("BOOT_UI_INITIALIZED");
+
+window.addEventListener("haiva:boot-failure", event => {
+  const stage = event.detail?.stage || "BOOT_FAILED";
+  const message = event.detail?.message || "H.A.I.V.A. core failed during startup.";
+  fatalBoot = true;
+  bootReadyConfirmed = false;
+  if (timeout) clearTimeout(timeout);
+  console.error("[HAIVA-BOOT] Fatal checkpoint:", stage, message);
+  setBootUI("ERROR", message, "● CORE ERROR");
+  syncControls();
+}, true);
 
 window.addEventListener("error", event => {
   const target = event.target;
@@ -73,14 +86,14 @@ const observer = new MutationObserver(() => {
   if (state === "error") {
     bootCheckpoint("RUNTIME_ERROR_STATE");
     syncControls();
-  } else if (!bootReadyConfirmed) {
+  } else if (!bootReadyConfirmed || fatalBoot) {
     syncControls();
   }
 });
 observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiva-state"] });
 
 timeout = setTimeout(() => {
-  if (!bootReadyConfirmed && document.body.dataset.haivaState !== "ready") {
+  if (!bootReadyConfirmed && !fatalBoot && document.body.dataset.haivaState !== "ready") {
     failBoot(new Error(`Boot did not reach READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
   }
 }, BOOT_TIMEOUT_MS);
@@ -89,6 +102,6 @@ import("./app.js")
   .then(() => {
     bootCheckpoint("APP_MODULE_LOADED");
     syncControls();
-    if (document.body.dataset.haivaState === "ready") confirmBootReady();
+    if (!fatalBoot && document.body.dataset.haivaState === "ready") confirmBootReady();
   })
   .catch(error => failBoot(error, "APP_MODULE_LOAD_FAILED"));
