@@ -14,6 +14,7 @@ class HAIVA {
     this.state = "BOOTING";
     this.recognition = null;
     this.nativeVoice = hasNativeVoiceBridge();
+    this.nativeVoiceReady = false;
     this.voiceActivated = false;
     this.isListening = false;
     this.isSpeaking = false;
@@ -125,10 +126,11 @@ class HAIVA {
     this.voiceSilenceTimer = null;
   }
 
-  beginVoiceCycle() {
+  beginVoiceCycle(armInitialGrace = true) {
     this.clearVoiceTimers();
     this.voiceHasStarted = false;
     this.pendingVoiceResult = "";
+    if (!armInitialGrace) return;
     this.voiceStartTimer = setTimeout(() => {
       if (!this.voiceActivated || this.voiceHasStarted || this.isProcessing || this.isSpeaking) return;
       this.stopListening();
@@ -164,7 +166,14 @@ class HAIVA {
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
     window.addEventListener("haiva:native-voice-ready", () => {
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) this.setState("LISTENING");
+      this.nativeVoiceReady = true;
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        // Native adapter timing starts only after the connector reports readiness.
+        // This keeps the shared 3-second grace window from racing adapter startup.
+        this.beginVoiceCycle(true);
+        this.isListening = true;
+        this.setState("LISTENING");
+      }
     });
     window.addEventListener("haiva:native-voice-begin", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
@@ -198,12 +207,14 @@ class HAIVA {
       this.isListening = false;
       this.voiceActivated = false;
       this.voiceHasStarted = false;
+      this.nativeVoiceReady = false;
       setVoiceButtonActive(false);
       this.setState("READY");
     });
     window.addEventListener("haiva:native-voice-error", event => {
       this.clearVoiceTimers();
       this.isListening = false;
+      this.nativeVoiceReady = false;
       const code = Number(event.detail?.code);
       console.warn("[HAIVA] Native speech recognition error:", code);
       if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
@@ -334,6 +345,7 @@ class HAIVA {
     this.clearVoiceTimers();
     this.voiceHasStarted = false;
     this.pendingVoiceResult = "";
+    this.nativeVoiceReady = false;
     this.stopListening();
     window.speechSynthesis?.cancel?.();
     this.isSpeaking = false;
@@ -347,8 +359,10 @@ class HAIVA {
   startListening() {
     if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
-    this.beginVoiceCycle();
     if (this.nativeVoice) {
+      // Adapter startup is outside the shared grace window. The 3-second
+      // Core grace timer is armed by the native-ready connector event.
+      this.beginVoiceCycle(false);
       this.isListening = true;
       this.setState("LISTENING");
       try { window.HaivaBridge.startVoiceCapture(); }
@@ -356,11 +370,13 @@ class HAIVA {
         this.clearVoiceTimers();
         this.isListening = false;
         this.voiceActivated = false;
+        this.nativeVoiceReady = false;
         setVoiceButtonActive(false);
         this.setState("VOICE ERROR");
       }
       return;
     }
+    this.beginVoiceCycle(true);
     if (!this.recognition) return;
     try { this.recognition.start(); } catch (error) { console.debug("Recognition start skipped:", error?.message || error); }
   }
@@ -433,6 +449,7 @@ class HAIVA {
       this.isSpeaking = false;
       this.isProcessing = false;
       this.voiceActivated = false;
+      this.nativeVoiceReady = false;
       this.clearVoiceTimers();
       this.voiceHasStarted = false;
       this.pendingVoiceResult = "";
