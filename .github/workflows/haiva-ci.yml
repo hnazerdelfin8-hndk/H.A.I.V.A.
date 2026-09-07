@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 # Build current main exactly as packaged for Android verification.
+# Fresh phone-test build trigger: 2026-09-07
 jobs:
   core-validation:
     runs-on: ubuntu-latest
