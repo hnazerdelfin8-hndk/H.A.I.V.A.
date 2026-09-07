@@ -58,14 +58,15 @@ test("main application calls the assistant's supported respond API", async () =>
   assert.doesNotMatch(source, /this\.assistant\.process\(command\)/);
 });
 
-test("chat and voice modes use separate response behavior", async () => {
+test("chat and voice modes share the canonical response pipeline", async () => {
   const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
   const chatHandler = source.match(/async handleTextCommand\(command\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  const voiceHandler = source.match(/async handleCommand\(command\) \{[\s\S]*?\n  \}/)?.[0] || "";
-  assert.match(chatHandler, /this\.assistant\.respond\(command\)/);
+  const resultHandler = source.match(/async handleResultText\(text\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(chatHandler, /await this\.assistant\.respond\(command\)/);
   assert.doesNotMatch(chatHandler, /await speak\(answer\)/);
-  assert.match(voiceHandler, /this\.assistant\.respond\(command\)/);
-  assert.match(voiceHandler, /await speak\(answer\)/);
+  assert.match(resultHandler, /removeWakeWord\(text\)/);
+  assert.match(resultHandler, /await this\.handleTextCommand\(command\)/);
+  assert.doesNotMatch(resultHandler, /this\.assistant\.respond\(command\)/);
 });
 
 test("voice synchronization contract is centralized and shared", async () => {
@@ -107,10 +108,10 @@ test("voice state machine has one core orchestration path", async () => {
   const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
   assert.match(source, /this\.setState\("LISTENING"\)/);
   assert.match(source, /this\.setState\("THINKING"\)/);
-  assert.match(source, /this\.setState\("SPEAKING"\)/);
   assert.match(source, /this\.setState\("READY"\)/);
-  assert.match(source, /await speak\(answer\)/);
-  assert.match(source, /this\.setState\("READY"\);/);
+  assert.match(source, /async handleResultText\(text\)/);
+  assert.match(source, /await this\.handleTextCommand\(command\)/);
+  assert.doesNotMatch(source, /async handleCommand\(command\)/);
   assert.doesNotMatch(source, /recognition\.start\(\).*recognition\.start\(/s);
 });
 
