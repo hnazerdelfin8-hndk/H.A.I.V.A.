@@ -88,7 +88,7 @@ test("voice pipeline is event driven and avoids legacy grace-period timers", asy
   assert.match(app, /voiceSilenceRetries/);
 
   assert.match(android, /Core\/app\.js is the single owner/);
-  assert.match(android, /haiva:native-voice-end/);
+  assert.match(android, /haiva:native-voice-segment-end/);
   assert.match(android, /nativeVoiceWatchdogMs = 5000L/);
   assert.match(android, /haiva:native-voice-timeout/);
   assert.doesNotMatch(android, /postDelayed\(initialSpeechWindow, 3000L\)/);
