@@ -38,8 +38,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private val voicePermissionRequestCode = 1001
     private val voiceFallbackRequestCode = 1002
 
-    // WebViewAssetLoader gives the packaged web runtime a stable HTTPS-like origin.
-    // This avoids file:// module-origin/CORS edge cases for ES modules and dynamic imports.
     private val coreUrl = "https://appassets.androidplatform.net/assets/haiva/index.html"
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
@@ -54,12 +52,14 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private var destroyed = false
     private var fallbackVoiceActive = false
 
+    // Safety watchdog only covers recognizer startup. Once Android reports READY or
+    // BEGIN, the watchdog is cancelled and the recognition session owns its lifecycle.
     private val nativeVoiceWatchdog = Handler(Looper.getMainLooper())
     private val nativeVoiceWatchdogMs = 5000L
     private var nativeVoiceRequestActive = false
 
     // Android is only the native voice adapter.
-    // Core/app.js is the single owner of READY -> LISTENING -> THINKING -> SPEAKING -> READY.
+    // Core/app.js owns the conversational READY/LISTENING/THINKING/SPEAKING lifecycle.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,23 +163,41 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     }
 
     private val recognitionListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) { cancelNativeVoiceWatchdog(); dispatchJsEvent("haiva:native-voice-ready") }
-        override fun onBeginningOfSpeech() { cancelNativeVoiceWatchdog(); dispatchJsEvent("haiva:native-voice-begin") }
+        override fun onReadyForSpeech(params: Bundle?) {
+            cancelNativeVoiceWatchdog()
+            dispatchJsEvent("haiva:native-voice-ready")
+        }
+
+        override fun onBeginningOfSpeech() {
+            cancelNativeVoiceWatchdog()
+            dispatchJsEvent("haiva:native-voice-begin")
+        }
+
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { dispatchJsEvent("haiva:native-voice-end") }
+
+        // IMPORTANT: onEndOfSpeech is a recognizer speech-segment boundary, not
+        // H.A.I.V.A.'s conversational turn boundary. Do not send READY here.
+        // The final result/error event is authoritative for the adapter session.
+        override fun onEndOfSpeech() {
+            dispatchJsEvent("haiva:native-voice-segment-end")
+        }
+
         override fun onPartialResults(partialResults: Bundle?) {
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoicePartial(text)
         }
+
         override fun onEvent(eventType: Int, params: Bundle?) {}
+
         override fun onError(error: Int) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
             dispatchVoiceError(error)
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) createSpeechRecognizer()
         }
+
         override fun onResults(results: Bundle?) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
@@ -201,8 +219,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to H.A.I.V.A.")
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            // Give the Android recognizer a generous endpoint tolerance. This is
+            // recognizer configuration, not a H.A.I.V.A. turn/grace timer.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
         }
         try { startActivityForResult(intent, voiceFallbackRequestCode) } catch (_: Exception) { fallbackVoiceActive = false; dispatchVoiceUnavailable("system_voice_fallback_unavailable") }
     }
@@ -264,8 +284,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
         }
         try { nativeVoiceRequestActive = true; recognizer.startListening(intent); startNativeVoiceWatchdog() } catch (_: Exception) { nativeVoiceRequestActive = false; startSystemVoiceFallback() }
     }
