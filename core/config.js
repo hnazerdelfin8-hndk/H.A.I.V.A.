@@ -27,12 +27,8 @@ export const CONFIG = {
     speechVolume: 1.0,
     restartDelay: 650,
 
-    // CANONICAL VOICE SYNCHRONIZATION CONTRACT.
-    // All voice adapters must use these values; core/app.js owns the state flow.
-    timing: {
-      initialSpeechGraceMs: 3000,
-      postSpeechSilenceMs: 2000
-    },
+    // Voice timing is owned by the native/browser recognition engines.
+    // H.A.I.V.A. does not add a custom initial or post-speech grace timer.
 
     wakeWords: [
       "yo haiva",
