@@ -154,16 +154,22 @@ class HAIVA {
         this.setState("LISTENING");
       }
     });
-    window.addEventListener("haiva:native-voice-end", () => {
-      if (this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
-      this.isListening = false;
-      this.nativeVoiceReady = false;
-      this.setState("READY");
+    // Android's onEndOfSpeech is only a speech-segment boundary. It must NOT
+    // transition H.A.I.V.A. to READY because the native recognizer can still
+    // deliver the final result for the active conversational turn.
+    window.addEventListener("haiva:native-voice-segment-end", () => {
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.nativeVoiceReady = false;
+        this.isListening = true;
+        this.setState("LISTENING");
+      }
     });
     window.addEventListener("haiva:native-voice-partial", event => {
       const text = event.detail?.text?.trim();
       if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.voiceSilenceRetries = 0;
+        this.nativeVoiceReady = true;
+        this.isListening = true;
         this.lastTranscript = normalizeSpeech(text);
         this.showTranscript(this.lastTranscript);
         this.setState("LISTENING");
