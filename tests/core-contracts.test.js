@@ -69,21 +69,23 @@ test("chat and voice modes share the canonical response pipeline", async () => {
   assert.doesNotMatch(resultHandler, /this\.assistant\.respond\(command\)/);
 });
 
-test("voice synchronization contract is centralized and shared", async () => {
+test("voice pipeline has no H.A.I.V.A.-owned grace timers", async () => {
   const config = await readFile(new URL("../core/config.js", import.meta.url), "utf8");
   const app = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
   const android = await readFile(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 
-  assert.match(config, /initialSpeechGraceMs:\s*3000/);
-  assert.match(config, /postSpeechSilenceMs:\s*2000/);
-  assert.match(app, /this\.voiceTiming = CONFIG\.voice\.timing/);
-  assert.match(app, /initialSpeechGraceMs/);
-  assert.match(app, /postSpeechSilenceMs/);
+  assert.doesNotMatch(config, /initialSpeechGraceMs/);
+  assert.doesNotMatch(config, /postSpeechSilenceMs/);
+  assert.doesNotMatch(app, /voiceStartTimer/);
+  assert.doesNotMatch(app, /voiceSilenceTimer/);
+  assert.doesNotMatch(app, /scheduleBrowserSilenceCompletion/);
+  assert.doesNotMatch(app, /setTimeout\(/);
+  assert.match(app, /haiva:native-voice-result/);
+  assert.match(app, /void this\.handleResultText\(text\)/);
 
-  // Android is an adapter, not a second orchestrator.
+  // Android is an adapter, not a second H.A.I.V.A. orchestration layer.
   assert.match(android, /Core\/app\.js is the single owner/);
   assert.match(android, /haiva:native-voice-end/);
-  assert.match(android, /EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L/);
   assert.match(android, /nativeVoiceWatchdogMs = 5000L/);
   assert.match(android, /haiva:native-voice-timeout/);
   assert.doesNotMatch(android, /postDelayed\(initialSpeechWindow, 3000L\)/);
