@@ -63,7 +63,8 @@ test("chat and voice modes share the canonical response pipeline", async () => {
   const chatHandler = source.match(/async handleTextCommand\(command, speakResponse = false\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const resultHandler = source.match(/async handleResultText\(text\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.match(chatHandler, /await this\.assistant\.respond\(command\)/);
-  assert.doesNotMatch(chatHandler, /await speak\(answer\)/);
+  assert.match(chatHandler, /if \(speakResponse\)/);
+  assert.match(chatHandler, /await speak\(answer\)/);
   assert.match(resultHandler, /removeWakeWord\(text\)/);
   assert.match(resultHandler, /await this\.handleTextCommand\(command, true\)/);
   assert.doesNotMatch(resultHandler, /this\.assistant\.respond\(command\)/);
