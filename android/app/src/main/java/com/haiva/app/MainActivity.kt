@@ -324,6 +324,17 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
     }
 
+    @JavascriptInterface
+    override fun stopSpeaking() {
+        runOnUiThread {
+            pendingSpeakText = null
+            if (!destroyed && ttsReady) {
+                try { textToSpeech.stop() } catch (_: Exception) {}
+            }
+            dispatchSpeechDone()
+        }
+    }
+
     private fun speakNow(text: String) {
         if (destroyed || !ttsReady) return
         textToSpeech.language = Locale.US
