@@ -25,6 +25,9 @@ class HAIVA {
     this.isProcessing = false;
     this.intentionalStop = false;
     this.voiceSilenceRetries = 0;
+    this.voiceTurn = 0;
+    this.pendingVoiceResult = false;
+    this.conversationalVoice = true;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
@@ -125,10 +128,12 @@ class HAIVA {
       this.isProcessing = false;
       this.isSpeaking = false;
       this.voiceSilenceRetries = 0;
+      this.pendingVoiceResult = false;
       if (this.state === "ERROR") this.setState("READY");
-      this.voiceActivated = false;
+      this.voiceActivated = speakResponse && this.conversationalVoice;
       this.nativeVoiceReady = false;
-      setVoiceButtonActive(false);
+      setVoiceButtonActive(this.voiceActivated);
+      if (this.voiceActivated) this.startListening();
     }
   }
 
@@ -153,18 +158,21 @@ class HAIVA {
       if (this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.isListening = false;
       this.nativeVoiceReady = false;
-      this.setState("LISTENING");
+      this.setState("READY");
     });
     window.addEventListener("haiva:native-voice-partial", event => {
       const text = event.detail?.text?.trim();
       if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.voiceSilenceRetries = 0;
-        this.showTranscript(normalizeSpeech(text));
+        this.lastTranscript = normalizeSpeech(text);
+        this.showTranscript(this.lastTranscript);
+        this.setState("LISTENING");
       }
     });
     window.addEventListener("haiva:native-voice-result", event => {
       const text = event.detail?.text?.trim();
-      if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
+      if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated || this.pendingVoiceResult) return;
+      this.pendingVoiceResult = true;
       this.voiceSilenceRetries = 0;
       this.isListening = false;
       this.nativeVoiceReady = false;
@@ -173,8 +181,12 @@ class HAIVA {
     window.addEventListener("haiva:native-voice-timeout", () => {
       if (this.isSpeaking || this.isProcessing) return;
       this.isListening = false;
-      this.voiceActivated = false;
       this.nativeVoiceReady = false;
+      if (this.voiceActivated && this.conversationalVoice) {
+        this.setState("READY");
+        return;
+      }
+      this.voiceActivated = false;
       setVoiceButtonActive(false);
       this.setState("READY");
     });
@@ -236,10 +248,10 @@ class HAIVA {
     const heard = document.getElementById("heard");
     if (!heard) return;
     if (state === "BOOTING") heard.textContent = "Initializing H.A.I.V.A. core…";
-    else if (state === "LISTENING") heard.textContent = "Listening… speak now.";
+    else if (state === "LISTENING") heard.textContent = "Listening… speak naturally.";
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
-    else if (state === "READY") heard.textContent = "Ready. Type a message or tap the microphone.";
+    else if (state === "READY") heard.textContent = "Ready. Tap the microphone or continue the conversation.";
     else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
     else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
     else if (state === "VOICE ERROR") heard.textContent = "Voice input needs attention. Tap the microphone to try again.";
@@ -267,24 +279,42 @@ class HAIVA {
       this.intentionalStop = false;
       if (!this.isSpeaking && !this.isProcessing && this.voiceActivated) this.setState("LISTENING");
     };
+    this.recognition.onspeechstart = () => {
+      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      this.setState("LISTENING");
+    };
+    this.recognition.onspeechend = () => {
+      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      this.isListening = false;
+    };
     this.recognition.onresult = event => this.handleResult(event);
     this.recognition.onerror = event => {
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
       if (this.isProcessing || this.isSpeaking) return;
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
+        this.setState("MICROPHONE DENIED");
+        return;
+      }
+      if (["no-speech", "aborted", "audio-capture"].includes(event.error) && this.voiceActivated) {
+        this.recoverRecognitionFromEvent(event.error);
+        return;
+      }
       this.voiceActivated = false;
       setVoiceButtonActive(false);
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") this.setState("MICROPHONE DENIED");
-      else this.setState("READY");
+      this.setState("READY");
     };
     this.recognition.onend = () => {
       this.isListening = false;
       if (this.isSpeaking || this.isProcessing) return;
       if (this.voiceActivated && !this.intentionalStop) {
-        this.voiceActivated = false;
-        setVoiceButtonActive(false);
-        this.setState("READY");
+        this.startListening();
+        return;
       }
+      if (this.intentionalStop) this.intentionalStop = false;
+      this.setState("READY");
     };
   }
 
@@ -308,6 +338,7 @@ class HAIVA {
     this.voiceActivated = true;
     this.intentionalStop = false;
     this.lastTranscript = "";
+    this.pendingVoiceResult = false;
     setVoiceButtonActive(true);
     this.setState("LISTENING");
     this.startListening();
@@ -316,6 +347,7 @@ class HAIVA {
   deactivateVoice() {
     this.voiceActivated = false;
     this.lastTranscript = "";
+    this.pendingVoiceResult = false;
     this.nativeVoiceReady = false;
     this.voiceSilenceRetries = 0;
     this.stopListening();
@@ -325,7 +357,7 @@ class HAIVA {
     setVoiceButtonActive(false);
     this.setState("READY");
     const heard = document.getElementById("heard");
-    if (heard) heard.textContent = "Ready. Type a message or tap the microphone.";
+    if (heard) heard.textContent = "Ready. Tap the microphone or continue the conversation.";
   }
 
   startListening() {
@@ -359,6 +391,20 @@ class HAIVA {
     this.isListening = false;
   }
 
+  recoverRecognitionFromEvent(reason) {
+    if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+    if (this.voiceSilenceRetries >= 4) {
+      console.warn("[HAIVA] Browser voice recovery limit reached:", reason);
+      this.voiceActivated = false;
+      this.voiceSilenceRetries = 0;
+      setVoiceButtonActive(false);
+      this.setState("READY");
+      return;
+    }
+    this.voiceSilenceRetries += 1;
+    this.startListening();
+  }
+
   handleResult(event) {
     let finalText = "";
     let interimText = "";
@@ -369,10 +415,14 @@ class HAIVA {
       else interimText += text;
     }
     const normalizedInterim = normalizeSpeech(interimText.trim());
-    if (normalizedInterim) this.showTranscript(normalizedInterim);
+    if (normalizedInterim) {
+      this.lastTranscript = normalizedInterim;
+      this.showTranscript(normalizedInterim);
+    }
 
     const normalizedFinal = normalizeSpeech(finalText.trim());
-    if (normalizedFinal) {
+    if (normalizedFinal && !this.pendingVoiceResult) {
+      this.pendingVoiceResult = true;
       this.isListening = false;
       void this.handleResultText(normalizedFinal);
     }
@@ -381,9 +431,14 @@ class HAIVA {
   async handleResultText(text) {
     const command = removeWakeWord(text).trim();
     if (!command) {
-      this.voiceActivated = false;
-      setVoiceButtonActive(false);
-      this.setState("READY");
+      this.pendingVoiceResult = false;
+      if (this.conversationalVoice && this.voiceActivated) {
+        this.startListening();
+      } else {
+        this.voiceActivated = false;
+        setVoiceButtonActive(false);
+        this.setState("READY");
+      }
       return;
     }
     await this.handleTextCommand(command, true);
