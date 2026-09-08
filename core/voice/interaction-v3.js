@@ -4,6 +4,8 @@
 // No fixed grace-period timers.
 // =========================================
 
+import { CONFIG } from "../config.js";
+
 const DEFAULT_INTERRUPT_KEYWORDS = [
   "stop",
   "stop muna",
@@ -43,10 +45,6 @@ function matchesPhrase(text, phrase) {
   return new RegExp(`(?:^|\\s)${escapeRegExp(target)}(?:$|\\s)`, "i").test(value);
 }
 
-/**
- * Classifies spoken input that arrives while H.A.I.V.A. is speaking.
- * Short interrupt phrases are treated as commands; normal sentences are not.
- */
 export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS) {
   const normalized = normalize(text);
   const list = Array.isArray(keywords) ? keywords : DEFAULT_INTERRUPT_KEYWORDS;
@@ -62,12 +60,6 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
   };
 }
 
-/**
- * Lightweight V3 turn coordinator.
- * The app remains the owner of actual recognition/TTS; this module only owns
- * conversation turn identity, duplicate commits, stale-event rejection, and
- * interrupt classification.
- */
 export function createVoiceInteractionV3(options = {}) {
   const interruptKeywords = options.interruptKeywords || DEFAULT_INTERRUPT_KEYWORDS;
   let generation = 0;
@@ -126,5 +118,99 @@ export function createVoiceInteractionV3(options = {}) {
     }
   };
 }
+
+/**
+ * Runtime V3 integration over the existing V2 app instance.
+ * This keeps V2 recognition ownership intact while adding true barge-in:
+ * TTS announces its speaking phase, V3 opens the existing recognizer, and
+ * interrupt speech cancels TTS before the fresh command is processed.
+ */
+export function installVoiceInteractionV3() {
+  if (typeof window === "undefined" || window.__HAIVA_V3_RUNTIME__) return;
+  window.__HAIVA_V3_RUNTIME__ = true;
+
+  const coordinator = createVoiceInteractionV3({
+    interruptKeywords: CONFIG.voice.interruptKeywords
+  });
+  let speakingTurn = 0;
+
+  window.addEventListener("haiva:v3-speaking-start", () => {
+    const app = window.HAIVA;
+    if (!app || !app.voiceActivated) return;
+    speakingTurn = coordinator.beginTurn();
+    coordinator.setPhase("SPEAKING", speakingTurn);
+
+    // V2 normally stops recognition before TTS. V3 deliberately reopens the
+    // same recognizer during SPEAKING so a spoken interrupt can be detected.
+    if (app.nativeVoice) {
+      try { window.HaivaBridge.startVoiceCapture(); } catch (error) { console.debug("V3 native barge-in start skipped:", error?.message || error); }
+    } else if (app.recognition) {
+      try { app.recognition.start(); } catch (error) { console.debug("V3 browser barge-in start skipped:", error?.message || error); }
+    }
+  });
+
+  const handleInterrupt = text => {
+    const app = window.HAIVA;
+    if (!app || !app.voiceActivated || !app.isSpeaking) return false;
+    const interruption = coordinator.interrupt(text, speakingTurn || coordinator.currentTurn());
+    if (!interruption) return false;
+
+    app.pendingVoiceResult = true;
+    app.isListening = false;
+    app.nativeVoiceReady = false;
+    app.isSpeaking = false;
+    app.setState("LISTENING");
+
+    try {
+      if (app.nativeVoice) window.HaivaBridge.stopVoiceCapture();
+      else app.recognition?.stop?.();
+    } catch (error) {
+      console.debug("V3 recognition stop skipped:", error?.message || error);
+    }
+
+    try {
+      if (typeof window.HaivaBridge?.stopSpeaking === "function") window.HaivaBridge.stopSpeaking();
+      else window.speechSynthesis?.cancel?.();
+    } catch (error) {
+      console.debug("V3 TTS stop skipped:", error?.message || error);
+    }
+
+    if (interruption.remainder) {
+      app.isProcessing = false;
+      void app.handleResultText(interruption.remainder);
+    } else {
+      app.pendingVoiceResult = false;
+      coordinator.setPhase("LISTENING", interruption.turn);
+      app.startListening();
+    }
+    return true;
+  };
+
+  window.addEventListener("haiva:native-voice-partial", event => {
+    const text = event.detail?.text?.trim();
+    if (text) handleInterrupt(text);
+  }, true);
+
+  window.addEventListener("haiva:native-voice-result", event => {
+    const text = event.detail?.text?.trim();
+    if (text && handleInterrupt(text)) event.stopImmediatePropagation();
+  }, true);
+
+  window.addEventListener("haiva:browser-voice-partial", event => {
+    const text = event.detail?.text?.trim();
+    if (text) handleInterrupt(text);
+  }, true);
+
+  window.addEventListener("haiva:v3-speaking-stop", () => {
+    const app = window.HAIVA;
+    if (!app) return;
+    if (app.nativeVoice) {
+      try { window.HaivaBridge.stopVoiceCapture(); } catch (error) { console.debug("V3 native barge-in stop skipped:", error?.message || error); }
+    }
+    coordinator.setPhase("READY");
+  });
+}
+
+installVoiceInteractionV3();
 
 export { DEFAULT_INTERRUPT_KEYWORDS };
