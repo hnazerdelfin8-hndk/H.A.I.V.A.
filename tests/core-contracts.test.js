@@ -60,16 +60,16 @@ test("main application calls the assistant's supported respond API", async () =>
 
 test("chat and voice modes share the canonical response pipeline", async () => {
   const source = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
-  const chatHandler = source.match(/async handleTextCommand\(command\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  const chatHandler = source.match(/async handleTextCommand\(command, speakResponse = false\) \{[\s\S]*?\n  \}/)?.[0] || "";
   const resultHandler = source.match(/async handleResultText\(text\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.match(chatHandler, /await this\.assistant\.respond\(command\)/);
   assert.doesNotMatch(chatHandler, /await speak\(answer\)/);
   assert.match(resultHandler, /removeWakeWord\(text\)/);
-  assert.match(resultHandler, /await this\.handleTextCommand\(command\)/);
+  assert.match(resultHandler, /await this\.handleTextCommand\(command, true\)/);
   assert.doesNotMatch(resultHandler, /this\.assistant\.respond\(command\)/);
 });
 
-test("voice pipeline has no H.A.I.V.A.-owned grace timers", async () => {
+test("voice pipeline avoids the legacy grace-period timers and uses bounded native recovery", async () => {
   const config = await readFile(new URL("../core/config.js", import.meta.url), "utf8");
   const app = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
   const android = await readFile(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
@@ -79,11 +79,11 @@ test("voice pipeline has no H.A.I.V.A.-owned grace timers", async () => {
   assert.doesNotMatch(app, /voiceStartTimer/);
   assert.doesNotMatch(app, /voiceSilenceTimer/);
   assert.doesNotMatch(app, /scheduleBrowserSilenceCompletion/);
-  assert.doesNotMatch(app, /setTimeout\(/);
   assert.match(app, /haiva:native-voice-result/);
   assert.match(app, /void this\.handleResultText\(text\)/);
+  assert.match(app, /scheduleVoiceRestart/);
+  assert.match(app, /voiceSilenceRetries/);
 
-  // Android is an adapter, not a second H.A.I.V.A. orchestration layer.
   assert.match(android, /Core\/app\.js is the single owner/);
   assert.match(android, /haiva:native-voice-end/);
   assert.match(android, /nativeVoiceWatchdogMs = 5000L/);
@@ -112,7 +112,7 @@ test("voice state machine has one core orchestration path", async () => {
   assert.match(source, /this\.setState\("THINKING"\)/);
   assert.match(source, /this\.setState\("READY"\)/);
   assert.match(source, /async handleResultText\(text\)/);
-  assert.match(source, /await this\.handleTextCommand\(command\)/);
+  assert.match(source, /await this\.handleTextCommand\(command, true\)/);
   assert.doesNotMatch(source, /async handleCommand\(command\)/);
   assert.doesNotMatch(source, /recognition\.start\(\).*recognition\.start\(/s);
 });
