@@ -6,7 +6,7 @@ export const CONFIG = {
   app: {
     name: "H.A.I.V.A.",
     fullName: "Hnazer Artificial Intelligence Voice Assistant",
-    version: "2.4.0"
+    version: "3.0.0"
   },
 
   environment: "production",
@@ -36,6 +36,28 @@ export const CONFIG = {
       "hey haiva",
       "hi haiva",
       "haiva"
+    ],
+
+    // V3 voice-command vocabulary. These are intentionally kept separate
+    // from wake words so the recognition lifecycle remains event-driven.
+    interruptKeywords: [
+      "stop",
+      "stop muna",
+      "teka",
+      "teka lang",
+      "wait",
+      "wait lang",
+      "hold on",
+      "pause",
+      "sandali",
+      "sandali lang",
+      "hintay",
+      "hintay lang",
+      "cancel",
+      "cancel muna",
+      "wag na",
+      "huwag na",
+      "never mind"
     ]
   },
 
@@ -55,6 +77,8 @@ export const CONFIG = {
     wakeWord: true,
     textToSpeech: true,
     memory: true,
-    commandRouter: true
+    commandRouter: true,
+    voiceInteractionV3: true,
+    voiceInterrupt: true
   }
 };
