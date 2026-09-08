@@ -26,11 +26,6 @@ class HAIVA {
     this.intentionalStop = false;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
-    this.voiceStartTimer = null;
-    this.voiceSilenceTimer = null;
-    this.voiceHasStarted = false;
-    this.pendingVoiceResult = "";
-    this.voiceTiming = CONFIG.voice.timing;
 
     this.setupChat();
     this.setupSettings();
@@ -124,63 +119,17 @@ class HAIVA {
     }
   }
 
-  clearVoiceTimers() {
-    if (this.voiceStartTimer) clearTimeout(this.voiceStartTimer);
-    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
-    this.voiceStartTimer = null;
-    this.voiceSilenceTimer = null;
-  }
-
-  beginVoiceCycle(armInitialGrace = true) {
-    this.clearVoiceTimers();
-    this.voiceHasStarted = false;
-    this.pendingVoiceResult = "";
-    if (!armInitialGrace) return;
-    this.voiceStartTimer = setTimeout(() => {
-      if (!this.voiceActivated || this.voiceHasStarted || this.isProcessing || this.isSpeaking) return;
-      this.stopListening();
-      this.voiceActivated = false;
-      setVoiceButtonActive(false);
-      this.setState("READY");
-    }, this.voiceTiming.initialSpeechGraceMs);
-  }
-
-  markSpeechStarted() {
-    this.voiceHasStarted = true;
-    if (this.voiceStartTimer) clearTimeout(this.voiceStartTimer);
-    this.voiceStartTimer = null;
-    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
-    this.voiceSilenceTimer = null;
-  }
-
-  scheduleBrowserSilenceCompletion() {
-    if (!this.voiceHasStarted || this.nativeVoice || !this.voiceActivated) return;
-    if (this.voiceSilenceTimer) clearTimeout(this.voiceSilenceTimer);
-    this.voiceSilenceTimer = setTimeout(() => {
-      this.voiceSilenceTimer = null;
-      if (!this.voiceActivated || this.isProcessing || this.isSpeaking) return;
-      this.stopListening();
-      if (this.pendingVoiceResult) {
-        const result = this.pendingVoiceResult;
-        this.pendingVoiceResult = "";
-        void this.handleResultText(result);
-      }
-    }, this.voiceTiming.postSpeechSilenceMs);
-  }
-
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
     window.addEventListener("haiva:native-voice-ready", () => {
       this.nativeVoiceReady = true;
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        this.beginVoiceCycle(true);
         this.isListening = true;
         this.setState("LISTENING");
       }
     });
     window.addEventListener("haiva:native-voice-begin", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        this.markSpeechStarted();
         this.isListening = true;
         this.setState("LISTENING");
       }
@@ -193,7 +142,6 @@ class HAIVA {
     window.addEventListener("haiva:native-voice-partial", event => {
       const text = event.detail?.text?.trim();
       if (text && this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
-        this.markSpeechStarted();
         this.showTranscript(normalizeSpeech(text));
       }
     });
@@ -201,21 +149,17 @@ class HAIVA {
       const text = event.detail?.text?.trim();
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.isListening = false;
-      this.pendingVoiceResult = "";
       void this.handleResultText(text);
     });
     window.addEventListener("haiva:native-voice-timeout", () => {
       if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
-      this.clearVoiceTimers();
       this.isListening = false;
       this.voiceActivated = false;
-      this.voiceHasStarted = false;
       this.nativeVoiceReady = false;
       setVoiceButtonActive(false);
       this.setState("READY");
     });
     window.addEventListener("haiva:native-voice-error", event => {
-      this.clearVoiceTimers();
       this.isListening = false;
       this.nativeVoiceReady = false;
       const code = Number(event.detail?.code);
@@ -288,7 +232,6 @@ class HAIVA {
     };
     this.recognition.onresult = event => this.handleResult(event);
     this.recognition.onerror = event => {
-      this.clearVoiceTimers();
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -303,9 +246,8 @@ class HAIVA {
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop && !this.voiceHasStarted) {
+      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
         this.voiceActivated = false;
-        this.clearVoiceTimers();
         setVoiceButtonActive(false);
         this.setState("READY");
       }
@@ -339,9 +281,6 @@ class HAIVA {
   deactivateVoice() {
     this.voiceActivated = false;
     this.lastTranscript = "";
-    this.clearVoiceTimers();
-    this.voiceHasStarted = false;
-    this.pendingVoiceResult = "";
     this.nativeVoiceReady = false;
     this.stopListening();
     window.speechSynthesis?.cancel?.();
@@ -357,12 +296,10 @@ class HAIVA {
     if (!this.voiceActivated || this.isListening || this.isSpeaking || this.isProcessing) return;
     this.intentionalStop = false;
     if (this.nativeVoice) {
-      this.beginVoiceCycle(false);
       this.isListening = true;
       this.setState("LISTENING");
       try { window.HaivaBridge.startVoiceCapture(); }
       catch (error) {
-        this.clearVoiceTimers();
         this.isListening = false;
         this.voiceActivated = false;
         this.nativeVoiceReady = false;
@@ -371,7 +308,6 @@ class HAIVA {
       }
       return;
     }
-    this.beginVoiceCycle(true);
     if (!this.recognition) return;
     try { this.recognition.start(); } catch (error) { console.debug("Recognition start skipped:", error?.message || error); }
   }
@@ -397,16 +333,12 @@ class HAIVA {
       else interimText += text;
     }
     const normalizedInterim = normalizeSpeech(interimText.trim());
-    if (normalizedInterim) {
-      this.markSpeechStarted();
-      this.showTranscript(normalizedInterim);
-    }
+    if (normalizedInterim) this.showTranscript(normalizedInterim);
+
     const normalizedFinal = normalizeSpeech(finalText.trim());
     if (normalizedFinal) {
-      this.markSpeechStarted();
-      this.pendingVoiceResult = normalizedFinal;
-      this.showTranscript(normalizedFinal);
-      this.scheduleBrowserSilenceCompletion();
+      this.isListening = false;
+      void this.handleResultText(normalizedFinal);
     }
   }
 
