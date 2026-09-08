@@ -3,6 +3,7 @@
 // =========================================
 
 import { CONFIG } from "./config.js";
+import "./voice/interaction-v3.js";
 
 export function setUIState(state) {
   const normalized = String(state).toLowerCase();
@@ -22,6 +23,27 @@ export function setVoiceButtonActive(active) {
 
 export function hasNativeVoiceBridge() {
   return typeof window !== "undefined" && !!window.HaivaBridge;
+}
+
+export function stopSpeaking() {
+  if (hasNativeVoiceBridge() && typeof window.HaivaBridge.stopSpeaking === "function") {
+    try {
+      window.HaivaBridge.stopSpeaking();
+      return true;
+    } catch (error) {
+      console.warn("Native TTS stop failed:", error);
+    }
+  }
+
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+      return true;
+    } catch (error) {
+      console.warn("Browser TTS stop failed:", error);
+    }
+  }
+  return false;
 }
 
 export function speak(text) {
