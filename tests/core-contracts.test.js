@@ -69,7 +69,7 @@ test("chat and voice modes share the canonical response pipeline", async () => {
   assert.doesNotMatch(resultHandler, /this\.assistant\.respond\(command\)/);
 });
 
-test("voice pipeline avoids the legacy grace-period timers and uses bounded native recovery", async () => {
+test("voice pipeline is event driven and avoids legacy grace-period timers", async () => {
   const config = await readFile(new URL("../core/config.js", import.meta.url), "utf8");
   const app = await readFile(new URL("../core/app.js", import.meta.url), "utf8");
   const android = await readFile(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
@@ -79,9 +79,11 @@ test("voice pipeline avoids the legacy grace-period timers and uses bounded nati
   assert.doesNotMatch(app, /voiceStartTimer/);
   assert.doesNotMatch(app, /voiceSilenceTimer/);
   assert.doesNotMatch(app, /scheduleBrowserSilenceCompletion/);
+  assert.doesNotMatch(app, /voiceRestartTimer/);
+  assert.doesNotMatch(app, /setTimeout\(/);
   assert.match(app, /haiva:native-voice-result/);
   assert.match(app, /void this\.handleResultText\(text\)/);
-  assert.match(app, /scheduleVoiceRestart/);
+  assert.match(app, /recoverNativeVoiceFromEvent/);
   assert.match(app, /voiceSilenceRetries/);
 
   assert.match(android, /Core\/app\.js is the single owner/);
