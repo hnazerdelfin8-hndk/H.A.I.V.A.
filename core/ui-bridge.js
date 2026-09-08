@@ -50,6 +50,8 @@ export function speak(text) {
   const value = String(text || "").trim();
   if (!value) return Promise.resolve();
 
+  window.dispatchEvent(new CustomEvent("haiva:v3-speaking-start"));
+
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.speak === "function") {
     return new Promise(resolve => {
       let settled = false;
@@ -57,6 +59,7 @@ export function speak(text) {
         if (settled) return;
         settled = true;
         window.removeEventListener("haiva:native-speech-done", finish);
+        window.dispatchEvent(new CustomEvent("haiva:v3-speaking-stop"));
         resolve();
       };
       window.addEventListener("haiva:native-speech-done", finish, { once: true });
@@ -70,7 +73,10 @@ export function speak(text) {
     });
   }
 
-  if (!("speechSynthesis" in window)) return Promise.resolve();
+  if (!("speechSynthesis" in window)) {
+    window.dispatchEvent(new CustomEvent("haiva:v3-speaking-stop"));
+    return Promise.resolve();
+  }
   return new Promise(resolve => {
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(value);
@@ -78,8 +84,12 @@ export function speak(text) {
     utterance.rate = CONFIG.voice.speechRate;
     utterance.pitch = CONFIG.voice.speechPitch;
     utterance.volume = CONFIG.voice.speechVolume;
-    utterance.onend = resolve;
-    utterance.onerror = resolve;
+    const finish = () => {
+      window.dispatchEvent(new CustomEvent("haiva:v3-speaking-stop"));
+      resolve();
+    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
     speechSynthesis.speak(utterance);
   });
 }
