@@ -94,12 +94,12 @@ class HAIVA {
       const text = input.value.trim();
       if (!text || this.isProcessing) return;
       input.value = "";
-      void this.handleTextCommand(text);
+      void this.handleTextCommand(text, false);
     };
     form.addEventListener("submit", submit);
   }
 
-  async handleTextCommand(command) {
+  async handleTextCommand(command, speakResponse = false) {
     this.isProcessing = true;
     this.stopListening();
     this.showTranscript(command);
@@ -108,6 +108,13 @@ class HAIVA {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
+      if (speakResponse) {
+        this.isSpeaking = true;
+        this.setState("SPEAKING");
+        try { await speak(answer); }
+        catch (speechError) { console.warn("Voice response failed:", speechError); }
+        finally { this.isSpeaking = false; }
+      }
       this.setState("READY");
     } catch (error) {
       console.error("Text command failed:", error);
@@ -115,29 +122,37 @@ class HAIVA {
       this.setState("ERROR");
     } finally {
       this.isProcessing = false;
+      this.isSpeaking = false;
       if (this.state === "ERROR") this.setState("READY");
+      this.voiceActivated = false;
+      this.nativeVoiceReady = false;
+      setVoiceButtonActive(false);
     }
   }
 
   setupNativeVoiceEvents() {
     if (!this.nativeVoice) return;
     window.addEventListener("haiva:native-voice-ready", () => {
-      this.nativeVoiceReady = true;
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.nativeVoiceReady = true;
         this.isListening = true;
         this.setState("LISTENING");
       }
     });
     window.addEventListener("haiva:native-voice-begin", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
+        this.nativeVoiceReady = true;
         this.isListening = true;
         this.setState("LISTENING");
       }
     });
     window.addEventListener("haiva:native-voice-end", () => {
-      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      if (this.isSpeaking || this.isProcessing) return;
       this.isListening = false;
-      this.setState("LISTENING");
+      this.nativeVoiceReady = false;
+      this.voiceActivated = false;
+      setVoiceButtonActive(false);
+      this.setState("READY");
     });
     window.addEventListener("haiva:native-voice-partial", event => {
       const text = event.detail?.text?.trim();
@@ -149,10 +164,11 @@ class HAIVA {
       const text = event.detail?.text?.trim();
       if (!text || this.isSpeaking || this.isProcessing || !this.voiceActivated) return;
       this.isListening = false;
+      this.nativeVoiceReady = false;
       void this.handleResultText(text);
     });
     window.addEventListener("haiva:native-voice-timeout", () => {
-      if (!this.voiceActivated || this.isSpeaking || this.isProcessing) return;
+      if (this.isSpeaking || this.isProcessing) return;
       this.isListening = false;
       this.voiceActivated = false;
       this.nativeVoiceReady = false;
@@ -164,11 +180,10 @@ class HAIVA {
       this.nativeVoiceReady = false;
       const code = Number(event.detail?.code);
       console.warn("[HAIVA] Native speech recognition error:", code);
-      if (this.voiceActivated && !this.isProcessing && !this.isSpeaking) {
-        this.voiceActivated = false;
-        setVoiceButtonActive(false);
-        this.setState("VOICE ERROR");
-      }
+      if (this.isProcessing || this.isSpeaking) return;
+      this.voiceActivated = false;
+      setVoiceButtonActive(false);
+      this.setState("VOICE ERROR");
     });
   }
 
@@ -234,19 +249,16 @@ class HAIVA {
     this.recognition.onerror = event => {
       this.isListening = false;
       console.warn("Speech recognition error:", event.error);
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        this.voiceActivated = false;
-        setVoiceButtonActive(false);
-        this.setState("MICROPHONE DENIED");
-      } else if (event.error !== "no-speech" && event.error !== "aborted") {
-        this.voiceActivated = false;
-        setVoiceButtonActive(false);
-        this.setState("VOICE ERROR");
-      }
+      if (this.isProcessing || this.isSpeaking) return;
+      this.voiceActivated = false;
+      setVoiceButtonActive(false);
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") this.setState("MICROPHONE DENIED");
+      else this.setState("READY");
     };
     this.recognition.onend = () => {
       this.isListening = false;
-      if (this.voiceActivated && !this.isSpeaking && !this.isProcessing && !this.intentionalStop) {
+      if (this.isSpeaking || this.isProcessing) return;
+      if (this.voiceActivated && !this.intentionalStop) {
         this.voiceActivated = false;
         setVoiceButtonActive(false);
         this.setState("READY");
@@ -350,7 +362,7 @@ class HAIVA {
       this.setState("READY");
       return;
     }
-    await this.handleTextCommand(command);
+    await this.handleTextCommand(command, true);
   }
 }
 
