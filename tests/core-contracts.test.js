@@ -9,40 +9,44 @@ async function read(path) {
 }
 
 test("advanced memory stores, recalls and forgets typed entries", async () => {
-  const source = await read("core/memory.js");
-  assert.match(source, /storeMemory/);
-  assert.match(source, /recallMemories/);
-  assert.match(source, /forgetMemory/);
+  const source = await read("core/memory/advanced-memory.js");
+  assert.match(source, /createAdvancedMemoryStore/);
+  assert.match(source, /recall\(/);
+  assert.match(source, /forget\(/);
   assert.match(source, /type/);
 });
 
 test("wake word matching is case insensitive", async () => {
+  const source = await read("core/voice/wake-word.js");
   const config = await read("core/config.js");
+  assert.match(source, /containsWakeWord/);
+  assert.match(source, /toLowerCase/);
   assert.match(config, /wakeWords/);
-  assert.match(config, /toLowerCase/);
 });
 
 test("provider gateway builds Groq-compatible requests", async () => {
-  const source = await read("core/provider-gateway.js");
+  const source = await read("api/provider-gateway.js");
   assert.match(source, /api\.groq\.com/);
   assert.match(source, /chat\/completions/);
 });
 
 test("provider gateway rejects an unconfigured provider explicitly", async () => {
-  const source = await read("core/provider-gateway.js");
+  const source = await read("api/provider-gateway.js");
   assert.match(source, /not configured/i);
+  assert.match(source, /PROVIDER_NOT_CONFIGURED/);
 });
 
 test("provider answer extraction supports configured Gemini and OpenAI-compatible responses", async () => {
-  const source = await read("core/provider-gateway.js");
+  const source = await read("api/provider-gateway.js");
   assert.match(source, /candidates/);
   assert.match(source, /choices/);
 });
 
 test("provider registry exposes configuration state without secrets", async () => {
-  const source = await read("core/provider-registry.js");
-  assert.match(source, /configured/);
-  assert.doesNotMatch(source, /process\.env\.[A-Z0-9_]+\s*\)/);
+  const source = await read("api/provider-gateway.js");
+  assert.match(source, /listProviders/);
+  assert.match(source, /configured: Boolean/);
+  assert.doesNotMatch(source, /apiKey:\s*getProviderApiKey/);
 });
 
 test("canonical skill registry exposes the expected skill surface", async () => {
@@ -59,8 +63,10 @@ test("main application calls the assistant's supported respond API", async () =>
 test("chat and voice modes share the canonical response pipeline", async () => {
   const app = await read("core/app.js");
   const chat = await read("skills/chat/index.js");
+  const config = await read("core/config.js");
   assert.match(app, /handleResultText/);
-  assert.match(chat, /\/api\/chat/);
+  assert.match(chat, /chatEndpoint/);
+  assert.match(config, /chatEndpoint/);
 });
 
 test("voice pipeline is event driven and avoids legacy grace-period timers", async () => {
@@ -107,12 +113,14 @@ test("voice state machine has one core orchestration path", async () => {
 });
 
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
-  const source = await read("core/orchestrator.js");
+  const source = await read("core/orchestrator/index.js");
   assert.match(source, /AbortController/);
-  assert.match(source, /timeout/);
+  assert.match(source, /AI_REQUEST_TIMEOUT_MS/);
+  assert.match(source, /DEFAULT_MAX_RETRIES = 0/);
 });
 
 test("orchestrator executes through the configured chat gateway", async () => {
-  const source = await read("core/orchestrator.js");
-  assert.match(source, /chatGateway|providerGateway|gateway/i);
+  const source = await read("core/orchestrator/index.js");
+  assert.match(source, /CONFIG\.api\.chatEndpoint/);
+  assert.match(source, /fetch\(CONFIG\.api\.chatEndpoint/);
 });
