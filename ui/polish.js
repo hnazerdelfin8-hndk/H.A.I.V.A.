@@ -1,6 +1,8 @@
 // H.A.I.V.A. visual/UX polish layer.
 // Keeps the main shell modular so the UI can be replaced without touching the core engine.
 
+import { V2_EVENTS, dispatchV2Event, installV2VoiceControl } from "../core/voice/interaction/v2/interaction.js";
+
 const style = document.createElement("style");
 style.textContent = `
   .haiva-live-indicator { display:inline-flex; align-items:center; gap:7px; }
@@ -36,23 +38,14 @@ if (mic) {
   mic.setAttribute("aria-label", "Start or pause H.A.I.V.A. conversational voice mode");
 }
 
-// V2 voice-control wiring: one tap activates the conversational session;
-// core/app.js owns the event-driven turn lifecycle and re-arms listening after TTS.
+// V2 owns the command boundary; core/app.js owns the event-driven turn lifecycle.
+installV2VoiceControl();
 document.addEventListener("click", event => {
   const button = event.target?.closest?.("#activate-voice");
   if (!button || button.disabled) return;
-  queueMicrotask(() => {
-    const app = window.HAIVA;
-    if (!app) return console.warn("[HAIVA] Voice control clicked before core instance was ready.");
-    try {
-      app.conversationalVoice = true;
-      if (app.voiceActivated) app.deactivateVoice();
-      else void app.activateVoice();
-    } catch (error) {
-      console.error("[HAIVA] Voice control failed:", error);
-      try { app.setState("VOICE ERROR"); } catch (_) {}
-    }
-  });
+  const app = window.HAIVA;
+  const eventName = app?.voiceActivated ? V2_EVENTS.DEACTIVATE : V2_EVENTS.ACTIVATE;
+  queueMicrotask(() => dispatchV2Event(eventName));
 });
 
 console.log("[HAIVA] UI polish layer loaded — V2 conversational voice wiring active.");
