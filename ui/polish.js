@@ -1,6 +1,8 @@
 // H.A.I.V.A. visual/UX polish layer.
 // Keeps the main shell modular so the UI can be replaced without touching the core engine.
 
+import { V2_EVENTS, dispatchV2Event, installV2VoiceControl } from "../core/voice/interaction/v2/interaction.js";
+
 const style = document.createElement("style");
 style.textContent = `
   .haiva-live-indicator { display:inline-flex; align-items:center; gap:7px; }
@@ -20,60 +22,30 @@ style.textContent = `
   .bubble { overflow-wrap:anywhere; }
   .status-pill { user-select:none; }
   @keyframes haivaBlink { 0%,100%{opacity:.3} 50%{opacity:1} }
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
 `;
 document.head.appendChild(style);
 
 const transcript = document.getElementById("transcript");
-if (transcript && transcript.textContent.includes("Yi, H.A.I.V.A.")) {
-  transcript.textContent = transcript.textContent.replace("Yi, H.A.I.V.A.", "Yo, H.A.I.V.A.");
-}
-
+if (transcript && transcript.textContent.includes("Yi, H.A.I.V.A.")) transcript.textContent = transcript.textContent.replace("Yi, H.A.I.V.A.", "Yo, H.A.I.V.A.");
 const heard = document.getElementById("heard");
-if (heard && heard.textContent.includes("Yi, H.A.I.V.A.")) {
-  heard.textContent = heard.textContent.replace("Yi, H.A.I.V.A.", "Yo, H.A.I.V.A.");
-}
-
+if (heard && heard.textContent.includes("Yi, H.A.I.V.A.")) heard.textContent = heard.textContent.replace("Yi, H.A.I.V.A.", "Yo, H.A.I.V.A.");
 const status = document.getElementById("haiva-status");
 if (status) status.classList.add("haiva-live-indicator");
-
 const mic = document.getElementById("activate-voice");
 if (mic) {
-  mic.title = "Start or pause H.A.I.V.A. voice mode";
-  mic.setAttribute("aria-label", "Start or pause H.A.I.V.A. voice mode");
+  mic.title = "Start or pause H.A.I.V.A. conversational voice mode";
+  mic.setAttribute("aria-label", "Start or pause H.A.I.V.A. conversational voice mode");
 }
 
-// Voice control wiring is deliberately delegated because core/app.js creates
-// window.HAIVA after this module is evaluated. Delegation also survives UI
-// re-renders that replace the microphone button node.
+// V2 owns the command boundary; core/app.js owns the event-driven turn lifecycle.
+installV2VoiceControl();
 document.addEventListener("click", event => {
   const button = event.target?.closest?.("#activate-voice");
   if (!button || button.disabled) return;
-
-  const invoke = () => {
-    const app = window.HAIVA;
-    if (!app) {
-      console.warn("[HAIVA] Voice control clicked before core instance was ready.");
-      return;
-    }
-    try {
-      // V1 baseline: one microphone tap owns exactly one voice turn.
-      // Keep the existing core/V2 conversational implementation intact;
-      // this activation path explicitly selects V1 until V1 is validated.
-      app.conversationalVoice = false;
-      if (app.voiceActivated) app.deactivateVoice();
-      else void app.activateVoice();
-    } catch (error) {
-      console.error("[HAIVA] Voice control failed:", error);
-      try { app.setState("VOICE ERROR"); } catch (_) {}
-    }
-  };
-
-  // Let the browser finish the native click dispatch before invoking the
-  // asynchronous voice activation/permission flow.
-  queueMicrotask(invoke);
+  const app = window.HAIVA;
+  const eventName = app?.voiceActivated ? V2_EVENTS.DEACTIVATE : V2_EVENTS.ACTIVATE;
+  queueMicrotask(() => dispatchV2Event(eventName));
 });
 
-console.log("[HAIVA] UI polish layer loaded.");
+console.log("[HAIVA] UI polish layer loaded — V2 conversational voice wiring active.");
