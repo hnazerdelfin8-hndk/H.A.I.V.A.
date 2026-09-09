@@ -72,6 +72,7 @@ test("chat and voice modes share the canonical response pipeline", async () => {
 test("voice pipeline is event driven and avoids legacy grace-period timers", async () => {
   const config = await read("core/config.js");
   const app = await read("core/app.js");
+  const bridge = await read("core/ui-bridge.js");
   const android = await read("android/app/src/main/java/com/haiva/app/MainActivity.kt");
 
   assert.doesNotMatch(config, /initialSpeechGraceMs/);
@@ -81,10 +82,12 @@ test("voice pipeline is event driven and avoids legacy grace-period timers", asy
   assert.doesNotMatch(app, /scheduleBrowserSilenceCompletion/);
   assert.doesNotMatch(app, /voiceRestartTimer/);
   assert.doesNotMatch(app, /setTimeout\(/);
+  assert.doesNotMatch(bridge, /setTimeout\(/);
   assert.match(app, /haiva:native-voice-result/);
   assert.match(app, /void this\.handleResultText\(text\)/);
   assert.match(app, /recoverNativeVoiceFromEvent/);
   assert.match(app, /voiceSilenceRetries/);
+  assert.match(bridge, /haiva:native-speech-done/);
 
   assert.match(android, /Core\/app\.js owns the conversational .*READY\/LISTENING\/THINKING\/SPEAKING lifecycle/);
   assert.match(android, /haiva:native-voice-segment-end/);
@@ -92,6 +95,15 @@ test("voice pipeline is event driven and avoids legacy grace-period timers", asy
   assert.match(android, /haiva:native-voice-timeout/);
   assert.doesNotMatch(android, /postDelayed\(initialSpeechWindow, 3000L\)/);
   assert.doesNotMatch(android, /private val initialSpeechWindow/);
+});
+
+test("V2 microphone wiring enables conversational mode instead of V1 one-shot mode", async () => {
+  const polish = await read("ui/polish.js");
+  const app = await read("core/app.js");
+  assert.match(polish, /app\.conversationalVoice\s*=\s*true/);
+  assert.doesNotMatch(polish, /app\.conversationalVoice\s*=\s*false/);
+  assert.match(app, /this\.voiceActivated\s*=\s*speakResponse\s*&&\s*this\.conversationalVoice/);
+  assert.match(app, /if \(this\.voiceActivated\) this\.startListening\(\)/);
 });
 
 test("voice connector events have one Android producer and bounded recovery paths", async () => {
