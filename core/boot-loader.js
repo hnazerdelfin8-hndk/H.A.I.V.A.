@@ -2,10 +2,8 @@
 // Owns the isolated boot presentation and hands off to core/boot.js.
 // core/boot.js is the single startup authority for the H.A.I.V.A. boot chain.
 
-// Keep the first entrypoint as a classic script. This lets the loading screen
-// execute even if a WebView has trouble evaluating a module entrypoint.
-// Diagnostics are optional at this boundary; boot.js remains the authoritative
-// runtime gate and will report a diagnostics-module failure through the catch.
+// Keep the first entrypoint as a classic script. The boot screen is also
+// statically present in index.html so it renders before any JS/module work.
 function bootCheckpoint(stage, message) {
   try {
     void import("./boot-diagnostics.js").then(module => {
@@ -22,6 +20,14 @@ let finished = false;
 let loadingOverlay = null;
 
 function createLoadingOverlay() {
+  // index.html owns the first-paint boot screen. Never create a second copy.
+  const existing = document.getElementById("haiva-boot-screen");
+  if (existing) {
+    loadingOverlay = existing;
+    return;
+  }
+
+  // Defensive fallback for hosts that serve an older/malformed index.html.
   const overlay = document.createElement("div");
   overlay.id = "haiva-boot-screen";
   overlay.setAttribute("role", "status");
@@ -88,7 +94,7 @@ function showError(reason, stage = "BOOT_FAILED") {
   const status = document.getElementById("haiva-boot-status");
   const error = document.getElementById("haiva-boot-error");
   const retry = document.getElementById("haiva-boot-retry");
-  if (status) status.textContent = "INITIALIZATION ERROR";
+  if (status) status.textContent = "BOOT ERROR";
   if (error) { error.hidden = false; error.textContent = `ERROR: ${message}\nSTEP: ${stage}`; }
   if (retry) { retry.hidden = false; retry.addEventListener("click", () => window.location.reload(), { once: true }); }
 }
