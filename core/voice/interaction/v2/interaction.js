@@ -1,9 +1,8 @@
 // =========================================
 // H.A.I.V.A. VOICE — V2 EVENT CONTRACT
 // =========================================
-// V2 is event-driven. This module is the single JS-side contract for the
-// conversational voice lifecycle. It deliberately contains no timers and no
-// UI/Android implementation logic.
+// V2 is event-driven. This module is the JS-side contract for the
+// conversational voice lifecycle. It contains no speech cutoff timers.
 
 export const V2_STATES = Object.freeze({
   READY: "READY",
@@ -37,4 +36,21 @@ export function dispatchV2Event(name, detail = {}) {
 
 export function isV2State(state) {
   return Object.values(V2_STATES).includes(state);
+}
+
+// The UI sends only a V2 command. Core/app.js remains the lifecycle owner.
+// This avoids the UI directly toggling internal voice state.
+export function installV2VoiceControl() {
+  if (typeof window === "undefined" || window.__HAIVA_V2_CONTROL__) return;
+  window.__HAIVA_V2_CONTROL__ = true;
+  window.addEventListener(V2_EVENTS.ACTIVATE, () => {
+    const app = window.HAIVA;
+    if (!app) return console.warn("[HAIVA][V2] Core instance is not ready.");
+    app.conversationalVoice = true;
+    if (!app.voiceActivated) void app.activateVoice();
+  });
+  window.addEventListener(V2_EVENTS.DEACTIVATE, () => {
+    const app = window.HAIVA;
+    if (app?.voiceActivated) app.deactivateVoice();
+  });
 }
