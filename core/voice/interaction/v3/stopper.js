@@ -2,6 +2,8 @@
 // V3 is intentionally dormant until an explicit V3 event is dispatched.
 // V2 remains the canonical conversational voice lifecycle owner.
 
+import { V2_EVENTS, dispatchV2Event } from "../v2/interaction.js";
+
 export const V3_EVENTS = Object.freeze({
   STOP: "haiva:v3-voice-stop",
   COMMAND: "haiva:v3-voice-command",
@@ -22,18 +24,8 @@ export function installV3VoiceStopper() {
     const app = window.HAIVA;
     if (!app) return;
 
-    // Stop is an explicit user/system command. It must not alter boot state
-    // and must not become a second voice lifecycle/state machine.
-    app.stopListening?.();
-    window.speechSynthesis?.cancel?.();
-    app.isSpeaking = false;
-    app.pendingVoiceResult = false;
-    app.nativeVoiceReady = false;
-    app.voiceActivated = false;
-    app.voiceSilenceRetries = 0;
-    app.setVoiceButtonActive?.(false);
-    app.setState?.("READY");
-
+    // V3 is a control boundary only. V2/core still owns voice state changes.
+    dispatchV2Event(V2_EVENTS.DEACTIVATE, { source: "v3-stop" });
     dispatchV3Event(V3_EVENTS.INTERRUPTED, { reason: "stop" });
   });
 
@@ -42,8 +34,8 @@ export function installV3VoiceStopper() {
     const app = window.HAIVA;
     if (!text || !app || app.isProcessing) return;
 
-    // V3 may hand an explicit interrupt/new command to the existing core
-    // response pipeline. It never creates a competing response engine.
+    // An explicit V3 command is handed to the existing core response path.
+    // V3 never creates a competing response engine or lifecycle.
     void app.handleResultText?.(text);
   });
 }
