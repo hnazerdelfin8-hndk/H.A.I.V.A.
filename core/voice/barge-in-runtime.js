@@ -18,7 +18,7 @@ let active = false;
 let browserRecognizer = null;
 
 function getApp() {
-  return typeof window !== "undefined'" ? window.HAIVA : null;
+  return typeof window !== "undefined" ? window.HAIVA : null;
 }
 
 function stopCapture() {
@@ -70,7 +70,7 @@ function startCapture() {
   const app = getApp();
   if (!app?.isSpeaking) return;
 
-  if (window.HaivaBridge?.startVoiceCapture) {
+  if (typeof window !== "undefined" && window.HaivaBridge?.startVoiceCapture) {
     try { window.HaivaBridge.startVoiceCapture(); } catch (_) {}
   } else {
     startBrowserCapture();
