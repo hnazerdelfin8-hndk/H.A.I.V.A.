@@ -3,6 +3,31 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// The APK must never depend on a CI-only asset copy step.
+// Always package the canonical web core from the repository into
+// android/app/build/generated/haivaAssets/haiva before Android builds.
+def haivaWebRoot = project.projectDir.parentFile.parentFile
+
+def syncHaivaWebAssets = tasks.register('syncHaivaWebAssets', Sync) {
+    from(haivaWebRoot) {
+        include 'index.html'
+        into 'haiva'
+    }
+    from(new File(haivaWebRoot, 'core')) {
+        into 'haiva/core'
+    }
+    from(new File(haivaWebRoot, 'ui')) {
+        into 'haiva/ui'
+    }
+    def skillsDir = new File(haivaWebRoot, 'skills')
+    if (skillsDir.exists()) {
+        from(skillsDir) {
+            into 'haiva/skills'
+        }
+    }
+    into layout.buildDirectory.dir('generated/haivaAssets')
+}
+
 android {
     namespace 'com.haiva.app'
     compileSdk 35
@@ -23,6 +48,16 @@ android {
             versionNameSuffix '-debug'
         }
     }
+
+    sourceSets {
+        main {
+            assets.srcDir(layout.buildDirectory.dir('generated/haivaAssets'))
+        }
+    }
+}
+
+tasks.named('preBuild') {
+    dependsOn(syncHaivaWebAssets)
 }
 
 kotlin { jvmToolchain(17) }
