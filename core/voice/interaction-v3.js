@@ -42,7 +42,14 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
     .sort((a, b) => b.length - a.length);
 
   for (const phrase of ordered) {
-    const pattern = new RegExp(`(^|\\s)${escapeRegExp(phrase)}(?=$|\\s|[,.!?])`, "i");
+    const escaped = escapeRegExp(phrase);
+    // Single-word stop keywords are intentionally strict: they must be the
+    // complete utterance or be followed by punctuation. This prevents normal
+    // speech such as "the wait time is three seconds" from becoming a stop.
+    const pattern = phrase.includes(" ")
+      ? new RegExp(`(^|\\s)${escaped}(?=$|\\s|[,.!?])`, "i")
+      : new RegExp(`^${escaped}(?:$|[,.!?])`, "i");
+
     if (pattern.test(normalized)) {
       return { interrupted: true, phrase };
     }
