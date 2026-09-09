@@ -26,21 +26,12 @@ export function hasNativeVoiceBridge() {
 
 export function stopSpeaking() {
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.stopSpeaking === "function") {
-    try {
-      window.HaivaBridge.stopSpeaking();
-      return true;
-    } catch (error) {
-      console.warn("Native TTS stop failed:", error);
-    }
+    try { window.HaivaBridge.stopSpeaking(); return true; }
+    catch (error) { console.warn("Native TTS stop failed:", error); }
   }
-
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    try {
-      window.speechSynthesis.cancel();
-      return true;
-    } catch (error) {
-      console.warn("Browser TTS stop failed:", error);
-    }
+    try { window.speechSynthesis.cancel(); return true; }
+    catch (error) { console.warn("Browser TTS stop failed:", error); }
   }
   return false;
 }
@@ -59,13 +50,8 @@ export function speak(text) {
         resolve();
       };
       window.addEventListener("haiva:native-speech-done", finish, { once: true });
-      try {
-        window.HaivaBridge.speak(value);
-        setTimeout(finish, Math.max(8000, value.length * 120));
-      } catch (error) {
-        console.warn("Native TTS failed:", error);
-        finish();
-      }
+      try { window.HaivaBridge.speak(value); }
+      catch (error) { console.warn("Native TTS failed:", error); finish(); }
     });
   }
 
@@ -85,11 +71,7 @@ export function speak(text) {
 }
 
 export function normalizeSpeech(text) {
-  return String(text)
-    .toLowerCase()
-    .replace(/[.,!?]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(text).toLowerCase().replace(/[.,!?]/g, "").replace(/\s+/g, " ").trim();
 }
 
 export function containsWakeWord(text) {
@@ -102,9 +84,7 @@ export function removeWakeWord(text) {
   let result = String(text);
   const wakeWords = Array.isArray(CONFIG.voice.wakeWords) ? CONFIG.voice.wakeWords : [];
   for (const wakeWord of wakeWords) {
-    const escaped = normalizeSpeech(wakeWord)
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\s+/g, "\\s+");
+    const escaped = normalizeSpeech(wakeWord).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
     result = result.replace(new RegExp(escaped, "ig"), " ");
   }
   return normalizeSpeech(result);
