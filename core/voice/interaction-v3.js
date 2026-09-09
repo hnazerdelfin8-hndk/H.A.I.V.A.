@@ -3,11 +3,14 @@
 // =========================================
 // V3 is a control/stopper layer only.
 // It does not own recognition, TTS, boot, V1, or V2 lifecycle state.
-// It provides turn-generation fencing and explicit voice interruption.
+// It provides turn-generation fencing, explicit voice interruption,
+// and optional "stop + new instruction" extraction.
 
 export const DEFAULT_INTERRUPT_KEYWORDS = Object.freeze([
   "stop",
   "stop muna",
+  "hinto",
+  "hinto muna",
   "teka",
   "teka lang",
   "wait",
@@ -43,9 +46,9 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
 
   for (const phrase of ordered) {
     const escaped = escapeRegExp(phrase);
-    // Single-word stop keywords are intentionally strict: they must be the
-    // complete utterance or be followed by punctuation. This prevents normal
-    // speech such as "the wait time is three seconds" from becoming a stop.
+    // Single-word stop keywords are intentionally strict. They must be the
+    // complete utterance or be followed by punctuation. Multi-word commands
+    // may appear at the start of an utterance followed by more instruction.
     const pattern = phrase.includes(" ")
       ? new RegExp(`(^|\\s)${escaped}(?=$|\\s|[,.!?])`, "i")
       : new RegExp(`^${escaped}(?:$|[,.!?])`, "i");
@@ -56,6 +59,37 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
   }
 
   return { interrupted: false, phrase: null };
+}
+
+export function parseStopAndInstruction(text, keywords = DEFAULT_INTERRUPT_KEYWORDS) {
+  const normalized = normalize(text);
+  if (!normalized) {
+    return { interrupted: false, phrase: null, instruction: "" };
+  }
+
+  const ordered = [...keywords]
+    .map(normalize)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
+  for (const phrase of ordered) {
+    const escaped = escapeRegExp(phrase);
+    const match = normalized.match(new RegExp(`^${escaped}(?:\\s*[,.:!?-]?\\s+|\\s+|[,.:!?-]+\\s*)(.*)$`, "i"));
+    if (!match) continue;
+
+    return {
+      interrupted: true,
+      phrase,
+      instruction: normalize(match[1] ?? "")
+    };
+  }
+
+  const detection = detectVoiceInterrupt(normalized, keywords);
+  return {
+    interrupted: detection.interrupted,
+    phrase: detection.phrase,
+    instruction: ""
+  };
 }
 
 export function createVoiceInteractionV3(options = {}) {
@@ -81,11 +115,12 @@ export function createVoiceInteractionV3(options = {}) {
   };
 
   const interrupt = (text, turn = generation) => {
-    const detection = detectVoiceInterrupt(text, keywords);
-    if (!detection.interrupted) {
+    const parsed = parseStopAndInstruction(text, keywords);
+    if (!parsed.interrupted) {
       return {
         interrupted: false,
         phrase: null,
+        instruction: "",
         turn: generation
       };
     }
@@ -95,7 +130,8 @@ export function createVoiceInteractionV3(options = {}) {
     const nextTurn = beginTurn();
     return {
       interrupted: true,
-      phrase: detection.phrase,
+      phrase: parsed.phrase,
+      instruction: parsed.instruction,
       previousTurn: turn,
       turn: nextTurn
     };
