@@ -2,6 +2,7 @@
 // Keeps the main shell modular so the UI can be replaced without touching the core engine.
 
 import { V2_EVENTS, dispatchV2Event, installV2VoiceControl } from "../core/voice/interaction/v2/interaction.js";
+import { installV3VoiceStopper } from "../core/voice/interaction/v3/stopper.js";
 
 const style = document.createElement("style");
 style.textContent = `
@@ -40,6 +41,8 @@ if (mic) {
 
 // V2 owns the command boundary; core/app.js owns the event-driven turn lifecycle.
 installV2VoiceControl();
+// V3 is installed as a dormant stopper boundary; no existing V2 flow is intercepted.
+installV3VoiceStopper();
 document.addEventListener("click", event => {
   const button = event.target?.closest?.("#activate-voice");
   if (!button || button.disabled) return;
@@ -48,4 +51,4 @@ document.addEventListener("click", event => {
   queueMicrotask(() => dispatchV2Event(eventName));
 });
 
-console.log("[HAIVA] UI polish layer loaded — V2 conversational voice wiring active.");
+console.log("[HAIVA] UI polish layer loaded — V2 conversational voice wiring active; V3 stopper dormant.");
