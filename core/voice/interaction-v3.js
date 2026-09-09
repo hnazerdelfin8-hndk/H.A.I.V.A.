@@ -46,9 +46,6 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
 
   for (const phrase of ordered) {
     const escaped = escapeRegExp(phrase);
-    // Single-word stop keywords are intentionally strict. They must be the
-    // complete utterance or be followed by punctuation. Multi-word commands
-    // may appear at the start of an utterance followed by more instruction.
     const pattern = phrase.includes(" ")
       ? new RegExp(`(^|\\s)${escaped}(?=$|\\s|[,.!?])`, "i")
       : new RegExp(`^${escaped}(?:$|[,.!?])`, "i");
@@ -80,7 +77,7 @@ export function parseStopAndInstruction(text, keywords = DEFAULT_INTERRUPT_KEYWO
     return {
       interrupted: true,
       phrase,
-      instruction: normalize(match[1] ?? "")
+      instruction: normalize(match[1] ?? "").replace(/[.,!?]+$/, "").trim()
     };
   }
 
@@ -125,8 +122,6 @@ export function createVoiceInteractionV3(options = {}) {
       };
     }
 
-    // Invalidate the interrupted turn and immediately open a fresh generation.
-    // This prevents late recognition/TTS/network callbacks from winning.
     const nextTurn = beginTurn();
     return {
       interrupted: true,
