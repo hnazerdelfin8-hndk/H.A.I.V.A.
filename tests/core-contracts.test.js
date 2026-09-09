@@ -97,13 +97,48 @@ test("voice pipeline is event driven and avoids legacy grace-period timers", asy
   assert.doesNotMatch(android, /private val initialSpeechWindow/);
 });
 
-test("V2 microphone wiring enables conversational mode instead of V1 one-shot mode", async () => {
+test("V2 microphone wiring routes through the canonical command contract", async () => {
   const polish = await read("ui/polish.js");
+  const v2 = await read("core/voice/interaction/v2/interaction.js");
   const app = await read("core/app.js");
-  assert.match(polish, /app\.conversationalVoice\s*=\s*true/);
+  assert.match(polish, /V2_EVENTS/);
+  assert.match(polish, /dispatchV2Event/);
   assert.doesNotMatch(polish, /app\.conversationalVoice\s*=\s*false/);
+  assert.match(v2, /haiva:v2-voice-activate/);
+  assert.match(v2, /haiva:v2-voice-deactivate/);
+  assert.match(v2, /installV2VoiceControl/);
+  assert.match(v2, /app\.conversationalVoice\s*=\s*true/);
   assert.match(app, /this\.voiceActivated\s*=\s*speakResponse\s*&&\s*this\.conversationalVoice/);
   assert.match(app, /if \(this\.voiceActivated\) this\.startListening\(\)/);
+});
+
+test("V2 native event vocabulary is synchronized across JS contract, core and Android", async () => {
+  const v2 = await read("core/voice/interaction/v2/interaction.js");
+  const app = await read("core/app.js");
+  const bridge = await read("core/ui-bridge.js");
+  const controls = await read("core/phase1-controls.js");
+  const android = await read("android/app/src/main/java/com/haiva/app/MainActivity.kt");
+
+  for (const event of [
+    "haiva:native-voice-ready",
+    "haiva:native-voice-begin",
+    "haiva:native-voice-segment-end",
+    "haiva:native-voice-partial",
+    "haiva:native-voice-result",
+    "haiva:native-voice-timeout",
+    "haiva:native-voice-error",
+    "haiva:native-speech-done"
+  ]) {
+    assert.match(v2, new RegExp(event.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(app, /haiva:native-voice-ready/);
+  assert.match(app, /haiva:native-voice-result/);
+  assert.match(app, /haiva:native-voice-timeout/);
+  assert.match(bridge, /haiva:native-speech-done/);
+  assert.match(controls, /haiva:native-voice-unavailable/);
+  assert.match(android, /haiva:native-voice-ready/);
+  assert.match(android, /haiva:native-voice-result/);
+  assert.match(android, /haiva:native-voice-segment-end/);
 });
 
 test("voice connector events have one Android producer and bounded recovery paths", async () => {
