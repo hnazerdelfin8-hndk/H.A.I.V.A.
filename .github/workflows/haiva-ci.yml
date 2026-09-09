@@ -32,6 +32,9 @@ jobs:
       - name: Run core contract tests
         run: node --test tests/core-contracts.test.js
 
+      - name: Run V3 stopper contract tests
+        run: node --test tests/v3-contracts.test.js
+
       - name: Run boot architecture contract tests
         run: node --test tests/boot-contracts.test.js
 
