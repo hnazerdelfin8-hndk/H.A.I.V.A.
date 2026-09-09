@@ -2,35 +2,28 @@ name: H.A.I.V.A. CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/boot-boundary-runtime]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
-# Build current main exactly as packaged for Android verification.
 jobs:
   core-validation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - name: Validate JavaScript syntax
         shell: bash
         run: |
           set -e
-          find . -type f -name '*.js' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
-            node --check "$file"
-          done
-
+          find . -type f -name '*.js' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do node --check "$file"; done
       - name: Run core contract tests
         run: node --test tests/core-contracts.test.js
-
       - name: Validate orchestrator and router
         run: |
           node --check core/orchestrator/index.js
@@ -41,45 +34,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Package H.A.I.V.A. web core into APK assets
-        shell: bash
-        run: |
-          set -e
-          rm -rf android/app/src/main/assets/haiva
-          mkdir -p android/app/src/main/assets/haiva
-          cp index.html android/app/src/main/assets/haiva/index.html
-          cp -R core android/app/src/main/assets/haiva/
-          cp -R ui android/app/src/main/assets/haiva/
-          if [ -d skills ]; then cp -R skills android/app/src/main/assets/haiva/; fi
-
       - name: Build source manifest
         shell: bash
         run: |
           set -e
           : > /tmp/haiva-source-manifest.sha256
-          find index.html core ui skills -type f -print | sort | while IFS= read -r file; do
-            sha256sum "$file"
-          done | awk '{print $1"  assets/haiva/"$2}' > /tmp/haiva-source-manifest.sha256
-          echo "Source manifest entries: $(wc -l < /tmp/haiva-source-manifest.sha256)"
-
+          find index.html core ui skills -type f -print | sort | while IFS= read -r file; do sha256sum "$file"; done | awk '{print $1"  assets/haiva/"$2}' > /tmp/haiva-source-manifest.sha256
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon
-
       - name: Verify APK exists
         shell: bash
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
-
       - name: Verify source to APK asset synchronization
         shell: bash
         run: |
@@ -88,17 +61,9 @@ jobs:
           mkdir -p /tmp/haiva-apk-extract
           unzip -q android/app/build/outputs/apk/debug/app-debug.apk -d /tmp/haiva-apk-extract
           : > /tmp/haiva-apk-manifest.sha256
-          find /tmp/haiva-apk-extract/assets/haiva -type f -print | sort | while IFS= read -r file; do
-            rel="${file#/tmp/haiva-apk-extract/}"
-            sha256sum "$file" | awk -v rel="$rel" '{print $1"  "rel}'
-          done > /tmp/haiva-apk-manifest.sha256
-          if ! diff -u /tmp/haiva-source-manifest.sha256 /tmp/haiva-apk-manifest.sha256; then
-            echo "ERROR: Source and APK web assets are not synchronized. Artifact rejected."
-            exit 1
-          fi
+          find /tmp/haiva-apk-extract/assets/haiva -type f -print | sort | while IFS= read -r file; do rel="${file#/tmp/haiva-apk-extract/}"; sha256sum "$file" | awk -v rel="$rel" '{print $1"  "rel}'; done > /tmp/haiva-apk-manifest.sha256
+          diff -u /tmp/haiva-source-manifest.sha256 /tmp/haiva-apk-manifest.sha256
           echo "SOURCE ↔ APK synchronization: PASS"
-          echo "Matched assets: $(wc -l < /tmp/haiva-source-manifest.sha256)"
-
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
