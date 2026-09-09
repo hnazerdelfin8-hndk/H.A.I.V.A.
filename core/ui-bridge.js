@@ -4,6 +4,11 @@
 
 import { CONFIG } from "./config.js";
 
+const dispatchVoiceEvent = (name, detail = {}) => {
+  if (typeof window === "undefined") return;
+  try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch (_) {}
+};
+
 export function setUIState(state) {
   const normalized = String(state).toLowerCase();
   document.body.dataset.haivaState = normalized;
@@ -28,6 +33,7 @@ export function stopSpeaking() {
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.stopSpeaking === "function") {
     try {
       window.HaivaBridge.stopSpeaking();
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: true });
       return true;
     } catch (error) {
       console.warn("Native TTS stop failed:", error);
@@ -37,6 +43,7 @@ export function stopSpeaking() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     try {
       window.speechSynthesis.cancel();
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: true });
       return true;
     } catch (error) {
       console.warn("Browser TTS stop failed:", error);
@@ -49,6 +56,8 @@ export function speak(text) {
   const value = String(text || "").trim();
   if (!value) return Promise.resolve();
 
+  dispatchVoiceEvent("haiva:speech-start", { text: value });
+
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.speak === "function") {
     return new Promise(resolve => {
       let settled = false;
@@ -56,6 +65,7 @@ export function speak(text) {
         if (settled) return;
         settled = true;
         window.removeEventListener("haiva:native-speech-done", finish);
+        dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
         resolve();
       };
       window.addEventListener("haiva:native-speech-done", finish, { once: true });
@@ -69,7 +79,10 @@ export function speak(text) {
     });
   }
 
-  if (!("speechSynthesis" in window)) return Promise.resolve();
+  if (!("speechSynthesis" in window)) {
+    dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
+    return Promise.resolve();
+  }
   return new Promise(resolve => {
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(value);
@@ -77,7 +90,10 @@ export function speak(text) {
     utterance.rate = CONFIG.voice.speechRate;
     utterance.pitch = CONFIG.voice.speechPitch;
     utterance.volume = CONFIG.voice.speechVolume;
-    const finish = () => resolve();
+    const finish = () => {
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
+      resolve();
+    };
     utterance.onend = finish;
     utterance.onerror = finish;
     speechSynthesis.speak(utterance);
