@@ -1,9 +1,8 @@
 // =========================================
 // H.A.I.V.A. V1 VOICE CAPTURE CONTROLLER
 // =========================================
-// V1 is the single owner of voice capture.
-// V2 owns lifecycle; V3 may request an interrupt-capture session,
-// but V3 never owns SpeechRecognition or the native bridge directly.
+// V1 owns capture only. It reports capture results to Voice Interaction.
+// V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -42,9 +41,14 @@ function startBrowserCapture() {
       }
       if (finalText.trim()) emitResult(finalText);
     };
-    recognition.onerror = () => {
+    recognition.onerror = error => {
       browserRecognizer = null;
       captureActive = false;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("haiva:v1-capture-error", {
+          detail: { source: "v1", error: error?.error || "unknown" }
+        }));
+      }
     };
     recognition.onend = () => {
       browserRecognizer = null;
@@ -83,12 +87,8 @@ function stopCapture() {
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("haiva:v3-capture-request", () => {
-    const app = window.HAIVA;
-    if (!app?.isSpeaking || app.isProcessing) return;
-    startCapture();
-  });
-
+  // Voice Interaction is the only requester of V1 capture.
+  window.addEventListener("haiva:v3-capture-request", () => startCapture());
   window.addEventListener("haiva:v3-capture-stop", stopCapture);
 }
 
