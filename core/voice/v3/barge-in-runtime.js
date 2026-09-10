@@ -1,56 +1,52 @@
 // =========================================
 // H.A.I.V.A. V3 LIVE BARGE-IN RUNTIME
 // =========================================
-// V3 is a post-boot voice control layer. V1 owns recognition capture;
-// V2 owns lifecycle/state transitions; V3 only detects interruption,
-// fences turns, and requests V1 capture through an explicit event.
+// V3 is interruption/control only.
+// It never calls Core App and never owns V1 capture directly.
+// V3 reports one interruption outcome to Voice Interaction.
 
 import { createVoiceInteractionV3 } from "./interaction-v3.js";
-import "../v1/capture-controller.js";
-import { stopSpeaking } from "../ui-bridge.js";
 
 const controller = createVoiceInteractionV3();
 let activeTurn = 0;
 let active = false;
 
-function getApp() { return typeof window !== "undefined" ? window.HAIVA : null; }
-
 function requestV1Capture() {
   if (!active || typeof window === "undefined") return;
-  const app = getApp();
-  if (!app?.isSpeaking || app.isProcessing) return;
-  window.dispatchEvent(new CustomEvent("haiva:v3-capture-request"));
+  window.dispatchEvent(new CustomEvent("haiva:v3-capture-request", {
+    detail: { source: "v3", turn: activeTurn }
+  }));
 }
 
 function stopV1Capture() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("haiva:v3-capture-stop"));
-  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haiva:v3-capture-stop", {
+    detail: { source: "v3", turn: activeTurn }
+  }));
+}
+
+function reportOutcome(result) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haiva:v3-voice-outcome", {
+    detail: {
+      source: "v3",
+      turn: activeTurn,
+      interrupted: Boolean(result?.interrupted),
+      instruction: result?.instruction || ""
+    }
+  }));
 }
 
 function handleBargeIn(text) {
   if (!active) return;
-  const app = getApp();
-  if (!app?.isSpeaking) return;
   const result = controller.interrupt(text, activeTurn);
   if (!result.interrupted) return;
   active = false;
   stopV1Capture();
-  stopSpeaking();
-  if (result.instruction) {
-    const instruction = result.instruction;
-    setTimeout(() => {
-      const currentApp = getApp();
-      if (!currentApp) return;
-      currentApp.pendingVoiceResult = false;
-      void currentApp.handleTextCommand(instruction, true);
-    }, 0);
-  }
+  reportOutcome(result);
 }
 
 window.addEventListener("haiva:speech-start", () => {
-  const app = getApp();
-  if (!app?.isSpeaking) return;
   active = true;
   activeTurn = controller.beginTurn();
   requestV1Capture();
@@ -61,7 +57,7 @@ window.addEventListener("haiva:speech-done", () => {
   stopV1Capture();
 });
 
-// Native Android V1 capture result.
+// Native V1 capture result.
 window.addEventListener("haiva:native-voice-result", event => {
   const text = event.detail?.text?.trim();
   if (text) handleBargeIn(text);
@@ -73,10 +69,4 @@ window.addEventListener("haiva:v1-capture-result", event => {
   if (text) handleBargeIn(text);
 });
 
-window.addEventListener("haiva:native-voice-partial", event => {
-  if (!active) return;
-  const text = event.detail?.text?.trim();
-  if (text && getApp()?.isSpeaking) getApp().showTranscript(text);
-});
-
-console.log("[HAIVA] V3 live barge-in runtime loaded. V1 owns capture; V3 owns interrupt control.");
+console.log("[HAIVA] V3 live barge-in runtime loaded. V3 reports only to Voice Interaction.");
