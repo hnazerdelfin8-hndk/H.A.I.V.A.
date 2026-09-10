@@ -4,6 +4,9 @@
 // V2 owns lifecycle/state sequencing and conversation-session authority.
 // V1 owns voice capture. V3 owns interruption control.
 // Boot Loader remains outside this lifecycle boundary.
+//
+// IMPORTANT: V2 does not call V1, V3, Boot Loader, UI, or Core App.
+// It only owns the internal lifecycle state and emits lifecycle events.
 
 const STATES = Object.freeze({
   READY: "READY",
@@ -26,24 +29,49 @@ const END_CONVERSATION_PATTERNS = Object.freeze([
   /\bgoodbye\s*(?:h\.?a\.?i\.?v\.?a\.?)?\b/i
 ]);
 
+function emitLifecycleEvent(nextState, previousState) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haiva:v2-state-change", {
+    detail: {
+      state: nextState,
+      previousState,
+      source: "v2"
+    }
+  }));
+}
+
 export class VoiceLifecycleV2 {
   constructor({ onStateChange = null } = {}) {
     this.state = STATES.READY;
     this.onStateChange = typeof onStateChange === "function" ? onStateChange : null;
     this.sessionActive = false;
+    this.transitionInProgress = false;
   }
 
   canTransition(nextState) {
-    if (!TRANSITIONS[nextState] && nextState !== STATES.READY) return false;
+    if (!Object.values(STATES).includes(nextState)) return false;
     return this.state === nextState || Boolean(TRANSITIONS[this.state]?.has(nextState));
   }
 
   transition(nextState) {
     if (!this.canTransition(nextState)) return false;
     if (this.state === nextState) return true;
+    if (this.transitionInProgress) return false;
+
+    this.transitionInProgress = true;
     const previousState = this.state;
     this.state = nextState;
-    this.onStateChange?.(nextState, previousState);
+
+    // Keep session ownership synchronized with the lifecycle state.
+    if (nextState === STATES.READY) this.sessionActive = false;
+    else if (!this.sessionActive) this.sessionActive = true;
+
+    try {
+      this.onStateChange?.(nextState, previousState);
+      emitLifecycleEvent(nextState, previousState);
+    } finally {
+      this.transitionInProgress = false;
+    }
     return true;
   }
 
