@@ -5,11 +5,14 @@ import { VoiceLifecycleV2, VOICE_LIFECYCLE_STATES } from "../core/voice/v2/lifec
 test("V2 lifecycle: normal conversational voice path", () => {
   const lifecycle = new VoiceLifecycleV2();
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.READY);
+  assert.equal(lifecycle.isConversationActive(), false);
   assert.equal(lifecycle.activateListening(), true);
+  assert.equal(lifecycle.isConversationActive(), true);
   assert.equal(lifecycle.beginThinking(), true);
   assert.equal(lifecycle.beginSpeaking(), true);
   assert.equal(lifecycle.returnToListening(), true);
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.LISTENING);
+  assert.equal(lifecycle.isConversationActive(), true);
 });
 
 test("V2 lifecycle: interrupt moves SPEAKING to THINKING without owning capture", () => {
@@ -19,10 +22,30 @@ test("V2 lifecycle: interrupt moves SPEAKING to THINKING without owning capture"
   lifecycle.beginSpeaking();
   assert.equal(lifecycle.interruptToThinking(), true);
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.THINKING);
+  assert.equal(lifecycle.isConversationActive(), true);
 });
 
 test("V2 lifecycle: invalid jumps are rejected", () => {
   const lifecycle = new VoiceLifecycleV2();
   assert.equal(lifecycle.beginSpeaking(), false);
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.READY);
+});
+
+test("V2 session: ordinary acknowledgement does not end conversation", () => {
+  const lifecycle = new VoiceLifecycleV2();
+  lifecycle.activateListening();
+  assert.equal(lifecycle.shouldEndConversation("Okay"), false);
+  assert.equal(lifecycle.shouldEndConversation("Thanks"), false);
+  assert.equal(lifecycle.isConversationActive(), true);
+});
+
+test("V2 session: explicit farewell ends conversation", () => {
+  const lifecycle = new VoiceLifecycleV2();
+  lifecycle.activateListening();
+  assert.equal(lifecycle.shouldEndConversation("Okay, goodbye."), true);
+  assert.equal(lifecycle.shouldEndConversation("Bye H.A.I.V.A."), true);
+  assert.equal(lifecycle.shouldEndConversation("Okay, thank you H.A.I.V.A., goodbye."), true);
+  assert.equal(lifecycle.endSession(), true);
+  assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.READY);
+  assert.equal(lifecycle.isConversationActive(), false);
 });
