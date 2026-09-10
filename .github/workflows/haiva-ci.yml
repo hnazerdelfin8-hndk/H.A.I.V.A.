@@ -35,6 +35,9 @@ jobs:
       - name: Run isolated V3 voice interaction tests
         run: node --test tests/voice-interaction-v3.test.js
 
+      - name: Run V1 V2 V3 voice boundary tests
+        run: node --test tests/voice-layer-boundary.test.js
+
       - name: Run boot architecture contract tests
         run: node --test tests/boot-contracts.test.js
 
