@@ -1,0 +1,274 @@
+// =========================================
+// H.A.I.V.A. VOICE INTERACTION
+// =========================================
+// Single internal coordinator for V1/V2/V3.
+// V1 = capture only.
+// V2 = lifecycle only.
+// V3 = stopper / interruption only.
+// Core App receives voice input/outcomes from this boundary only.
+
+import { v1Capture } from "./v1/capture-controller.js";
+import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
+import { createVoiceInteractionV3 } from "./v3/interaction-v3.js";
+import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak } from "../ui-bridge.js";
+
+export const VOICE_INTERACTION_EVENTS = Object.freeze({
+  INPUT: "haiva:voice-interaction-input",
+  OUTCOME: "haiva:voice-interaction-outcome",
+  STATE: "haiva:voice-interaction-state",
+  ERROR: "haiva:voice-interaction-error"
+});
+
+export class VoiceInteraction {
+  constructor({ onInput = null, onOutcome = null, onStateChange = null, onTranscript = null } = {}) {
+    this.onInput = typeof onInput === "function" ? onInput : null;
+    this.onOutcome = typeof onOutcome === "function" ? onOutcome : null;
+    this.onStateChange = typeof onStateChange === "function" ? onStateChange : null;
+    this.onTranscript = typeof onTranscript === "function" ? onTranscript : null;
+
+    this.lifecycle = new VoiceLifecycleV2({
+      onStateChange: (state, previousState) => this.reportState(state, previousState)
+    });
+    this.interruption = createVoiceInteractionV3();
+
+    this.nativeVoice = hasNativeVoiceBridge();
+    this.active = false;
+    this.listening = false;
+    this.processing = false;
+    this.speaking = false;
+    this.pendingResult = false;
+    this.recoveryAttempts = 0;
+    this.turn = 0;
+    this.initialized = false;
+  }
+
+  initialize() {
+    if (this.initialized) return;
+    this.initialized = true;
+    this.bindV1Events();
+    this.bindNativeCaptureEvents();
+    this.bindV3Requests();
+  }
+
+  reportState(state, previousState) {
+    const detail = { state, previousState, source: "voice-interaction" };
+    this.onStateChange?.(state, previousState);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.STATE, { detail }));
+    }
+  }
+
+  reportInput(text, source = "v1") {
+    const command = removeWakeWord(normalizeSpeech(String(text || ""))).trim();
+    if (!command) return false;
+    const detail = { type: "VOICE_INPUT", text: command, source, turn: this.turn };
+    this.onInput?.(command, detail);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.INPUT, { detail }));
+    }
+    return true;
+  }
+
+  reportOutcome(outcome) {
+    const detail = {
+      type: "VOICE_OUTCOME",
+      ...outcome,
+      source: "voice-interaction",
+      turn: this.turn
+    };
+    this.onOutcome?.(detail);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.OUTCOME, { detail }));
+    }
+  }
+
+  bindV1Events() {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("haiva:v1-capture-result", event => {
+      if (!this.active || this.processing || this.pendingResult) return;
+
+      const text = event.detail?.text;
+      if (!text) return;
+
+      // V3 is consulted here only for an active SPEAKING turn.
+      // Normal capture remains V1 -> Voice Interaction.
+      if (this.speaking) {
+        const interruption = this.interruption.interrupt(text, this.turn);
+        if (interruption.interrupted) {
+          this.handleInterruption(interruption);
+          return;
+        }
+      }
+
+      if (!this.acceptResult()) return;
+      this.listening = false;
+      this.reportInput(text, event.detail?.source || "v1");
+    });
+
+    window.addEventListener("haiva:v1-capture-error", event => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.listening = false;
+      this.reportError("v1", event.detail?.error || "capture-error");
+    });
+  }
+
+  bindNativeCaptureEvents() {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("haiva:native-voice-ready", () => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.listening = true;
+      this.lifecycle.activateListening();
+    });
+
+    window.addEventListener("haiva:native-voice-begin", () => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.recoveryAttempts = 0;
+      this.listening = true;
+      this.lifecycle.activateListening();
+    });
+
+    window.addEventListener("haiva:native-voice-partial", event => {
+      if (!this.active || this.processing || this.speaking) return;
+      const text = normalizeSpeech(event.detail?.text || "");
+      if (!text) return;
+      this.listening = true;
+      this.onTranscript?.(text);
+    });
+
+    window.addEventListener("haiva:native-voice-timeout", () => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.listening = false;
+      this.lifecycle.finishReady();
+    });
+
+    window.addEventListener("haiva:native-voice-error", event => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.listening = false;
+      this.reportError("native", Number(event.detail?.code));
+    });
+  }
+
+  bindV3Requests() {
+    if (typeof window === "undefined") return;
+
+    // V3 may request a fresh capture after an interruption.
+    window.addEventListener("haiva:v3-capture-request", () => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.startListening();
+    });
+
+    window.addEventListener("haiva:v3-capture-stop", () => {
+      this.stopListening();
+    });
+  }
+
+  handleInterruption(result) {
+    this.speaking = false;
+    this.processing = false;
+    this.pendingResult = false;
+    this.listening = false;
+    this.turn = result.turn;
+
+    this.lifecycle.interruptToThinking();
+    this.reportOutcome({
+      type: "VOICE_INTERRUPT",
+      instruction: result.instruction || "",
+      interrupted: true,
+      previousTurn: result.previousTurn
+    });
+
+    if (result.instruction) this.reportInput(result.instruction, "v3-interruption");
+  }
+
+  acceptResult() {
+    if (!this.active || this.processing || this.speaking || this.pendingResult) return false;
+    this.pendingResult = true;
+    return true;
+  }
+
+  activate() {
+    this.initialize();
+    if (this.active) return true;
+    if (!this.nativeVoice && typeof window !== "undefined" && !(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      this.reportError("availability", "VOICE_UNAVAILABLE");
+      return false;
+    }
+
+    this.active = true;
+    this.turn = this.interruption.beginTurn();
+    this.recoveryAttempts = 0;
+    this.pendingResult = false;
+    this.lifecycle.startSession();
+    this.startListening();
+    return true;
+  }
+
+  deactivate() {
+    this.active = false;
+    this.processing = false;
+    this.speaking = false;
+    this.pendingResult = false;
+    this.stopListening();
+    this.lifecycle.endSession();
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
+  }
+
+  startListening() {
+    if (!this.active || this.listening || this.processing || this.speaking) return false;
+    this.listening = true;
+    this.lifecycle.activateListening();
+    v1Capture.startCapture();
+    return true;
+  }
+
+  stopListening() {
+    this.listening = false;
+    v1Capture.stopCapture();
+  }
+
+  beginProcessing() {
+    if (!this.active) return;
+    this.processing = true;
+    this.stopListening();
+    this.lifecycle.beginThinking();
+  }
+
+  async beginSpeaking(text) {
+    if (!this.active) return;
+    this.processing = false;
+    this.speaking = true;
+    this.lifecycle.beginSpeaking();
+    try {
+      await speak(text);
+    } finally {
+      this.speaking = false;
+    }
+  }
+
+  finishCommand(shouldEnd = false) {
+    this.processing = false;
+    this.pendingResult = false;
+
+    if (shouldEnd || !this.active) {
+      this.active = false;
+      this.stopListening();
+      this.lifecycle.endSession();
+      return;
+    }
+
+    this.lifecycle.returnToListening();
+    this.startListening();
+  }
+
+  reportError(source, error) {
+    const detail = { type: "VOICE_ERROR", source, error, turn: this.turn };
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.ERROR, { detail }));
+    }
+    this.onOutcome?.(detail);
+  }
+}
+
+export const createVoiceInteraction = options => new VoiceInteraction(options);
