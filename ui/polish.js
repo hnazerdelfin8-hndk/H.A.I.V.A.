@@ -1,8 +1,6 @@
 // H.A.I.V.A. visual/UX polish layer.
 // Keeps the main shell modular so the UI can be replaced without touching the core engine.
 
-import "../core/voice/barge-in-runtime.js";
-
 const style = document.createElement("style");
 style.textContent = `
   .haiva-live-indicator { display:inline-flex; align-items:center; gap:7px; }
