@@ -8,17 +8,20 @@ on:
   workflow_dispatch:
 
 # Build current main exactly as packaged for Android verification.
-# Fresh phone-test build trigger: 2026-09-07
+# Fresh phone-test build trigger: 2026-09-10
+# V2 lifecycle contract is now included in core validation.
 jobs:
   core-validation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
+
       - name: Validate JavaScript syntax
         shell: bash
         run: |
@@ -26,16 +29,22 @@ jobs:
           find . -type f -name '*.js' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
             node --check "$file"
           done
+
       - name: Run core contract tests
         run: node --test tests/core-contracts.test.js
+
       - name: Run isolated V3 voice interaction tests
         run: node --test tests/voice-interaction-v3.test.js
+
       - name: Run V1 V2 V3 voice boundary tests
         run: node --test tests/voice-layer-boundary.test.js
+
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
+
       - name: Run boot architecture contract tests
         run: node --test tests/boot-contracts.test.js
+
       - name: Validate orchestrator and router
         run: |
           node --check core/orchestrator/index.js
@@ -46,13 +55,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
       - name: Package H.A.I.V.A. web core into APK assets
         shell: bash
         run: |
@@ -63,6 +75,7 @@ jobs:
           cp -R core android/app/src/main/assets/haiva/
           cp -R ui android/app/src/main/assets/haiva/
           if [ -d skills ]; then cp -R skills android/app/src/main/assets/haiva/; fi
+
       - name: Build source manifest
         shell: bash
         run: |
@@ -72,12 +85,15 @@ jobs:
             sha256sum "$file"
           done | awk '{print $1"  assets/haiva/"$2}' > /tmp/haiva-source-manifest.sha256
           echo "Source manifest entries: $(wc -l < /tmp/haiva-source-manifest.sha256)"
+
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon
+
       - name: Verify APK exists
         shell: bash
         run: test -s android/app/build/outputs/apk/debug/app-debug.apk
+
       - name: Verify source to APK asset synchronization
         shell: bash
         run: |
@@ -96,6 +112,7 @@ jobs:
           fi
           echo "SOURCE ↔ APK synchronization: PASS"
           echo "Matched assets: $(wc -l < /tmp/haiva-source-manifest.sha256)"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
