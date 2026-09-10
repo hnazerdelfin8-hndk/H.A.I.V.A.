@@ -8,6 +8,7 @@ import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { createSpeechRecognition } from "./voice/speech-to-text.js";
 import { v1Capture } from "./voice/v1/capture-controller.js";
+import { VoiceLifecycleV2 } from "./voice/v2/lifecycle-coordinator.js";
 import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, removeWakeWord, hasNativeVoiceBridge } from "./ui-bridge.js";
 import { bootCheckpoint } from "./boot-diagnostics.js";
 
@@ -29,6 +30,7 @@ class HAIVA {
     this.voiceTurn = 0;
     this.pendingVoiceResult = false;
     this.conversationalVoice = true;
+    this.voiceLifecycle = new VoiceLifecycleV2();
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
@@ -105,9 +107,16 @@ class HAIVA {
   }
 
   async handleTextCommand(command, speakResponse = false) {
+    const isVoiceTurn = Boolean(speakResponse);
+    const isInterrupt = isVoiceTurn && this.voiceLifecycle.state === "SPEAKING";
+    const shouldEndConversation = isVoiceTurn && this.voiceLifecycle.shouldEndConversation(command);
     this.isProcessing = true;
     this.stopListening();
     this.showTranscript(command);
+    if (isVoiceTurn) {
+      if (isInterrupt) this.voiceLifecycle.interruptToThinking();
+      else this.voiceLifecycle.beginThinking();
+    }
     this.setState("THINKING");
     try {
       const response = await this.assistant.respond(command);
@@ -115,15 +124,23 @@ class HAIVA {
       this.showResponse(answer);
       if (speakResponse) {
         this.isSpeaking = true;
+        this.voiceLifecycle.beginSpeaking();
         this.setState("SPEAKING");
         try { await speak(answer); }
         catch (speechError) { console.warn("Voice response failed:", speechError); }
         finally { this.isSpeaking = false; }
       }
-      this.setState("READY");
+      if (isVoiceTurn) {
+        if (shouldEndConversation) this.voiceLifecycle.endSession();
+        else if (!this.voiceLifecycle.isConversationActive()) this.voiceLifecycle.startSession();
+        if (!shouldEndConversation) this.voiceLifecycle.returnToListening();
+      } else {
+        this.setState("READY");
+      }
     } catch (error) {
       console.error("Text command failed:", error);
       this.showResponse(CONFIG.assistant.fallbackResponse);
+      if (isVoiceTurn) this.voiceLifecycle.endSession();
       this.setState("ERROR");
     } finally {
       this.isProcessing = false;
@@ -131,7 +148,7 @@ class HAIVA {
       this.voiceSilenceRetries = 0;
       this.pendingVoiceResult = false;
       if (this.state === "ERROR") this.setState("READY");
-      this.voiceActivated = speakResponse && this.conversationalVoice;
+      this.voiceActivated = isVoiceTurn && this.conversationalVoice && this.voiceLifecycle.isConversationActive();
       this.nativeVoiceReady = false;
       setVoiceButtonActive(this.voiceActivated);
       if (this.voiceActivated) this.startListening();
@@ -340,6 +357,8 @@ class HAIVA {
     }
     this.voiceSilenceRetries = 0;
     this.voiceActivated = true;
+    this.voiceLifecycle.startSession();
+    this.voiceLifecycle.transition("LISTENING");
     this.intentionalStop = false;
     this.lastTranscript = "";
     this.pendingVoiceResult = false;
@@ -350,6 +369,7 @@ class HAIVA {
 
   deactivateVoice() {
     this.voiceActivated = false;
+    this.voiceLifecycle.endSession();
     this.lastTranscript = "";
     this.pendingVoiceResult = false;
     this.nativeVoiceReady = false;
@@ -369,6 +389,7 @@ class HAIVA {
     this.intentionalStop = false;
     if (this.nativeVoice) {
       this.isListening = true;
+      this.voiceLifecycle.transition("LISTENING");
       this.setState("LISTENING");
       v1Capture.startCapture();
       return;
@@ -433,6 +454,7 @@ class HAIVA {
         this.startListening();
       } else {
         this.voiceActivated = false;
+        this.voiceLifecycle.endSession();
         setVoiceButtonActive(false);
         this.setState("READY");
       }
