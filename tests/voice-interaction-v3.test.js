@@ -5,7 +5,7 @@ import {
   createVoiceInteractionV3,
   detectVoiceInterrupt,
   parseStopAndInstruction
-} from "../core/voice/interaction-v3.js";
+} from "../core/voice/v3/interaction-v3.js";
 
 test("V3 interrupt vocabulary recognizes natural English and Tagalog stop phrases", () => {
   for (const phrase of ["stop", "hinto", "hinto muna", "teka lang", "sandali", "wait lang", "huwag na", "never mind"]) {
@@ -29,29 +29,18 @@ test("V3 parser treats STOP alone as interruption with no new instruction", () =
 
 test("V3 parser extracts a new instruction after STOP", () => {
   const result = parseStopAndInstruction("Stop, gumawa ka ng summary.");
-  assert.deepEqual(result, {
-    interrupted: true,
-    phrase: "stop",
-    instruction: "gumawa ka ng summary"
-  });
+  assert.deepEqual(result, { interrupted: true, phrase: "stop", instruction: "gumawa ka ng summary" });
 });
 
 test("V3 parser extracts a new instruction after HINTO", () => {
   const result = parseStopAndInstruction("Hinto, buksan mo ang calendar");
-  assert.deepEqual(result, {
-    interrupted: true,
-    phrase: "hinto",
-    instruction: "buksan mo ang calendar"
-  });
+  assert.deepEqual(result, { interrupted: true, phrase: "hinto", instruction: "buksan mo ang calendar" });
 });
 
 test("V3 coordinator commits one authoritative result per turn", () => {
   const coordinator = createVoiceInteractionV3();
   const turn = coordinator.beginTurn();
-  assert.deepEqual(coordinator.commitResult(turn, "Hello Haiva"), {
-    turn,
-    text: "hello haiva"
-  });
+  assert.deepEqual(coordinator.commitResult(turn, "Hello Haiva"), { turn, text: "hello haiva" });
   assert.equal(coordinator.commitResult(turn, "duplicate"), null);
 });
 
