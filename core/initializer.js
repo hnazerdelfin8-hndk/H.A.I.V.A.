@@ -4,11 +4,15 @@
 
 import { CONFIG } from "./config.js";
 import { registerDefaultSkills } from "./skill-manager.js";
+import { confirmCoreBootReady } from "./boot-ready.js";
 
 let initialized = false;
 
 export async function initializeHAIVA() {
-  if (initialized) return { ready: true, alreadyInitialized: true };
+  if (initialized) {
+    confirmCoreBootReady({ alreadyInitialized: true });
+    return { ready: true, alreadyInitialized: true };
+  }
 
   console.log(`Starting ${CONFIG.app.name} v${CONFIG.app.version}...`);
 
@@ -27,12 +31,16 @@ export async function initializeHAIVA() {
     initialized = true;
     console.log("H.A.I.V.A. core initialization complete.");
 
-    return {
+    const result = {
       ready: true,
       degraded: warnings.length > 0,
       warnings,
       version: CONFIG.app.version
     };
+
+    // Explicit boot success boundary. Runtime READY remains owned by app.js.
+    confirmCoreBootReady({ degraded: result.degraded, version: result.version });
+    return result;
   } catch (error) {
     console.error("H.A.I.V.A. initialization failed:", error);
     const message = error?.message || String(error || "Unknown initialization error");
