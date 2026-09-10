@@ -17,11 +17,8 @@ let fatalBoot = false;
 let timeout = null;
 
 function progress(percent, message, step) {
-  try {
-    window.haivaBootProgress?.(percent, message, step);
-  } catch (error) {
-    console.warn("[HAIVA-BOOT] progress update failed", error);
-  }
+  try { window.haivaBootProgress?.(percent, message, step); }
+  catch (error) { console.warn("[HAIVA-BOOT] progress update failed", error); }
 }
 
 bootCheckpoint("BOOT_MODULE_STARTED");
@@ -52,13 +49,13 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   syncControls();
 }
 
-function loadOptionalV3() {
-  // V3 is a post-boot control layer. It must never be part of the boot
-  // success/failure boundary and must not be allowed to block the core.
+function loadVoiceInteraction() {
+  // V1/V2/V3 are one Voice Interaction system, but voice controls are loaded
+  // only after Core Boot Ready so a voice-module failure can never brick boot.
   queueMicrotask(() => {
-    import("./voice/barge-in-runtime.js")
-      .then(() => bootCheckpoint("V3_RUNTIME_LOADED", "post-boot optional control layer"))
-      .catch(error => console.warn("[HAIVA-BOOT] Optional V3 runtime unavailable:", error?.message || error));
+    import("./voice/v3/barge-in-runtime.js")
+      .then(() => bootCheckpoint("VOICE_INTERACTION_V3_LOADED", "post-boot voice control layer"))
+      .catch(error => console.warn("[HAIVA-BOOT] Voice Interaction V3 unavailable:", error?.message || error));
   });
 }
 
@@ -71,7 +68,7 @@ function confirmBootReady(detail = {}) {
   progress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
   setBootUI("READY", "H.A.I.V.A. core is online. Ready, Master.", "● CORE READY");
   syncControls();
-  loadOptionalV3();
+  loadVoiceInteraction();
 }
 
 setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
@@ -79,10 +76,7 @@ syncControls();
 bootCheckpoint("BOOT_UI_INITIALIZED");
 progress(42, "Initializing H.A.I.V.A. core…", 1);
 
-window.addEventListener("haiva:boot-ready", event => {
-  confirmBootReady(event.detail || {});
-}, true);
-
+window.addEventListener("haiva:boot-ready", event => confirmBootReady(event.detail || {}), true);
 window.addEventListener("haiva:boot-failure", event => {
   const stage = event.detail?.stage || "BOOT_FAILED";
   const message = event.detail?.message || "H.A.I.V.A. core failed during startup.";
@@ -94,19 +88,15 @@ window.addEventListener("haiva:boot-failure", event => {
   setBootUI("ERROR", message, "● CORE ERROR");
   syncControls();
 }, true);
-
 window.addEventListener("error", event => {
   const target = event.target;
   if (target && target.tagName === "SCRIPT") failBoot(event.message || `Failed to load ${target.src}`, "SCRIPT_LOAD_FAILED");
   else if (event.error) failBoot(event.error, "RUNTIME_ERROR");
 }, true);
-
 window.addEventListener("unhandledrejection", event => failBoot(event.reason || "Unhandled promise rejection", "UNHANDLED_REJECTION"));
 
 timeout = setTimeout(() => {
-  if (!bootReadyConfirmed && !fatalBoot) {
-    failBoot(new Error(`Boot did not reach explicit CORE READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
-  }
+  if (!bootReadyConfirmed && !fatalBoot) failBoot(new Error(`Boot did not reach explicit CORE READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
 }, BOOT_TIMEOUT_MS);
 
 import("./app.js")
