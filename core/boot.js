@@ -52,6 +52,16 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   syncControls();
 }
 
+function loadOptionalV3() {
+  // V3 is a post-boot control layer. It must never be part of the boot
+  // success/failure boundary and must not be allowed to block the core.
+  queueMicrotask(() => {
+    import("./voice/barge-in-runtime.js")
+      .then(() => bootCheckpoint("V3_RUNTIME_LOADED", "post-boot optional control layer"))
+      .catch(error => console.warn("[HAIVA-BOOT] Optional V3 runtime unavailable:", error?.message || error));
+  });
+}
+
 function confirmBootReady(detail = {}) {
   if (fatalBoot || bootReadyConfirmed) return;
   bootReadyConfirmed = true;
@@ -61,6 +71,7 @@ function confirmBootReady(detail = {}) {
   progress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
   setBootUI("READY", "H.A.I.V.A. core is online. Ready, Master.", "● CORE READY");
   syncControls();
+  loadOptionalV3();
 }
 
 setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
