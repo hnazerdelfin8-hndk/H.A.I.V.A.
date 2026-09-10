@@ -7,6 +7,7 @@ import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { createSpeechRecognition } from "./voice/speech-to-text.js";
+import { v1Capture } from "./voice/v1/capture-controller.js";
 import { setUIState, setVoiceButtonActive, speak, normalizeSpeech, removeWakeWord, hasNativeVoiceBridge } from "./ui-bridge.js";
 import { bootCheckpoint } from "./boot-diagnostics.js";
 
@@ -154,9 +155,6 @@ class HAIVA {
         this.setState("LISTENING");
       }
     });
-    // Android's onEndOfSpeech is only a speech-segment boundary. It must NOT
-    // transition H.A.I.V.A. to READY because the native recognizer can still
-    // deliver the final result for the active conversational turn.
     window.addEventListener("haiva:native-voice-segment-end", () => {
       if (this.voiceActivated && !this.isSpeaking && !this.isProcessing) {
         this.nativeVoiceReady = false;
@@ -372,14 +370,7 @@ class HAIVA {
     if (this.nativeVoice) {
       this.isListening = true;
       this.setState("LISTENING");
-      try { window.HaivaBridge.startVoiceCapture(); }
-      catch (error) {
-        this.isListening = false;
-        this.voiceActivated = false;
-        this.nativeVoiceReady = false;
-        setVoiceButtonActive(false);
-        this.setState("VOICE ERROR");
-      }
+      v1Capture.startCapture();
       return;
     }
     if (!this.recognition) return;
@@ -389,7 +380,7 @@ class HAIVA {
   stopListening() {
     this.intentionalStop = true;
     if (this.nativeVoice) {
-      try { window.HaivaBridge.stopVoiceCapture(); } catch (error) { console.debug("Native recognition stop skipped:", error?.message || error); }
+      v1Capture.stopCapture();
     }
     if (this.recognition) {
       try { this.recognition.stop(); } catch (error) { console.debug("Recognition stop skipped:", error?.message || error); }
