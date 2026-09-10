@@ -2,11 +2,9 @@
 // H.A.I.V.A. V2 VOICE LIFECYCLE COORDINATOR
 // =========================================
 // V2 owns lifecycle/state sequencing and conversation-session authority.
-// V1 owns voice capture. V3 owns interruption control.
-// Boot Loader remains outside this lifecycle boundary.
-//
-// IMPORTANT: V2 does not call V1, V3, Boot Loader, UI, or Core App.
-// It only owns the internal lifecycle state and emits lifecycle events.
+// V1 owns capture. V3 owns interruption control.
+// V2 reports state only to its owning Voice Interaction coordinator.
+// It never calls V1, V3, Boot Loader, UI, Core App, Brain, or Skills.
 
 const STATES = Object.freeze({
   READY: "READY",
@@ -28,17 +26,6 @@ const END_CONVERSATION_PATTERNS = Object.freeze([
   /\bbye\s*(?:h\.?a\.?i\.?v\.?a\.?)?\b/i,
   /\bgoodbye\s*(?:h\.?a\.?i\.?v\.?a\.?)?\b/i
 ]);
-
-function emitLifecycleEvent(nextState, previousState) {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("haiva:v2-state-change", {
-    detail: {
-      state: nextState,
-      previousState,
-      source: "v2"
-    }
-  }));
-}
 
 export class VoiceLifecycleV2 {
   constructor({ onStateChange = null } = {}) {
@@ -62,13 +49,11 @@ export class VoiceLifecycleV2 {
     const previousState = this.state;
     this.state = nextState;
 
-    // Keep session ownership synchronized with the lifecycle state.
     if (nextState === STATES.READY) this.sessionActive = false;
     else if (!this.sessionActive) this.sessionActive = true;
 
     try {
       this.onStateChange?.(nextState, previousState);
-      emitLifecycleEvent(nextState, previousState);
     } finally {
       this.transitionInProgress = false;
     }
