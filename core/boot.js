@@ -35,7 +35,7 @@ function setBootUI(state, message, conversation) {
 }
 
 function syncControls() {
-  const ready = document.body.dataset.haivaState === "ready" && bootReadyConfirmed && !fatalBoot;
+  const ready = bootReadyConfirmed && !fatalBoot;
   if (input) input.disabled = !ready;
   if (send) send.disabled = !ready;
   if (mic) mic.disabled = !ready;
@@ -52,15 +52,14 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   syncControls();
 }
 
-function confirmBootReady() {
-  if (fatalBoot || bootReadyConfirmed || document.body.dataset.haivaState !== "ready") return;
-  progress(92, "Core initialized. Finalizing H.A.I.V.A. interface…", 3);
+function confirmBootReady(detail = {}) {
+  if (fatalBoot || bootReadyConfirmed) return;
   bootReadyConfirmed = true;
   if (timeout) clearTimeout(timeout);
-  bootCheckpoint("BOOT_READY", "runtime state READY confirmed");
+  bootCheckpoint("BOOT_READY", JSON.stringify(detail));
   bootCheckpoint("CORE_READY", "H.A.I.V.A. core startup gate passed");
   progress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
-  if (conversationState) conversationState.textContent = "● CORE READY";
+  setBootUI("READY", "H.A.I.V.A. core is online. Ready, Master.", "● CORE READY");
   syncControls();
 }
 
@@ -68,6 +67,10 @@ setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
 syncControls();
 bootCheckpoint("BOOT_UI_INITIALIZED");
 progress(42, "Initializing H.A.I.V.A. core…", 1);
+
+window.addEventListener("haiva:boot-ready", event => {
+  confirmBootReady(event.detail || {});
+}, true);
 
 window.addEventListener("haiva:boot-failure", event => {
   const stage = event.detail?.stage || "BOOT_FAILED";
@@ -89,26 +92,9 @@ window.addEventListener("error", event => {
 
 window.addEventListener("unhandledrejection", event => failBoot(event.reason || "Unhandled promise rejection", "UNHANDLED_REJECTION"));
 
-const observer = new MutationObserver(() => {
-  const state = document.body.dataset.haivaState || "unknown";
-  const last = sessionStorage.getItem("haiva.boot.last.state");
-  if (last !== state) {
-    try { sessionStorage.setItem("haiva.boot.last.state", state); } catch {}
-    bootCheckpoint(`STATE_${state.toUpperCase()}`);
-  }
-  if (state === "ready") confirmBootReady();
-  if (state === "error") {
-    bootCheckpoint("RUNTIME_ERROR_STATE");
-    syncControls();
-  } else if (!bootReadyConfirmed || fatalBoot) {
-    syncControls();
-  }
-});
-observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiva-state"] });
-
 timeout = setTimeout(() => {
-  if (!bootReadyConfirmed && !fatalBoot && document.body.dataset.haivaState !== "ready") {
-    failBoot(new Error(`Boot did not reach READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
+  if (!bootReadyConfirmed && !fatalBoot) {
+    failBoot(new Error(`Boot did not reach explicit CORE READY within ${BOOT_TIMEOUT_MS}ms`), "BOOT_TIMEOUT");
   }
 }, BOOT_TIMEOUT_MS);
 
@@ -117,6 +103,5 @@ import("./app.js")
     bootCheckpoint("APP_MODULE_LOADED");
     progress(68, "H.A.I.V.A. core module loaded. Preparing runtime…", 2);
     syncControls();
-    if (!fatalBoot && document.body.dataset.haivaState === "ready") confirmBootReady();
   })
   .catch(error => failBoot(error, "APP_MODULE_LOAD_FAILED"));
