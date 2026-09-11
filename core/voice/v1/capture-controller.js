@@ -20,6 +20,13 @@ function emitResult(text) {
   }));
 }
 
+function emitCaptureError(error) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haiva:v1-capture-error", {
+    detail: { source: "v1", error }
+  }));
+}
+
 function stopBrowserCapture() {
   if (!browserRecognizer) return;
   try { browserRecognizer.abort(); } catch (_) {}
@@ -45,15 +52,16 @@ function startBrowserCapture() {
     recognition.onerror = error => {
       browserRecognizer = null;
       captureActive = false;
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("haiva:v1-capture-error", {
-          detail: { source: "v1", error: error?.error || "unknown" }
-        }));
-      }
+      emitCaptureError(error?.error || "unknown");
     };
     recognition.onend = () => {
       browserRecognizer = null;
+      const wasActive = captureActive;
       captureActive = false;
+      // A browser recognizer can end without producing a final result.
+      // Report that capture boundary so VoiceInteraction can recover instead
+      // of leaving the conversational lifecycle stuck in LISTENING.
+      if (wasActive) emitCaptureError("capture-ended");
     };
     recognition.start();
     return true;
