@@ -9,27 +9,36 @@ test("voice connector events have one Android producer and bounded recovery path
   const controls = await read("core/phase1-controls.js");
   const android = await read("android/app/src/main/java/com/haiva/app/MainActivity.kt");
 
-  assert.match(app, /haiva:native-voice-timeout/);
+  assert.doesNotMatch(app, /haiva:native-voice-timeout/);
   assert.match(app, /setState\("VOICE UNAVAILABLE"\)/);
   assert.match(controls, /haiva:native-voice-unavailable/);
   assert.match(android, /dispatchVoiceUnavailable/);
 });
 
-test("voice state machine has one core orchestration path", async () => {
+test("Core App connects to Voice Interaction only", async () => {
+  const app = await read("core/app.js");
+  const interaction = await read("core/voice/interaction.js");
+
+  assert.match(app, /createVoiceInteraction/);
+  assert.doesNotMatch(app, /createSpeechRecognition/);
+  assert.doesNotMatch(app, /v1Capture/);
+  assert.doesNotMatch(app, /VoiceLifecycleV2/);
+  assert.doesNotMatch(app, /haiva:native-voice-/);
+  assert.match(interaction, /v1Capture/);
+  assert.match(interaction, /VoiceLifecycleV2/);
+  assert.match(interaction, /createVoiceInteractionV3/);
+});
+
+test("V1 capture remains internal to Voice Interaction", async () => {
   const app = await read("core/app.js");
   const v1 = await read("core/voice/v1/capture-controller.js");
-  const v2 = await read("core/voice/v2/lifecycle-coordinator.js");
 
-  assert.match(app, /setState\(/);
-  assert.match(app, /v1Capture\.startCapture/);
-  assert.match(app, /v1Capture\.stopCapture/);
-  assert.doesNotMatch(app, /window\.HaivaBridge\.startVoiceCapture/);
-  assert.doesNotMatch(app, /window\.HaivaBridge\.stopVoiceCapture/);
+  assert.doesNotMatch(app, /startCapture/);
+  assert.doesNotMatch(app, /stopCapture/);
   assert.match(v1, /startVoiceCapture/);
   assert.match(v1, /stopVoiceCapture/);
-  assert.match(v2, /class VoiceLifecycleV2/);
-  assert.match(v2, /beginThinking/);
-  assert.match(v2, /beginSpeaking/);
+  assert.doesNotMatch(v1, /haiva:v3-capture-request/);
+  assert.doesNotMatch(v1, /haiva:v3-capture-stop/);
 });
 
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
