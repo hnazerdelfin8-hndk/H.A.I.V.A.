@@ -105,8 +105,9 @@ export class VoiceInteraction {
     window.addEventListener("haiva:v1-capture-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
+      // A capture error with no usable speech is a normal end-of-listening
+      // condition. Silence/no-match must never become the UI's VOICE ERROR.
       this.lifecycle.finishReady();
-      this.reportError("v1", event.detail?.error || "capture-error");
     });
   }
 
@@ -166,8 +167,10 @@ export class VoiceInteraction {
     window.addEventListener("haiva:native-voice-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
+      // Android SpeechRecognizer reports NO_MATCH, SPEECH_TIMEOUT and some
+      // benign session/client endings through onError. They are not failures
+      // of H.A.I.V.A.'s voice interaction. Recover to READY silently.
       this.lifecycle.finishReady();
-      this.reportError("native", Number(event.detail?.code));
     });
   }
 
