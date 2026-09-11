@@ -112,24 +112,22 @@ export class VoiceInteraction {
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
-    // Native capture events belong to Voice Interaction, not Core App.
+    // Native events are capture telemetry only. VoiceInteraction remains the
+    // single coordinator, while V2 remains the sole lifecycle authority.
     window.addEventListener("haiva:native-voice-ready", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = true;
-      this.lifecycle.activateListening();
     });
 
     window.addEventListener("haiva:native-voice-begin", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.recoveryAttempts = 0;
       this.listening = true;
-      this.lifecycle.activateListening();
     });
 
     window.addEventListener("haiva:native-voice-segment-end", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = true;
-      this.lifecycle.activateListening();
     });
 
     window.addEventListener("haiva:native-voice-partial", event => {
