@@ -1,7 +1,8 @@
 // =========================================
 // H.A.I.V.A. V1 VOICE CAPTURE CONTROLLER
 // =========================================
-// V1 owns capture only. It reports capture results to Voice Interaction.
+// V1 is the capture worker inside Voice Interaction.
+// Voice Interaction owns the session and requests V1 capture.
 // V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
@@ -84,12 +85,6 @@ function stopCapture() {
     try { window.HaivaBridge.stopVoiceCapture(); } catch (_) {}
   }
   stopBrowserCapture();
-}
-
-if (typeof window !== "undefined") {
-  // Voice Interaction is the only requester of V1 capture.
-  window.addEventListener("haiva:v3-capture-request", () => startCapture());
-  window.addEventListener("haiva:v3-capture-stop", stopCapture);
 }
 
 export const v1Capture = Object.freeze({ startCapture, stopCapture });
