@@ -7,6 +7,13 @@ const interaction = readFileSync(new URL("../core/voice/interaction.js", import.
 const v1 = readFileSync(new URL("../core/voice/v1/capture-controller.js", import.meta.url), "utf8");
 const v3 = readFileSync(new URL("../core/voice/v3/barge-in-runtime.js", import.meta.url), "utf8");
 
+function nativeHandlerBody(source, eventName) {
+  const escaped = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = source.match(new RegExp(`window\\.addEventListener\\("${escaped}", \\(\\\\) => \\{([\\s\\S]*?)\\n    \\}\\);`));
+  assert.ok(match, `${eventName} handler missing`);
+  return match[1];
+}
+
 test("voice boundary: Voice Interaction owns the voice domain", () => {
   assert.match(app, /createVoiceInteraction/);
   assert.match(interaction, /v1Capture/);
@@ -31,12 +38,13 @@ test("voice boundary: V1 is a capture worker only", () => {
 });
 
 test("voice boundary: native capture events do not authorize V2 lifecycle", () => {
-  assert.match(interaction, /haiva:native-voice-ready/);
-  assert.match(interaction, /haiva:native-voice-begin/);
-  assert.match(interaction, /haiva:native-voice-segment-end/);
-  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-ready",[\s\S]*?\{[^}]*activateListening\(\)/);
-  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-begin",[\s\S]*?\{[^}]*activateListening\(\)/);
-  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-segment-end",[\s\S]*?\{[^}]*activateListening\(\)/);
+  for (const eventName of [
+    "haiva:native-voice-ready",
+    "haiva:native-voice-begin",
+    "haiva:native-voice-segment-end"
+  ]) {
+    assert.doesNotMatch(nativeHandlerBody(interaction, eventName), /activateListening\(\)/);
+  }
 });
 
 test("voice boundary: V3 does not own SpeechRecognition or native capture", () => {
