@@ -105,6 +105,7 @@ export class VoiceInteraction {
     window.addEventListener("haiva:v1-capture-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
+      this.lifecycle.finishReady();
       this.reportError("v1", event.detail?.error || "capture-error");
     });
   }
@@ -165,6 +166,7 @@ export class VoiceInteraction {
     window.addEventListener("haiva:native-voice-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
+      this.lifecycle.finishReady();
       this.reportError("native", Number(event.detail?.code));
     });
   }
