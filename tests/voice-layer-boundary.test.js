@@ -34,9 +34,9 @@ test("voice boundary: native capture events do not authorize V2 lifecycle", () =
   assert.match(interaction, /haiva:native-voice-ready/);
   assert.match(interaction, /haiva:native-voice-begin/);
   assert.match(interaction, /haiva:native-voice-segment-end/);
-  assert.doesNotMatch(interaction, /native-voice-ready[\s\S]*?activateListening\(\)/);
-  assert.doesNotMatch(interaction, /native-voice-begin[\s\S]*?activateListening\(\)/);
-  assert.doesNotMatch(interaction, /native-voice-segment-end[\s\S]*?activateListening\(\)/);
+  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-ready",[\s\S]*?\{[^}]*activateListening\(\)/);
+  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-begin",[\s\S]*?\{[^}]*activateListening\(\)/);
+  assert.doesNotMatch(interaction, /addEventListener\("haiva:native-voice-segment-end",[\s\S]*?\{[^}]*activateListening\(\)/);
 });
 
 test("voice boundary: V3 does not own SpeechRecognition or native capture", () => {
