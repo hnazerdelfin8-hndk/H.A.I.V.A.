@@ -1,10 +1,10 @@
 // =========================================
 // H.A.I.V.A. VOICE INTERACTION
 // =========================================
-// Single internal coordinator for V1/V2/V3.
-// V1 = capture only.
-// V2 = lifecycle only.
-// V3 = stopper / interruption only.
+// Single owner/authority for the voice domain.
+// V1 = capture worker.
+// V2 = lifecycle worker.
+// V3 = stopper / interruption worker.
 // Core App receives voice input/outcomes from this boundary only.
 
 import { v1Capture } from "./v1/capture-controller.js";
@@ -47,7 +47,6 @@ export class VoiceInteraction {
     this.initialized = true;
     this.bindV1Events();
     this.bindNativeCaptureEvents();
-    this.bindV3Requests();
   }
 
   reportState(state, previousState) {
@@ -87,12 +86,9 @@ export class VoiceInteraction {
 
     window.addEventListener("haiva:v1-capture-result", event => {
       if (!this.active || this.processing || this.pendingResult) return;
-
       const text = event.detail?.text;
       if (!text) return;
 
-      // V3 is consulted here only for an active SPEAKING turn.
-      // Normal capture remains V1 -> Voice Interaction.
       if (this.speaking) {
         const interruption = this.interruption.interrupt(text, this.turn);
         if (interruption.interrupted) {
@@ -116,6 +112,7 @@ export class VoiceInteraction {
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
+    // Native capture events belong to Voice Interaction, not Core App.
     window.addEventListener("haiva:native-voice-ready", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = true;
@@ -129,12 +126,36 @@ export class VoiceInteraction {
       this.lifecycle.activateListening();
     });
 
+    window.addEventListener("haiva:native-voice-segment-end", () => {
+      if (!this.active || this.processing || this.speaking) return;
+      this.listening = true;
+      this.lifecycle.activateListening();
+    });
+
     window.addEventListener("haiva:native-voice-partial", event => {
       if (!this.active || this.processing || this.speaking) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (!text) return;
       this.listening = true;
       this.onTranscript?.(text);
+    });
+
+    window.addEventListener("haiva:native-voice-result", event => {
+      if (!this.active || this.processing || this.pendingResult) return;
+      const text = event.detail?.text;
+      if (!text) return;
+
+      if (this.speaking) {
+        const interruption = this.interruption.interrupt(text, this.turn);
+        if (interruption.interrupted) {
+          this.handleInterruption(interruption);
+          return;
+        }
+      }
+
+      if (!this.acceptResult()) return;
+      this.listening = false;
+      this.reportInput(text, "native");
     });
 
     window.addEventListener("haiva:native-voice-timeout", () => {
@@ -150,20 +171,6 @@ export class VoiceInteraction {
     });
   }
 
-  bindV3Requests() {
-    if (typeof window === "undefined") return;
-
-    // V3 may request a fresh capture after an interruption.
-    window.addEventListener("haiva:v3-capture-request", () => {
-      if (!this.active || this.processing || this.speaking) return;
-      this.startListening();
-    });
-
-    window.addEventListener("haiva:v3-capture-stop", () => {
-      this.stopListening();
-    });
-  }
-
   handleInterruption(result) {
     this.speaking = false;
     this.processing = false;
@@ -171,6 +178,7 @@ export class VoiceInteraction {
     this.listening = false;
     this.turn = result.turn;
 
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
@@ -179,11 +187,16 @@ export class VoiceInteraction {
       previousTurn: result.previousTurn
     });
 
-    if (result.instruction) this.reportInput(result.instruction, "v3-interruption");
+    if (result.instruction) {
+      this.reportInput(result.instruction, "v3-interruption");
+    } else if (this.active) {
+      this.lifecycle.returnToListening();
+      this.startListening();
+    }
   }
 
   acceptResult() {
-    if (!this.active || this.processing || this.speaking || this.pendingResult) return false;
+    if (!this.active || this.processing || this.pendingResult) return false;
     this.pendingResult = true;
     return true;
   }
@@ -260,6 +273,14 @@ export class VoiceInteraction {
 
     this.lifecycle.returnToListening();
     this.startListening();
+  }
+
+  isConversationActive() {
+    return this.lifecycle.isConversationActive();
+  }
+
+  shouldEndConversation(command) {
+    return this.lifecycle.shouldEndConversation(command);
   }
 
   reportError(source, error) {
