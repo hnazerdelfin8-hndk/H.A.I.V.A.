@@ -2,10 +2,7 @@
 // H.A.I.V.A. VOICE INTERACTION
 // =========================================
 // Single owner/authority for the voice domain.
-// V1 = capture worker.
-// V2 = lifecycle worker.
-// V3 = stopper / interruption worker.
-// Core App receives voice input/outcomes from this boundary only.
+// V1 = capture worker. V2 = lifecycle worker. V3 = stopper/interruption worker.
 
 import { v1Capture } from "./v1/capture-controller.js";
 import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
@@ -25,12 +22,8 @@ export class VoiceInteraction {
     this.onOutcome = typeof onOutcome === "function" ? onOutcome : null;
     this.onStateChange = typeof onStateChange === "function" ? onStateChange : null;
     this.onTranscript = typeof onTranscript === "function" ? onTranscript : null;
-
-    this.lifecycle = new VoiceLifecycleV2({
-      onStateChange: (state, previousState) => this.reportState(state, previousState)
-    });
+    this.lifecycle = new VoiceLifecycleV2({ onStateChange: (state, previousState) => this.reportState(state, previousState) });
     this.interruption = createVoiceInteractionV3();
-
     this.nativeVoice = hasNativeVoiceBridge();
     this.active = false;
     this.listening = false;
@@ -39,6 +32,9 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.recoveryAttempts = 0;
     this.turn = 0;
+    this.captureSession = 0;
+    this.activeCaptureSession = null;
+    this.recoveryTimer = null;
     this.initialized = false;
   }
 
@@ -52,9 +48,7 @@ export class VoiceInteraction {
   reportState(state, previousState) {
     const detail = { state, previousState, source: "voice-interaction" };
     this.onStateChange?.(state, previousState);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.STATE, { detail }));
-    }
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.STATE, { detail }));
   }
 
   reportInput(text, source = "v1") {
@@ -62,122 +56,129 @@ export class VoiceInteraction {
     if (!command) return false;
     const detail = { type: "VOICE_INPUT", text: command, source, turn: this.turn };
     this.onInput?.(command, detail);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.INPUT, { detail }));
-    }
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.INPUT, { detail }));
     return true;
   }
 
   reportOutcome(outcome) {
-    const detail = {
-      type: "VOICE_OUTCOME",
-      ...outcome,
-      source: "voice-interaction",
-      turn: this.turn
-    };
+    const detail = { type: "VOICE_OUTCOME", ...outcome, source: "voice-interaction", turn: this.turn };
     this.onOutcome?.(detail);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.OUTCOME, { detail }));
-    }
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.OUTCOME, { detail }));
+  }
+
+  isCurrentCaptureEvent(event) {
+    const eventSession = event?.detail?.sessionId;
+    return !eventSession || eventSession === this.activeCaptureSession;
   }
 
   bindV1Events() {
     if (typeof window === "undefined") return;
-
     window.addEventListener("haiva:v1-capture-result", event => {
-      if (!this.active || this.processing || this.pendingResult) return;
+      if (!this.active || this.processing || this.pendingResult || !this.isCurrentCaptureEvent(event)) return;
       const text = event.detail?.text;
       if (!text) return;
-
       if (this.speaking) {
         const interruption = this.interruption.interrupt(text, this.turn);
-        if (interruption.interrupted) {
-          this.handleInterruption(interruption);
-          return;
-        }
+        if (interruption.interrupted) { this.handleInterruption(interruption); return; }
       }
-
       if (!this.acceptResult()) return;
       this.listening = false;
       this.reportInput(text, event.detail?.source || "v1");
     });
-
     window.addEventListener("haiva:v1-capture-error", event => {
-      if (!this.active || this.processing || this.speaking) return;
-      this.listening = false;
-      this.lifecycle.finishReady();
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
+      this.finishCaptureReady();
     });
   }
 
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
-    // Native events are capture telemetry only. VoiceInteraction remains the
-    // single coordinator, while V2 remains the sole lifecycle authority.
-    window.addEventListener("haiva:native-voice-ready", () => {
-      if (!this.active || this.processing || this.speaking) return;
+    window.addEventListener("haiva:native-voice-ready", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
       this.listening = true;
     });
-
-    window.addEventListener("haiva:native-voice-begin", () => {
-      if (!this.active || this.processing || this.speaking) return;
+    window.addEventListener("haiva:native-voice-begin", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
       this.recoveryAttempts = 0;
       this.listening = true;
     });
-
-    window.addEventListener("haiva:native-voice-segment-end", () => {
-      if (!this.active || this.processing || this.speaking) return;
+    window.addEventListener("haiva:native-voice-segment-end", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
       this.listening = true;
     });
-
     window.addEventListener("haiva:native-voice-partial", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (!text) return;
       this.listening = true;
       this.onTranscript?.(text);
     });
-
     window.addEventListener("haiva:native-voice-result", event => {
-      if (!this.active || this.processing || this.pendingResult) return;
+      if (!this.active || this.processing || this.pendingResult || !this.isCurrentCaptureEvent(event)) return;
       const text = event.detail?.text;
       if (!text) return;
-
       if (this.speaking) {
         const interruption = this.interruption.interrupt(text, this.turn);
-        if (interruption.interrupted) {
-          this.handleInterruption(interruption);
-          return;
-        }
+        if (interruption.interrupted) { this.handleInterruption(interruption); return; }
       }
-
       if (!this.acceptResult()) return;
       this.listening = false;
       this.reportInput(text, "native");
     });
-
-    window.addEventListener("haiva:native-voice-complete", () => {
-      if (!this.active || this.processing || this.speaking) return;
-      this.listening = false;
-      this.pendingResult = false;
-      // Normal capture completion (no speech, empty result, expected cancel)
-      // returns the interaction to READY without producing VOICE ERROR.
-      this.lifecycle.finishReady();
+    window.addEventListener("haiva:native-voice-complete", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
+      this.finishCaptureReady();
     });
-
-    window.addEventListener("haiva:native-voice-timeout", () => {
-      if (!this.active || this.processing || this.speaking) return;
-      this.listening = false;
-      this.pendingResult = false;
-      this.lifecycle.finishReady();
+    window.addEventListener("haiva:native-voice-recoverable", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
+      this.finishCaptureReady();
     });
-
+    window.addEventListener("haiva:native-voice-timeout", event => {
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
+      this.finishCaptureReady();
+    });
     window.addEventListener("haiva:native-voice-error", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing || this.speaking || !this.isCurrentCaptureEvent(event)) return;
+      this.finishCaptureReady();
+      this.reportError("native", event.detail?.code ?? "unknown");
+    });
+    window.addEventListener("haiva:native-voice-unavailable", event => {
+      if (!this.active || !this.isCurrentCaptureEvent(event)) return;
       this.listening = false;
       this.pendingResult = false;
-      this.lifecycle.finishReady();
+      this.stopListening();
+      this.active = false;
+      this.lifecycle.endSession();
+      this.reportOutcome({ type: "VOICE_UNAVAILABLE", reason: event.detail?.reason || "native_voice_unavailable" });
     });
+  }
+
+  finishCaptureReady() {
+    this.listening = false;
+    this.pendingResult = false;
+    this.invalidateCaptureSession();
+
+    // READY is a re-arm point inside an active voice conversation.
+    // It must immediately prepare the next turn without requiring another mic tap.
+    this.lifecycle.finishReady();
+
+    if (!this.active || this.processing || this.speaking) return;
+
+    this.lifecycle.startSession();
+    this.scheduleNextListening();
+  }
+
+  scheduleNextListening(delay = 250) {
+    if (!this.active || this.processing || this.speaking || this.listening) return false;
+    if (this.recoveryTimer != null) clearTimeout(this.recoveryTimer);
+
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      if (!this.active || this.processing || this.speaking || this.listening) return;
+      this.startListening();
+    }, delay);
+    return true;
   }
 
   handleInterruption(result) {
@@ -185,23 +186,13 @@ export class VoiceInteraction {
     this.processing = false;
     this.pendingResult = false;
     this.listening = false;
+    this.invalidateCaptureSession();
     this.turn = result.turn;
-
     if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
     this.lifecycle.interruptToThinking();
-    this.reportOutcome({
-      type: "VOICE_INTERRUPT",
-      instruction: result.instruction || "",
-      interrupted: true,
-      previousTurn: result.previousTurn
-    });
-
-    if (result.instruction) {
-      this.reportInput(result.instruction, "v3-interruption");
-    } else if (this.active) {
-      this.lifecycle.returnToListening();
-      this.startListening();
-    }
+    this.reportOutcome({ type: "VOICE_INTERRUPT", instruction: result.instruction || "", interrupted: true, previousTurn: result.previousTurn });
+    if (result.instruction) this.reportInput(result.instruction, "v3-interruption");
+    else if (this.active) { this.lifecycle.returnToListening(); this.startListening(); }
   }
 
   acceptResult() {
@@ -214,10 +205,9 @@ export class VoiceInteraction {
     this.initialize();
     if (this.active) return true;
     if (!this.nativeVoice && typeof window !== "undefined" && !(window.SpeechRecognition || window.webkitSpeechRecognition)) {
-      this.reportError("availability", "VOICE_UNAVAILABLE");
+      this.reportOutcome({ type: "VOICE_UNAVAILABLE", reason: "voice_bridge_unavailable" });
       return false;
     }
-
     this.active = true;
     this.turn = this.interruption.beginTurn();
     this.recoveryAttempts = 0;
@@ -232,6 +222,10 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
+    if (this.recoveryTimer != null) {
+      clearTimeout(this.recoveryTimer);
+      this.recoveryTimer = null;
+    }
     this.stopListening();
     this.lifecycle.endSession();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
@@ -239,15 +233,23 @@ export class VoiceInteraction {
 
   startListening() {
     if (!this.active || this.listening || this.processing || this.speaking) return false;
+    const sessionId = `${++this.captureSession}`;
+    this.activeCaptureSession = sessionId;
     this.listening = true;
     this.lifecycle.activateListening();
-    v1Capture.startCapture();
+    v1Capture.startCapture(sessionId);
     return true;
   }
 
   stopListening() {
     this.listening = false;
-    v1Capture.stopCapture();
+    const sessionId = this.activeCaptureSession;
+    this.activeCaptureSession = null;
+    if (sessionId != null) v1Capture.stopCapture(sessionId);
+  }
+
+  invalidateCaptureSession() {
+    this.activeCaptureSession = null;
   }
 
   beginProcessing() {
@@ -262,41 +264,32 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = true;
     this.lifecycle.beginSpeaking();
-    try {
-      await speak(text);
-    } finally {
-      this.speaking = false;
-    }
+    try { await speak(text); } finally { this.speaking = false; }
   }
 
   finishCommand(shouldEnd = false) {
     this.processing = false;
     this.pendingResult = false;
-
     if (shouldEnd || !this.active) {
       this.active = false;
+      if (this.recoveryTimer != null) {
+        clearTimeout(this.recoveryTimer);
+        this.recoveryTimer = null;
+      }
       this.stopListening();
       this.lifecycle.endSession();
       return;
     }
-
     this.lifecycle.returnToListening();
     this.startListening();
   }
 
-  isConversationActive() {
-    return this.lifecycle.isConversationActive();
-  }
-
-  shouldEndConversation(command) {
-    return this.lifecycle.shouldEndConversation(command);
-  }
+  isConversationActive() { return this.lifecycle.isConversationActive(); }
+  shouldEndConversation(command) { return this.lifecycle.shouldEndConversation(command); }
 
   reportError(source, error) {
     const detail = { type: "VOICE_ERROR", source, error, turn: this.turn };
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.ERROR, { detail }));
-    }
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.ERROR, { detail }));
     this.onOutcome?.(detail);
   }
 }

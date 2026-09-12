@@ -1,9 +1,7 @@
 // =========================================
 // H.A.I.V.A. V1 VOICE CAPTURE CONTROLLER
 // =========================================
-// V1 is the capture worker inside Voice Interaction.
-// Voice Interaction owns the session and requests V1 capture.
-// V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
+// V1 is capture-only. VoiceInteraction owns session identity and lifecycle.
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -11,19 +9,20 @@ const SpeechRecognitionCtor = typeof window !== "undefined"
 
 let browserRecognizer = null;
 let captureActive = false;
+let activeSessionId = null;
 
-function emitResult(text) {
+function emitResult(text, sessionId) {
   const normalized = String(text ?? "").trim();
   if (!normalized || typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("haiva:v1-capture-result", {
-    detail: { text: normalized, source: "v1" }
+    detail: { text: normalized, source: "v1", sessionId }
   }));
 }
 
-function emitCaptureError(error) {
+function emitCaptureError(error, sessionId) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("haiva:v1-capture-error", {
-    detail: { source: "v1", error }
+    detail: { source: "v1", error, sessionId }
   }));
 }
 
@@ -33,7 +32,7 @@ function stopBrowserCapture() {
   browserRecognizer = null;
 }
 
-function startBrowserCapture() {
+function startBrowserCapture(sessionId) {
   if (!SpeechRecognitionCtor || browserRecognizer || !captureActive) return false;
   try {
     const recognition = new SpeechRecognitionCtor();
@@ -42,55 +41,57 @@ function startBrowserCapture() {
     recognition.maxAlternatives = 3;
     browserRecognizer = recognition;
     recognition.onresult = event => {
+      if (!captureActive || activeSessionId !== sessionId) return;
       let finalText = "";
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
         if (result.isFinal) finalText += result[0]?.transcript || "";
       }
-      if (finalText.trim()) emitResult(finalText);
+      if (finalText.trim()) emitResult(finalText, sessionId);
     };
     recognition.onerror = error => {
+      if (activeSessionId !== sessionId) return;
       browserRecognizer = null;
       captureActive = false;
-      emitCaptureError(error?.error || "unknown");
+      emitCaptureError(error?.error || "unknown", sessionId);
     };
     recognition.onend = () => {
+      if (activeSessionId !== sessionId) return;
       browserRecognizer = null;
       const wasActive = captureActive;
       captureActive = false;
-      // A browser recognizer can end without producing a final result.
-      // Report that capture boundary so VoiceInteraction can recover instead
-      // of leaving the conversational lifecycle stuck in LISTENING.
-      if (wasActive) emitCaptureError("capture-ended");
+      if (wasActive) emitCaptureError("capture-ended", sessionId);
     };
     recognition.start();
     return true;
   } catch (error) {
-    browserRecognizer = null;
-    captureActive = false;
-    console.warn("[HAIVA] V1 browser capture unavailable:", error?.message || error);
+    if (activeSessionId === sessionId) {
+      browserRecognizer = null;
+      captureActive = false;
+      console.warn("[HAIVA] V1 browser capture unavailable:", error?.message || error);
+      emitCaptureError(error?.message || "capture-start-failed", sessionId);
+    }
     return false;
   }
 }
 
-function startCapture() {
+function startCapture(sessionId) {
   if (typeof window === "undefined") return;
+  activeSessionId = String(sessionId);
   captureActive = true;
   if (window.HaivaBridge?.startVoiceCapture) {
-    try {
-      window.HaivaBridge.startVoiceCapture();
-      return;
-    } catch (error) {
-      console.warn("[HAIVA] V1 native capture start failed:", error?.message || error);
-    }
+    try { window.HaivaBridge.startVoiceCapture(activeSessionId); return; }
+    catch (error) { console.warn("[HAIVA] V1 native capture start failed:", error?.message || error); }
   }
-  startBrowserCapture();
+  startBrowserCapture(activeSessionId);
 }
 
-function stopCapture() {
+function stopCapture(sessionId) {
+  if (String(sessionId) !== String(activeSessionId)) return;
   captureActive = false;
+  activeSessionId = null;
   if (typeof window !== "undefined" && window.HaivaBridge?.stopVoiceCapture) {
-    try { window.HaivaBridge.stopVoiceCapture(); } catch (_) {}
+    try { window.HaivaBridge.stopVoiceCapture(String(sessionId)); } catch (_) {}
   }
   stopBrowserCapture();
 }

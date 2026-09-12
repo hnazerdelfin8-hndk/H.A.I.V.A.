@@ -48,7 +48,14 @@ class HAIVA {
         this.showTranscript(text);
       },
       onOutcome: detail => {
-        if (detail?.type === "VOICE_ERROR") {
+        if (detail?.type === "VOICE_UNAVAILABLE") {
+          this.voiceActivated = false;
+          this.isListening = false;
+          this.isSpeaking = false;
+          this.isProcessing = false;
+          setVoiceButtonActive(false);
+          this.setState("VOICE UNAVAILABLE");
+        } else if (detail?.type === "VOICE_ERROR") {
           this.setState("VOICE ERROR");
         }
       }
@@ -135,14 +142,11 @@ class HAIVA {
       this.isProcessing = true;
       this.setState("THINKING");
     }
-
     this.showTranscript(command);
-
     try {
       const response = await this.assistant.respond(command);
       const answer = response || CONFIG.assistant.fallbackResponse;
       this.showResponse(answer);
-
       if (speakResponse) {
         await this.voiceInteraction.beginSpeaking(answer);
         const shouldEndConversation = this.voiceInteraction.shouldEndConversation(command);
