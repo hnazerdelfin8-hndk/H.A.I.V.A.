@@ -157,7 +157,18 @@ export class VoiceInteraction {
     this.listening = false;
     this.pendingResult = false;
     this.invalidateCaptureSession();
+
+    // Capture completion is a turn boundary, not the end of an active
+    // conversational voice session. Recover into the next listening turn
+    // automatically so the user never has to tap the microphone again.
+    if (!this.active || this.processing || this.speaking) {
+      this.lifecycle.finishReady();
+      return;
+    }
+
     this.lifecycle.finishReady();
+    this.lifecycle.startSession();
+    this.startListening();
   }
 
   handleInterruption(result) {
