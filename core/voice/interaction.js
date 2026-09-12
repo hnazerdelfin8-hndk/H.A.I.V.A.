@@ -34,6 +34,7 @@ export class VoiceInteraction {
     this.turn = 0;
     this.captureSession = 0;
     this.activeCaptureSession = null;
+    this.recoveryTimer = null;
     this.initialized = false;
   }
 
@@ -158,17 +159,26 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.invalidateCaptureSession();
 
-    // Capture completion is a turn boundary, not the end of an active
-    // conversational voice session. Recover into the next listening turn
-    // automatically so the user never has to tap the microphone again.
-    if (!this.active || this.processing || this.speaking) {
-      this.lifecycle.finishReady();
-      return;
-    }
-
+    // READY is a re-arm point inside an active voice conversation.
+    // It must immediately prepare the next turn without requiring another mic tap.
     this.lifecycle.finishReady();
+
+    if (!this.active || this.processing || this.speaking) return;
+
     this.lifecycle.startSession();
-    this.startListening();
+    this.scheduleNextListening();
+  }
+
+  scheduleNextListening(delay = 250) {
+    if (!this.active || this.processing || this.speaking || this.listening) return false;
+    if (this.recoveryTimer != null) clearTimeout(this.recoveryTimer);
+
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      if (!this.active || this.processing || this.speaking || this.listening) return;
+      this.startListening();
+    }, delay);
+    return true;
   }
 
   handleInterruption(result) {
@@ -212,6 +222,10 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
+    if (this.recoveryTimer != null) {
+      clearTimeout(this.recoveryTimer);
+      this.recoveryTimer = null;
+    }
     this.stopListening();
     this.lifecycle.endSession();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
@@ -258,6 +272,10 @@ export class VoiceInteraction {
     this.pendingResult = false;
     if (shouldEnd || !this.active) {
       this.active = false;
+      if (this.recoveryTimer != null) {
+        clearTimeout(this.recoveryTimer);
+        this.recoveryTimer = null;
+      }
       this.stopListening();
       this.lifecycle.endSession();
       return;
