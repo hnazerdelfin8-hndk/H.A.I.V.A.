@@ -36,11 +36,16 @@ test("native session: Android adapter fences callbacks and emits recoverable out
   assert.match(android, /sessionId/);
 });
 
-test("native session: normal no-speech outcomes return to READY instead of VOICE ERROR", () => {
+test("native session: normal no-speech outcomes are recoverable, not user-facing errors", () => {
   assert.match(android, /ERROR_NO_MATCH/);
   assert.match(android, /ERROR_SPEECH_TIMEOUT/);
   assert.match(android, /dispatchVoiceCaptureComplete\("no_speech", sessionId\)/);
   assert.match(interaction, /haiva:native-voice-complete/);
   assert.match(interaction, /haiva:native-voice-recoverable/);
   assert.match(interaction, /this\.lifecycle\.finishReady\(\)/);
+});
+
+test("native session: active conversational mode automatically opens the next listening turn", () => {
+  assert.match(interaction, /this\.lifecycle\.finishReady\(\);\s*this\.lifecycle\.startSession\(\);\s*this\.startListening\(\);/);
+  assert.match(interaction, /Capture completion is a turn boundary/);
 });
