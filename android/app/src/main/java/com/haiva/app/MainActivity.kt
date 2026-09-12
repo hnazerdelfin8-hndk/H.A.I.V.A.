@@ -194,8 +194,18 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onError(error: Int) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
-            dispatchVoiceError(error)
-            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) createSpeechRecognizer()
+            when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH,
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    dispatchVoiceCaptureComplete("no_speech")
+                }
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                SpeechRecognizer.ERROR_CLIENT -> {
+                    dispatchVoiceCaptureComplete("recoverable_client_state")
+                    createSpeechRecognizer()
+                }
+                else -> dispatchVoiceError(error)
+            }
         }
 
         override fun onResults(results: Bundle?) {
@@ -203,7 +213,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             nativeVoiceRequestActive = false
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
+            if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceCaptureComplete("empty_result")
         }
     }
 
@@ -219,8 +229,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to H.A.I.V.A.")
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
-            // Give the Android recognizer a generous endpoint tolerance. This is
-            // recognizer configuration, not a H.A.I.V.A. turn/grace timer.
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
         }
@@ -232,9 +240,12 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != voiceFallbackRequestCode) return
         fallbackVoiceActive = false
-        if (resultCode != RESULT_OK) { dispatchVoiceError(SpeechRecognizer.ERROR_CLIENT); return }
+        if (resultCode != RESULT_OK) {
+            dispatchVoiceCaptureComplete("fallback_cancelled")
+            return
+        }
         val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
-        if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceError(SpeechRecognizer.ERROR_NO_MATCH)
+        if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceCaptureComplete("fallback_empty_result")
     }
 
     private fun requestVoicePermission() {
@@ -357,6 +368,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private fun dispatchVoiceResult(text: String) {
         val quoted = org.json.JSONObject.quote(text)
         runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))", null) }
+    }
+
+    private fun dispatchVoiceCaptureComplete(reason: String) {
+        val quoted = org.json.JSONObject.quote(reason)
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-complete',{detail:{reason:$quoted}}))", null) }
     }
 
     private fun dispatchVoiceError(error: Int) {
