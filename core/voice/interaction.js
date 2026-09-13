@@ -117,12 +117,14 @@ export class VoiceInteraction {
     // single coordinator, while V2 remains the sole lifecycle authority.
     window.addEventListener("haiva:native-voice-ready", () => {
       if (!this.active || this.processing || this.speaking) return;
+      this.lifecycle.activateListening();
       this.listening = true;
     });
 
     window.addEventListener("haiva:native-voice-begin", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.recoveryAttempts = 0;
+      this.lifecycle.activateListening();
       this.listening = true;
     });
 
@@ -253,6 +255,19 @@ export class VoiceInteraction {
 
   startListening() {
     if (!this.active || this.listening || this.processing || this.speaking) return false;
+
+    // Requesting native capture is not the same as being LISTENING. The
+    // recognizer is authoritative for the actual LISTENING state via
+    // haiva:native-voice-ready / haiva:native-voice-begin. Keeping the
+    // listening flag false here also prevents a premature true from blocking
+    // recovery when native capture fails before readiness.
+    if (this.nativeVoice) {
+      v1Capture.startCapture();
+      return true;
+    }
+
+    // Browser SpeechRecognition has no equivalent ready/begin bridge event,
+    // so its capture request remains the fallback signal for LISTENING.
     this.listening = true;
     this.lifecycle.activateListening();
     v1Capture.startCapture();
