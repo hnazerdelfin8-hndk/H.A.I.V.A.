@@ -9,7 +9,11 @@ const v3 = readFileSync(new URL("../core/voice/v3/barge-in-runtime.js", import.m
 
 function nativeHandlerBody(source, eventName) {
   const escaped = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(new RegExp(`window\\.addEventListener\\("${escaped}", \\(\\\\) => \\{([\\s\\S]*?)\\n    \\}\\);`));
+  const match = source.match(
+    new RegExp(
+      `window\\.addEventListener\\("${escaped}", \\(\\) => \\{([\\s\\S]*?)\\n    \\}\\);`
+    )
+  );
   assert.ok(match, `${eventName} handler missing`);
   return match[1];
 }
