@@ -142,13 +142,14 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:native-voice-result", event => {
-      console.info("[HAIVA-VOICE-DIAG] PATCH1_NATIVE_RESULT_IN", {
+      console.info("[HAIVA-VOICE-DIAG] PATCH2_NATIVE_RESULT_IN", {
         textPresent: Boolean(event.detail?.text),
         textLength: String(event.detail?.text || "").length,
         active: this.active,
         processing: this.processing,
         pendingResult: this.pendingResult,
-        listening: this.listening
+        listening: this.listening,
+        speaking: this.speaking
       });
       if (!this.active || this.processing || this.pendingResult) return;
       const text = event.detail?.text;
@@ -259,18 +260,11 @@ export class VoiceInteraction {
   startListening({ allowDuringSpeaking = false } = {}) {
     if (!this.active || this.listening || this.processing || (this.speaking && !allowDuringSpeaking)) return false;
 
-    // Requesting native capture is not the same as being LISTENING. The
-    // recognizer is authoritative for the actual LISTENING state via
-    // haiva:native-voice-ready / haiva:native-voice-begin. Keeping the
-    // listening flag false here also prevents a premature true from blocking
-    // recovery when native capture fails before readiness.
     if (this.nativeVoice) {
       v1Capture.startCapture();
       return true;
     }
 
-    // Browser SpeechRecognition has no equivalent ready/begin bridge event,
-    // so its capture request remains the fallback signal for LISTENING.
     this.listening = true;
     if (!allowDuringSpeaking) this.lifecycle.activateListening();
     v1Capture.startCapture();
@@ -290,15 +284,23 @@ export class VoiceInteraction {
   }
 
   async beginSpeaking(text) {
-    if (!this.active) return;
+    if (!this.active) return false;
     this.processing = false;
     this.speaking = true;
     this.lifecycle.beginSpeaking();
+
+    // Patch 2: arm V3 capture immediately before TTS starts. V2 remains in
+    // SPEAKING; the capture is only an interruption probe owned by V3.
+    this.startListening({ allowDuringSpeaking: true });
+
     try {
       await speak(text);
     } finally {
+      // Patch 2 deliberately leaves final turn fencing to Patch 3.
       this.speaking = false;
+      this.stopListening();
     }
+    return true;
   }
 
   finishCommand(shouldEnd = false) {
