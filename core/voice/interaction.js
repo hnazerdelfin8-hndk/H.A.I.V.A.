@@ -10,7 +10,7 @@
 import { v1Capture } from "./v1/capture-controller.js";
 import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
 import { createVoiceInteractionV3 } from "./v3/interaction-v3.js";
-import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak } from "../ui-bridge.js";
+import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../ui-bridge.js";
 
 export const VOICE_INTERACTION_EVENTS = Object.freeze({
   INPUT: "haiva:voice-interaction-input",
@@ -205,7 +205,9 @@ export class VoiceInteraction {
     this.listening = false;
     this.turn = result.turn;
 
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
+    // Patch 5: stop the actual active TTS path through the unified bridge.
+    // This reaches native Android TTS as well as browser speech synthesis.
+    stopSpeaking();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
@@ -252,7 +254,7 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.stopListening();
     this.lifecycle.endSession();
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
+    stopSpeaking();
   }
 
   // Patch 1: V3 may open a capture window while TTS is speaking.
