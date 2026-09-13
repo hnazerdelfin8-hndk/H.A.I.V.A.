@@ -142,14 +142,15 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:native-voice-result", event => {
-      console.info("[HAIVA-VOICE-DIAG] PATCH2_NATIVE_RESULT_IN", {
+      console.info("[HAIVA-VOICE-DIAG] PATCH3_NATIVE_RESULT_IN", {
         textPresent: Boolean(event.detail?.text),
         textLength: String(event.detail?.text || "").length,
         active: this.active,
         processing: this.processing,
         pendingResult: this.pendingResult,
         listening: this.listening,
-        speaking: this.speaking
+        speaking: this.speaking,
+        turn: this.turn
       });
       if (!this.active || this.processing || this.pendingResult) return;
       const text = event.detail?.text;
@@ -287,20 +288,26 @@ export class VoiceInteraction {
     if (!this.active) return false;
     this.processing = false;
     this.speaking = true;
+    const speakingTurn = this.turn;
     this.lifecycle.beginSpeaking();
 
-    // Patch 2: arm V3 capture immediately before TTS starts. V2 remains in
-    // SPEAKING; the capture is only an interruption probe owned by V3.
+    // V3 capture is armed while V2 remains in SPEAKING.
     this.startListening({ allowDuringSpeaking: true });
 
     try {
       await speak(text);
     } finally {
-      // Patch 2 deliberately leaves final turn fencing to Patch 3.
+      // If V3 interrupted this TTS turn, the interruption already advanced
+      // the turn generation. Do not let the stale speaking completion reset
+      // state or stop the new turn's capture.
+      if (this.turn !== speakingTurn) {
+        return false;
+      }
       this.speaking = false;
       this.stopListening();
     }
-    return true;
+
+    return this.turn === speakingTurn;
   }
 
   finishCommand(shouldEnd = false) {
