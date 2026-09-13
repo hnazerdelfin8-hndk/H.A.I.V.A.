@@ -105,7 +105,8 @@ export class VoiceInteraction {
     window.addEventListener("haiva:v1-capture-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
-      this.lifecycle.finishReady();
+      this.lifecycle.returnToListening();
+      this.startListening();
     });
   }
 
@@ -160,23 +161,28 @@ export class VoiceInteraction {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
       this.pendingResult = false;
-      // Normal capture completion (no speech, empty result, expected cancel)
-      // returns the interaction to READY without producing VOICE ERROR.
-      this.lifecycle.finishReady();
+      // Normal capture completion is part of the event-driven conversation
+      // loop. It must re-arm LISTENING, not fall back to READY.
+      this.lifecycle.returnToListening();
+      this.startListening();
     });
 
     window.addEventListener("haiva:native-voice-timeout", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
       this.pendingResult = false;
-      this.lifecycle.finishReady();
+      // A capture timeout is recoverable inside an active conversation.
+      this.lifecycle.returnToListening();
+      this.startListening();
     });
 
     window.addEventListener("haiva:native-voice-error", event => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
       this.pendingResult = false;
-      this.lifecycle.finishReady();
+      // Recoverable native capture errors stay inside the active voice loop.
+      this.lifecycle.returnToListening();
+      this.startListening();
     });
   }
 
