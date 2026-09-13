@@ -213,7 +213,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             nativeVoiceRequestActive = false
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceCaptureComplete("empty_result")
+            if (text.isNotEmpty()) {
+                Log.i("HAIVA-VOICE-DIAG", "PATCH1_NATIVE_RESULT_OUT textPresent=true length=${text.length}")
+                dispatchVoiceResult(text)
+            } else {
+                Log.i("HAIVA-VOICE-DIAG", "PATCH1_NATIVE_RESULT_OUT textPresent=false -> capture-complete")
+                dispatchVoiceCaptureComplete("empty_result")
+            }
         }
     }
 
@@ -366,6 +372,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     }
 
     private fun dispatchVoiceResult(text: String) {
+        Log.i("HAIVA-VOICE-DIAG", "PATCH1_NATIVE_RESULT_DISPATCH event=haiva:native-voice-result")
         val quoted = org.json.JSONObject.quote(text)
         runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted}}))", null) }
     }
