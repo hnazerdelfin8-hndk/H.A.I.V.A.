@@ -59,10 +59,6 @@ document.addEventListener("click", event => {
       return;
     }
     try {
-      // V1 baseline: one microphone tap owns exactly one voice turn.
-      // Keep the existing core/V2 conversational implementation intact;
-      // this activation path explicitly selects V1 until V1 is validated.
-      app.conversationalVoice = false;
       if (app.voiceActivated) app.deactivateVoice();
       else void app.activateVoice();
     } catch (error) {
