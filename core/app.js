@@ -6,7 +6,7 @@ import "../ui/polish.js";
 import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
-import { setUIState, setVoiceButtonActive, speak, hasNativeVoiceBridge } from "./ui-bridge.js";
+import { setUIState, setVoiceButtonActive, hasNativeVoiceBridge } from "./ui-bridge.js";
 import { bootCheckpoint } from "./boot-diagnostics.js";
 import { createVoiceInteraction } from "./voice/interaction.js";
 
@@ -48,9 +48,7 @@ class HAIVA {
         this.showTranscript(text);
       },
       onOutcome: detail => {
-        if (detail?.type === "VOICE_ERROR") {
-          this.setState("VOICE ERROR");
-        }
+        if (detail?.type === "VOICE_ERROR") this.setState("VOICE ERROR");
       }
     });
 
@@ -203,22 +201,14 @@ class HAIVA {
   setupReminderNotifications() {
     window.addEventListener("haiva:reminder", async event => {
       const message = event.detail?.message;
-      if (!message) return;
-      this.voiceInteraction.stopListening();
-      this.isSpeaking = true;
-      this.setState("SPEAKING");
-      try {
-        const response = `Reminder: ${message}.`;
-        this.showResponse(response);
-        await speak(response);
-      } catch (error) { console.warn("Reminder speech failed:", error); }
-      finally {
-        this.isSpeaking = false;
-        this.voiceActivated = false;
-        this.voiceInteraction.deactivate();
-        setVoiceButtonActive(false);
-        this.setState("READY");
-      }
+      if (!message || !this.voiceInteraction.active) return;
+
+      // Reminder is only a trigger. VoiceInteraction owns TTS and lifecycle.
+      const response = `Reminder: ${message}.`;
+      this.showResponse(response);
+      const completedTurn = await this.voiceInteraction.beginSpeaking(response);
+      if (!completedTurn) return;
+      this.voiceInteraction.finishCommand(false);
     });
   }
 
