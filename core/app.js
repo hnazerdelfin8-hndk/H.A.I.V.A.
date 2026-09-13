@@ -21,10 +21,8 @@ class HAIVA {
     this.isListening = false;
     this.isSpeaking = false;
     this.isProcessing = false;
-    this.voiceSilenceRetries = 0;
     this.voiceTurn = 0;
     this.pendingVoiceResult = false;
-    this.conversationalVoice = true;
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
@@ -161,7 +159,6 @@ class HAIVA {
       this.voiceActivated = this.voiceInteraction.active;
       this.pendingVoiceResult = this.voiceInteraction.pendingResult;
       this.voiceTurn = this.voiceInteraction.turn;
-      this.voiceSilenceRetries = 0;
       if (this.state === "ERROR") this.setState("READY");
       setVoiceButtonActive(this.voiceActivated);
     }
@@ -191,7 +188,6 @@ class HAIVA {
     this.isProcessing = false;
     this.pendingVoiceResult = false;
     this.lastTranscript = "";
-    this.voiceSilenceRetries = 0;
     setVoiceButtonActive(false);
     this.setState("READY");
     const heard = document.getElementById("heard");
