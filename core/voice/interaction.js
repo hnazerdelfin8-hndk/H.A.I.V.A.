@@ -140,6 +140,14 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:native-voice-result", event => {
+      console.info("[HAIVA-VOICE-DIAG] PATCH1_NATIVE_RESULT_IN", {
+        textPresent: Boolean(event.detail?.text),
+        textLength: String(event.detail?.text || "").length,
+        active: this.active,
+        processing: this.processing,
+        pendingResult: this.pendingResult,
+        listening: this.listening
+      });
       if (!this.active || this.processing || this.pendingResult) return;
       const text = event.detail?.text;
       if (!text) return;
