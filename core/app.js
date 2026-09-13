@@ -144,7 +144,8 @@ class HAIVA {
       this.showResponse(answer);
 
       if (speakResponse) {
-        await this.voiceInteraction.beginSpeaking(answer);
+        const completedTurn = await this.voiceInteraction.beginSpeaking(answer);
+        if (!completedTurn) return;
         const shouldEndConversation = this.voiceInteraction.shouldEndConversation(command);
         this.voiceInteraction.finishCommand(shouldEndConversation);
       } else {
