@@ -41,14 +41,19 @@ test("voice boundary: V1 is a capture worker only", () => {
   assert.doesNotMatch(v1, /haiva:v3-capture-stop/);
 });
 
-test("voice boundary: native capture events do not authorize V2 lifecycle", () => {
+test("voice boundary: native capture events are coordinated by Voice Interaction and may activate V2 lifecycle", () => {
   for (const eventName of [
     "haiva:native-voice-ready",
-    "haiva:native-voice-begin",
-    "haiva:native-voice-segment-end"
+    "haiva:native-voice-begin"
   ]) {
-    assert.doesNotMatch(nativeHandlerBody(interaction, eventName), /activateListening\(\)/);
+    const body = nativeHandlerBody(interaction, eventName);
+    assert.match(body, /activateListening\(\)/);
+    assert.match(body, /this\.listening = true/);
   }
+
+  const segmentEndBody = nativeHandlerBody(interaction, "haiva:native-voice-segment-end");
+  assert.doesNotMatch(segmentEndBody, /activateListening\(\)/);
+  assert.match(segmentEndBody, /this\.listening = true/);
 });
 
 test("voice boundary: V3 does not own SpeechRecognition or native capture", () => {
