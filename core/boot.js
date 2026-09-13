@@ -49,16 +49,6 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   syncControls();
 }
 
-function loadVoiceInteraction() {
-  // V1/V2/V3 are one Voice Interaction system, but voice controls are loaded
-  // only after Core Boot Ready so a voice-module failure can never brick boot.
-  queueMicrotask(() => {
-    import("./voice/v3/barge-in-runtime.js")
-      .then(() => bootCheckpoint("VOICE_INTERACTION_V3_LOADED", "post-boot voice control layer"))
-      .catch(error => console.warn("[HAIVA-BOOT] Voice Interaction V3 unavailable:", error?.message || error));
-  });
-}
-
 function confirmBootReady(detail = {}) {
   if (fatalBoot || bootReadyConfirmed) return;
   bootReadyConfirmed = true;
@@ -68,7 +58,6 @@ function confirmBootReady(detail = {}) {
   progress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
   setBootUI("READY", "H.A.I.V.A. core is online. Ready, Master.", "● CORE READY");
   syncControls();
-  loadVoiceInteraction();
 }
 
 setBootUI("BOOTING", "Initializing H.A.I.V.A. core…", "● CORE STARTING");
