@@ -253,8 +253,11 @@ export class VoiceInteraction {
     if (typeof window !== "undefined") window.speechSynthesis?.cancel?.();
   }
 
-  startListening() {
-    if (!this.active || this.listening || this.processing || this.speaking) return false;
+  // Patch 1: V3 may open a capture window while TTS is speaking.
+  // This does not change V2 lifecycle state; V3 only needs the capture
+  // channel available so an interruption phrase can reach its parser.
+  startListening({ allowDuringSpeaking = false } = {}) {
+    if (!this.active || this.listening || this.processing || (this.speaking && !allowDuringSpeaking)) return false;
 
     // Requesting native capture is not the same as being LISTENING. The
     // recognizer is authoritative for the actual LISTENING state via
@@ -269,7 +272,7 @@ export class VoiceInteraction {
     // Browser SpeechRecognition has no equivalent ready/begin bridge event,
     // so its capture request remains the fallback signal for LISTENING.
     this.listening = true;
-    this.lifecycle.activateListening();
+    if (!allowDuringSpeaking) this.lifecycle.activateListening();
     v1Capture.startCapture();
     return true;
   }
