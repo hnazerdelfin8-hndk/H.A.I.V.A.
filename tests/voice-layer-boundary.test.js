@@ -9,13 +9,85 @@ const v3 = readFileSync(new URL("../core/voice/v3/barge-in-runtime.js", import.m
 
 function nativeHandlerBody(source, eventName) {
   const escaped = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = source.match(
-    new RegExp(
-      `window\\.addEventListener\\("${escaped}", \\((?:event)?\\) => \\{([\\s\\S]*?)\\n\\s*\\}\\);`
-    )
+  const start = source.search(
+    new RegExp(`window\\.addEventListener\\(\\s*[\"']${escaped}[\"']\\s*,`)
   );
-  assert.ok(match, `${eventName} handler missing`);
-  return match[1];
+  assert.notEqual(start, -1, `${eventName} handler missing`);
+
+  const arrowStart = source.indexOf("=>", start);
+  assert.notEqual(arrowStart, -1, `${eventName} handler arrow missing`);
+
+  const openBrace = source.indexOf("{", arrowStart);
+  assert.notEqual(openBrace, -1, `${eventName} handler body missing`);
+
+  let depth = 0;
+  let quote = null;
+  let escapedChar = false;
+  let lineComment = false;
+  let blockComment = false;
+  let templateExpressionDepth = 0;
+
+  for (let index = openBrace; index < source.length; index += 1) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (lineComment) {
+      if (char === "\\n") lineComment = false;
+      continue;
+    }
+
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (escapedChar) {
+        escapedChar = false;
+        continue;
+      }
+      if (char === "\\\\") {
+        escapedChar = true;
+        continue;
+      }
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(openBrace + 1, index);
+      }
+    }
+  }
+
+  assert.fail(`${eventName} handler body is unbalanced`);
 }
 
 test("voice boundary: Voice Interaction owns the voice domain", () => {
