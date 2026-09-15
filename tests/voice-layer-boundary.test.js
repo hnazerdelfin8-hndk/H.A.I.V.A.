@@ -11,7 +11,7 @@ function nativeHandlerBody(source, eventName) {
   const escaped = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = source.match(
     new RegExp(
-      `window\\.addEventListener\\("${escaped}", \\(\\) => \\{([\\s\\S]*?)\\n    \\}\\);`
+      `window\\.addEventListener\\("${escaped}", \\((?:event)?\\) => \\{([\\s\\S]*?)\\n\\s*\\}\\);`
     )
   );
   assert.ok(match, `${eventName} handler missing`);
