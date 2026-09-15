@@ -3,6 +3,7 @@
 // =========================================
 // V3 owns only the interruption-capture worker.
 // VoiceInteraction remains the sole voice-domain orchestrator.
+// V3 can explicitly hand capture back to V1 through an injected callback.
 
 import { acquireCapture, releaseCapture, registerCaptureOwner } from "../capture-handoff.js";
 
@@ -12,6 +13,7 @@ const SpeechRecognitionCtor = typeof window !== "undefined"
 
 let browserRecognizer = null;
 let captureActive = false;
+let handoffToV1Handler = null;
 
 function emit(name, detail = {}) {
   if (typeof window === "undefined") return;
@@ -96,4 +98,22 @@ function stopCapture() {
   return releaseCapture("v3", stopUnderlyingCapture);
 }
 
-export const v3Capture = Object.freeze({ startCapture, stopCapture });
+function handoffToV1() {
+  stopCapture();
+  if (typeof handoffToV1Handler !== "function") return false;
+  queueMicrotask(() => {
+    try { handoffToV1Handler(); } catch (_) {}
+  });
+  return true;
+}
+
+function setV1HandoffHandler(handler) {
+  handoffToV1Handler = typeof handler === "function" ? handler : null;
+}
+
+export const v3Capture = Object.freeze({
+  startCapture,
+  stopCapture,
+  handoffToV1,
+  setV1HandoffHandler
+});
