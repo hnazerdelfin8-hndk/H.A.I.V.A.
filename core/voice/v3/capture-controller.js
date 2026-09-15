@@ -4,6 +4,8 @@
 // V3 owns only the interruption-capture worker.
 // VoiceInteraction remains the sole voice-domain orchestrator.
 
+import { acquireCapture, releaseCapture } from "../capture-handoff.js";
+
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
   : null;
@@ -63,26 +65,37 @@ function startBrowserCapture() {
   }
 }
 
-function startCapture() {
-  if (typeof window === "undefined") return false;
-  captureActive = true;
-  if (window.HaivaBridge?.startV3VoiceCapture) {
-    try {
-      window.HaivaBridge.startV3VoiceCapture();
-      return true;
-    } catch (error) {
-      console.warn("[HAIVA] V3 native capture start failed:", error?.message || error);
-    }
-  }
-  return startBrowserCapture();
-}
-
-function stopCapture() {
+function stopUnderlyingCapture() {
   captureActive = false;
   if (typeof window !== "undefined" && window.HaivaBridge?.stopV3VoiceCapture) {
     try { window.HaivaBridge.stopV3VoiceCapture(); } catch (_) {}
   }
   stopBrowserCapture();
+}
+
+function startCapture() {
+  if (typeof window === "undefined") return false;
+  captureActive = true;
+  return acquireCapture("v3", () => {
+    if (!captureActive) return;
+    if (window.HaivaBridge?.startV3VoiceCapture) {
+      try {
+        window.HaivaBridge.startV3VoiceCapture();
+        return;
+      } catch (error) {
+        console.warn("[HAIVA] V3 native capture start failed:", error?.message || error);
+      }
+    }
+    startBrowserCapture();
+  }, owner => {
+    if (owner === "v1" && window.HaivaBridge?.stopVoiceCapture) {
+      try { window.HaivaBridge.stopVoiceCapture(); } catch (_) {}
+    }
+  });
+}
+
+function stopCapture() {
+  return releaseCapture("v3", stopUnderlyingCapture);
 }
 
 export const v3Capture = Object.freeze({ startCapture, stopCapture });
