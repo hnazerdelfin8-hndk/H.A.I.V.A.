@@ -4,7 +4,7 @@
 // V3 owns only the interruption-capture worker.
 // VoiceInteraction remains the sole voice-domain orchestrator.
 
-import { acquireCapture, releaseCapture } from "../capture-handoff.js";
+import { acquireCapture, releaseCapture, registerCaptureOwner } from "../capture-handoff.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -73,6 +73,8 @@ function stopUnderlyingCapture() {
   stopBrowserCapture();
 }
 
+registerCaptureOwner("v3", stopUnderlyingCapture);
+
 function startCapture() {
   if (typeof window === "undefined") return false;
   captureActive = true;
@@ -87,10 +89,6 @@ function startCapture() {
       }
     }
     startBrowserCapture();
-  }, owner => {
-    if (owner === "v1" && window.HaivaBridge?.stopVoiceCapture) {
-      try { window.HaivaBridge.stopVoiceCapture(); } catch (_) {}
-    }
   });
 }
 
