@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   DEFAULT_INTERRUPT_KEYWORDS,
+  V3_STATES,
   createVoiceInteractionV3,
   detectVoiceInterrupt,
   parseStopAndInstruction
@@ -54,8 +55,11 @@ test("V3 coordinator rejects stale turn results", () => {
 test("V3 interrupt creates a fresh turn generation", () => {
   const coordinator = createVoiceInteractionV3({ interruptKeywords: DEFAULT_INTERRUPT_KEYWORDS });
   const speakingTurn = coordinator.beginTurn();
+  coordinator.beginMonitoring(speakingTurn);
+  assert.equal(coordinator.getState(), V3_STATES.MONITORING);
   const interruption = coordinator.interrupt("Teka lang", speakingTurn);
   assert.equal(interruption.interrupted, true);
+  assert.equal(interruption.route, "v1");
   assert.notEqual(interruption.turn, speakingTurn);
   assert.equal(coordinator.isCurrent(interruption.turn), true);
 });
@@ -63,9 +67,34 @@ test("V3 interrupt creates a fresh turn generation", () => {
 test("V3 interrupt invalidates the old turn for STOP plus instruction", () => {
   const coordinator = createVoiceInteractionV3();
   const speakingTurn = coordinator.beginTurn();
+  coordinator.beginMonitoring(speakingTurn);
   const interruption = coordinator.interrupt("Stop, gumawa ka ng summary", speakingTurn);
   assert.equal(interruption.interrupted, true);
   assert.equal(interruption.instruction, "gumawa ka ng summary");
+  assert.equal(interruption.route, "v1");
   assert.equal(coordinator.commitResult(speakingTurn, "old response"), null);
   assert.equal(coordinator.isCurrent(interruption.turn), true);
+});
+
+test("V3 normal speaking handoff routes back to V1 without interruption", () => {
+  const coordinator = createVoiceInteractionV3();
+  const speakingTurn = coordinator.beginTurn();
+  assert.equal(coordinator.beginMonitoring(speakingTurn), true);
+  const handoff = coordinator.prepareHandoffToV1(speakingTurn);
+  assert.deepEqual(handoff, {
+    route: "v1",
+    interrupted: false,
+    instruction: "",
+    turn: speakingTurn
+  });
+  assert.equal(coordinator.getState(), V3_STATES.HANDOFF);
+  assert.equal(coordinator.completeHandoff(speakingTurn), true);
+  assert.equal(coordinator.getState(), V3_STATES.IDLE);
+});
+
+test("V3 rejects stale normal handoff", () => {
+  const coordinator = createVoiceInteractionV3();
+  const oldTurn = coordinator.beginTurn();
+  coordinator.beginTurn();
+  assert.equal(coordinator.prepareHandoffToV1(oldTurn), null);
 });
