@@ -1,8 +1,8 @@
 // =========================================
 // H.A.I.V.A. CAPTURE HANDOFF ARBITER
 // =========================================
-// One microphone owner at a time. V1 and V3 must release before the
-// other capture worker can acquire the microphone.
+// One microphone owner at a time. Every restart releases the current
+// recognition session before the next session is allowed to acquire it.
 
 const HANDOFF_DELAY_MS = 180;
 
@@ -20,23 +20,27 @@ function clearPending() {
 }
 
 export function acquireCapture(nextOwner, startCapture, releasePrevious) {
-  if (owner === nextOwner && !pendingTimer) return startCapture();
+  const previousOwner = owner;
+  ++generation;
+  clearPending();
 
-  if (owner !== null && owner !== nextOwner) {
-    const previousOwner = owner;
+  if (previousOwner !== null) {
     owner = null;
     try { releasePrevious(previousOwner); } catch (_) {}
   }
 
-  const token = ++generation;
-  clearPending();
+  const token = generation;
   pendingOwner = nextOwner;
   pendingTimer = setTimeout(() => {
     pendingTimer = null;
     if (token !== generation || pendingOwner !== nextOwner) return;
     pendingOwner = null;
     owner = nextOwner;
-    try { startCapture(); } catch (_) { owner = null; }
+    try {
+      startCapture();
+    } catch (_) {
+      owner = null;
+    }
   }, HANDOFF_DELAY_MS);
   return true;
 }
