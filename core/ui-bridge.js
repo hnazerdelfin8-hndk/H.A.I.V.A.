@@ -9,6 +9,8 @@ const dispatchVoiceEvent = (name, detail = {}) => {
   try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch (_) {}
 };
 
+let speechGeneration = 0;
+
 export function setUIState(state) {
   const normalized = String(state).toLowerCase();
   document.body.dataset.haivaState = normalized;
@@ -30,10 +32,11 @@ export function hasNativeVoiceBridge() {
 }
 
 export function stopSpeaking() {
+  const interruptedGeneration = ++speechGeneration;
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.stopSpeaking === "function") {
     try {
       window.HaivaBridge.stopSpeaking();
-      dispatchVoiceEvent("haiva:speech-done", { interrupted: true });
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: true, generation: interruptedGeneration });
       return true;
     } catch (error) {
       console.warn("Native TTS stop failed:", error);
@@ -43,7 +46,7 @@ export function stopSpeaking() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     try {
       window.speechSynthesis.cancel();
-      dispatchVoiceEvent("haiva:speech-done", { interrupted: true });
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: true, generation: interruptedGeneration });
       return true;
     } catch (error) {
       console.warn("Browser TTS stop failed:", error);
@@ -56,22 +59,26 @@ export function speak(text) {
   const value = String(text || "").trim();
   if (!value) return Promise.resolve();
 
-  dispatchVoiceEvent("haiva:speech-start", { text: value });
+  const generation = ++speechGeneration;
+  dispatchVoiceEvent("haiva:speech-start", { text: value, generation });
 
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.speak === "function") {
     return new Promise(resolve => {
       let settled = false;
-      const finish = () => {
-        if (settled) return;
+      const finish = event => {
+        if (settled || generation !== speechGeneration) return;
         settled = true;
         window.removeEventListener("haiva:native-speech-done", finish);
-        dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
+        dispatchVoiceEvent("haiva:speech-done", {
+          interrupted: event?.detail?.interrupted === true,
+          generation
+        });
         resolve();
       };
-      window.addEventListener("haiva:native-speech-done", finish, { once: true });
+      window.addEventListener("haiva:native-speech-done", finish);
       try {
         window.HaivaBridge.speak(value);
-        setTimeout(finish, Math.max(8000, value.length * 120));
+        setTimeout(() => finish(), Math.max(8000, value.length * 120));
       } catch (error) {
         console.warn("Native TTS failed:", error);
         finish();
@@ -80,7 +87,7 @@ export function speak(text) {
   }
 
   if (!("speechSynthesis" in window)) {
-    dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
+    dispatchVoiceEvent("haiva:speech-done", { interrupted: false, generation });
     return Promise.resolve();
   }
   return new Promise(resolve => {
@@ -91,7 +98,8 @@ export function speak(text) {
     utterance.pitch = CONFIG.voice.speechPitch;
     utterance.volume = CONFIG.voice.speechVolume;
     const finish = () => {
-      dispatchVoiceEvent("haiva:speech-done", { interrupted: false });
+      if (generation !== speechGeneration) return;
+      dispatchVoiceEvent("haiva:speech-done", { interrupted: false, generation });
       resolve();
     };
     utterance.onend = finish;
