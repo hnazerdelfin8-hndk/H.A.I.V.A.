@@ -39,6 +39,10 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.recoveryAttempts = 0;
     this.turn = 0;
+    // Patch 1: null means there is no currently accepted native capture.
+    // Native Android attaches a monotonically increasing sessionId to every
+    // callback, allowing stale recognizer events to be rejected safely.
+    this.captureSessionId = null;
     this.initialized = false;
   }
 
@@ -81,6 +85,18 @@ export class VoiceInteraction {
     }
   }
 
+  acceptNativeCaptureEvent(event, { establish = false } = {}) {
+    if (!this.nativeVoice) return true;
+    const sessionId = event.detail?.sessionId;
+    if (sessionId == null) return false;
+    if (establish) {
+      if (this.captureSessionId !== null && sessionId !== this.captureSessionId) return false;
+      this.captureSessionId = sessionId;
+      return true;
+    }
+    return this.captureSessionId !== null && sessionId === this.captureSessionId;
+  }
+
   bindV1Events() {
     if (typeof window === "undefined") return;
 
@@ -113,28 +129,30 @@ export class VoiceInteraction {
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
-    // Native events are capture telemetry only. VoiceInteraction remains the
-    // single coordinator, while V2 remains the sole lifecycle authority.
-    window.addEventListener("haiva:native-voice-ready", () => {
+    window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing || this.speaking) return;
+      if (!this.acceptNativeCaptureEvent(event, { establish: true })) return;
       this.lifecycle.activateListening();
       this.listening = true;
     });
 
-    window.addEventListener("haiva:native-voice-begin", () => {
+    window.addEventListener("haiva:native-voice-begin", event => {
       if (!this.active || this.processing || this.speaking) return;
+      if (!this.acceptNativeCaptureEvent(event)) return;
       this.recoveryAttempts = 0;
       this.lifecycle.activateListening();
       this.listening = true;
     });
 
-    window.addEventListener("haiva:native-voice-segment-end", () => {
+    window.addEventListener("haiva:native-voice-segment-end", event => {
       if (!this.active || this.processing || this.speaking) return;
+      if (!this.acceptNativeCaptureEvent(event)) return;
       this.listening = true;
     });
 
     window.addEventListener("haiva:native-voice-partial", event => {
       if (!this.active || this.processing || this.speaking) return;
+      if (!this.acceptNativeCaptureEvent(event)) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (!text) return;
       this.listening = true;
@@ -142,7 +160,9 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:native-voice-result", event => {
-      console.info("[HAIVA-VOICE-DIAG] PATCH3_NATIVE_RESULT_IN", {
+      console.info("[HAIVA-VOICE-DIAG] PATCH1_NATIVE_RESULT_IN", {
+        sessionId: event.detail?.sessionId ?? null,
+        acceptedSessionId: this.captureSessionId,
         textPresent: Boolean(event.detail?.text),
         textLength: String(event.detail?.text || "").length,
         active: this.active,
@@ -152,6 +172,7 @@ export class VoiceInteraction {
         speaking: this.speaking,
         turn: this.turn
       });
+      if (!this.acceptNativeCaptureEvent(event)) return;
       if (!this.active || this.processing || this.pendingResult) return;
       const text = event.detail?.text;
       if (!text) return;
@@ -166,33 +187,36 @@ export class VoiceInteraction {
 
       if (!this.acceptResult()) return;
       this.listening = false;
+      this.captureSessionId = null;
       this.reportInput(text, "native");
     });
 
-    window.addEventListener("haiva:native-voice-complete", () => {
+    window.addEventListener("haiva:native-voice-complete", event => {
+      if (!this.acceptNativeCaptureEvent(event)) return;
       if (!this.active || this.processing || this.speaking) return;
+      this.captureSessionId = null;
       this.listening = false;
       this.pendingResult = false;
-      // Normal capture completion is part of the event-driven conversation
-      // loop. It must re-arm LISTENING, not fall back to READY.
       this.lifecycle.returnToListening();
       this.startListening();
     });
 
-    window.addEventListener("haiva:native-voice-timeout", () => {
+    window.addEventListener("haiva:native-voice-timeout", event => {
+      if (!this.acceptNativeCaptureEvent(event)) return;
       if (!this.active || this.processing || this.speaking) return;
+      this.captureSessionId = null;
       this.listening = false;
       this.pendingResult = false;
-      // A capture timeout is recoverable inside an active conversation.
       this.lifecycle.returnToListening();
       this.startListening();
     });
 
     window.addEventListener("haiva:native-voice-error", event => {
+      if (!this.acceptNativeCaptureEvent(event)) return;
       if (!this.active || this.processing || this.speaking) return;
+      this.captureSessionId = null;
       this.listening = false;
       this.pendingResult = false;
-      // Recoverable native capture errors stay inside the active voice loop.
       this.lifecycle.returnToListening();
       this.startListening();
     });
@@ -203,10 +227,9 @@ export class VoiceInteraction {
     this.processing = false;
     this.pendingResult = false;
     this.listening = false;
+    this.captureSessionId = null;
     this.turn = result.turn;
 
-    // Patch 5: stop the actual active TTS path through the unified bridge.
-    // This reaches native Android TTS as well as browser speech synthesis.
     stopSpeaking();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
@@ -242,6 +265,7 @@ export class VoiceInteraction {
     this.turn = this.interruption.beginTurn();
     this.recoveryAttempts = 0;
     this.pendingResult = false;
+    this.captureSessionId = null;
     this.lifecycle.startSession();
     this.startListening();
     return true;
@@ -252,17 +276,18 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
+    this.captureSessionId = null;
     this.stopListening();
     this.lifecycle.endSession();
     stopSpeaking();
   }
 
-  // Patch 1: V3 may open a capture window while TTS is speaking.
-  // This does not change V2 lifecycle state; V3 only needs the capture
-  // channel available so an interruption phrase can reach its parser.
+  // V3 may open a capture window while TTS is speaking. Native session ids
+  // make that capture window generation-safe without changing V2 lifecycle.
   startListening({ allowDuringSpeaking = false } = {}) {
     if (!this.active || this.listening || this.processing || (this.speaking && !allowDuringSpeaking)) return false;
 
+    this.captureSessionId = null;
     if (this.nativeVoice) {
       v1Capture.startCapture();
       return true;
@@ -276,6 +301,7 @@ export class VoiceInteraction {
 
   stopListening() {
     this.listening = false;
+    this.captureSessionId = null;
     v1Capture.stopCapture();
   }
 
@@ -293,15 +319,11 @@ export class VoiceInteraction {
     const speakingTurn = this.turn;
     this.lifecycle.beginSpeaking();
 
-    // V3 capture is armed while V2 remains in SPEAKING.
     this.startListening({ allowDuringSpeaking: true });
 
     try {
       await speak(text);
     } finally {
-      // If V3 interrupted this TTS turn, the interruption already advanced
-      // the turn generation. Do not let the stale speaking completion reset
-      // state or stop the new turn's capture.
       if (this.turn !== speakingTurn) {
         return false;
       }
