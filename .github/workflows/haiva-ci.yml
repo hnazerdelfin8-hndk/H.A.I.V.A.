@@ -42,6 +42,9 @@ jobs:
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
 
+      - name: Run voice stale-event race fencing tests
+        run: node --test tests/voice-race-fencing.test.js
+
       - name: Run boot architecture contract tests
         run: node --test tests/boot-contracts.test.js
 
