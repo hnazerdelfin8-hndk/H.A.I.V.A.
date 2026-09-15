@@ -454,12 +454,9 @@ export class VoiceInteraction {
       return;
     }
 
+    // V3 owns the post-speaking handoff back to V1.
+    // Do not restart V1 here; finishCommand only closes the turn state.
     this.lifecycle.returnToListening();
-    if (this.nativeVoice) {
-      this.restartListeningAfterNativeTurn();
-    } else {
-      this.startListening();
-    }
   }
 
   isConversationActive() {
