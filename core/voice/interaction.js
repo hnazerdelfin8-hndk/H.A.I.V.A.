@@ -137,22 +137,26 @@ export class VoiceInteraction {
 
     window.addEventListener("haiva:v3-capture-ready", event => {
       if (!this.active || !this.speaking || this.processing) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event, { establish: true })) return;
     });
 
     window.addEventListener("haiva:v3-capture-begin", event => {
       if (!this.active || !this.speaking || this.processing) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event)) return;
     });
 
     window.addEventListener("haiva:v3-capture-partial", event => {
       if (!this.active || !this.speaking || this.processing) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event)) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (text) this.onTranscript?.(text);
     });
 
     window.addEventListener("haiva:v3-capture-result", event => {
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event)) return;
       if (!this.active || !this.speaking || this.processing) return;
       const text = event.detail?.text;
@@ -169,6 +173,7 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:v3-capture-complete", event => {
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event)) return;
       if (!this.active || !this.speaking || this.processing) return;
       this.v3CaptureSessionId = null;
@@ -176,6 +181,7 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:v3-capture-error", event => {
+      if (!this.interruption.isMonitoring(this.turn)) return;
       if (!this.acceptNativeV3CaptureEvent(event)) return;
       if (!this.active || !this.speaking || this.processing) return;
       this.v3CaptureSessionId = null;
@@ -188,6 +194,7 @@ export class VoiceInteraction {
 
     window.addEventListener("haiva:native-speech-start", () => {
       if (!this.active || !this.speaking || this.processing) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
       this.v3CaptureSessionId = null;
       v3Capture.startCapture();
     });
@@ -293,8 +300,10 @@ export class VoiceInteraction {
 
   restartV3CaptureAfterTurn() {
     if (!this.active || !this.speaking || this.processing) return false;
+    if (!this.interruption.isMonitoring(this.turn)) return false;
     queueMicrotask(() => {
       if (!this.active || !this.speaking || this.processing) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
       this.v3CaptureSessionId = null;
       v3Capture.startCapture();
     });
@@ -305,7 +314,9 @@ export class VoiceInteraction {
     if (!this.active || this.processing || this.speaking || this.listening) return false;
     this.captureSessionId = null;
     this.lifecycle.returnToListening();
-    return this.startListening();
+    const started = this.startListening();
+    if (started) this.interruption.completeHandoff(this.turn);
+    return started;
   }
 
   handleInterruption(result) {
@@ -422,6 +433,7 @@ export class VoiceInteraction {
     const speakingTurn = this.turn;
     this.stopListening();
     this.lifecycle.beginSpeaking();
+    this.interruption.beginMonitoring(speakingTurn);
 
     if (!this.nativeVoice) {
       v3Capture.startCapture();
@@ -435,6 +447,8 @@ export class VoiceInteraction {
       }
       this.speaking = false;
       this.v3CaptureSessionId = null;
+      const handoff = this.interruption.prepareHandoffToV1(speakingTurn);
+      if (!handoff) return false;
       v3Capture.handoffToV1();
     }
 
