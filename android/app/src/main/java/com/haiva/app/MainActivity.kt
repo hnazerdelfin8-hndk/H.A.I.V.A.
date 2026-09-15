@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -69,10 +70,31 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
 
         textToSpeech = TextToSpeech(this, this)
+        textToSpeech.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
         textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) = Unit
-            override fun onDone(utteranceId: String?) { if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone() }
-            override fun onError(utteranceId: String?) { if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone() }
+            override fun onStart(utteranceId: String?) {
+                if (utteranceId == "HAIVA_RESPONSE") {
+                    Log.i("HAIVA-AUDIO", "TTS_START utterance=HAIVA_RESPONSE")
+                    dispatchJsEvent("haiva:native-speech-start")
+                }
+            }
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == "HAIVA_RESPONSE") {
+                    Log.i("HAIVA-AUDIO", "TTS_DONE utterance=HAIVA_RESPONSE")
+                    dispatchSpeechDone()
+                }
+            }
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == "HAIVA_RESPONSE") {
+                    Log.e("HAIVA-AUDIO", "TTS_ERROR utterance=HAIVA_RESPONSE")
+                    dispatchSpeechDone()
+                }
+            }
         })
 
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
@@ -215,15 +237,20 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private val v3RecognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
             cancelNativeV3VoiceWatchdog()
+            Log.i("HAIVA-AUDIO", "V3_READY session=$activeNativeV3VoiceSessionId ttsReady=$ttsReady")
             dispatchV3VoiceEvent("haiva:v3-capture-ready")
         }
         override fun onBeginningOfSpeech() {
             cancelNativeV3VoiceWatchdog()
+            Log.i("HAIVA-AUDIO", "V3_BEGIN session=$activeNativeV3VoiceSessionId")
             dispatchV3VoiceEvent("haiva:v3-capture-begin")
         }
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { dispatchV3VoiceEvent("haiva:v3-capture-segment-end") }
+        override fun onEndOfSpeech() {
+            Log.i("HAIVA-AUDIO", "V3_END_OF_SPEECH session=$activeNativeV3VoiceSessionId")
+            dispatchV3VoiceEvent("haiva:v3-capture-segment-end")
+        }
         override fun onPartialResults(partialResults: Bundle?) {
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
@@ -233,6 +260,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onError(error: Int) {
             cancelNativeV3VoiceWatchdog()
             nativeV3VoiceRequestActive = false
+            Log.w("HAIVA-AUDIO", "V3_ERROR session=$activeNativeV3VoiceSessionId code=$error")
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchV3VoiceComplete("no_speech")
@@ -249,6 +277,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             nativeV3VoiceRequestActive = false
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
+            Log.i("HAIVA-AUDIO", "V3_RESULT session=$activeNativeV3VoiceSessionId textPresent=${text.isNotEmpty()}")
             if (text.isNotEmpty()) dispatchV3VoiceResult(text)
             else dispatchV3VoiceComplete("empty_result")
         }
@@ -406,11 +435,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         activeNativeV3VoiceSessionId = sessionId
         try {
             nativeV3VoiceRequestActive = true
+            Log.i("HAIVA-AUDIO", "V3_START_LISTENING session=$sessionId ttsReady=$ttsReady")
             recognizer.startListening(intent)
             startNativeV3VoiceWatchdog(sessionId)
         } catch (_: Exception) {
             nativeV3VoiceRequestActive = false
             activeNativeV3VoiceSessionId = null
+            Log.e("HAIVA-AUDIO", "V3_START_FAILED session=$sessionId")
             dispatchV3VoiceError(SpeechRecognizer.ERROR_CLIENT)
         }
     }
@@ -467,6 +498,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         textToSpeech.setSpeechRate(1.0f)
         textToSpeech.setPitch(1.0f)
         val queued = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, "HAIVA_RESPONSE")
+        Log.i("HAIVA-AUDIO", "TTS_QUEUE result=$queued")
         if (queued == TextToSpeech.ERROR) dispatchSpeechDone()
     }
 
