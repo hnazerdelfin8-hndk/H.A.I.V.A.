@@ -19,9 +19,13 @@ function clearPending() {
   pendingOwner = null;
 }
 
-export function acquireCapture(nextOwner, startNativeOrBrowser) {
-  if (owner === nextOwner && !pendingTimer) {
-    return startNativeOrBrowser();
+export function acquireCapture(nextOwner, startCapture, releasePrevious) {
+  if (owner === nextOwner && !pendingTimer) return startCapture();
+
+  if (owner !== null && owner !== nextOwner) {
+    const previousOwner = owner;
+    owner = null;
+    try { releasePrevious(previousOwner); } catch (_) {}
   }
 
   const token = ++generation;
@@ -32,17 +36,17 @@ export function acquireCapture(nextOwner, startNativeOrBrowser) {
     if (token !== generation || pendingOwner !== nextOwner) return;
     pendingOwner = null;
     owner = nextOwner;
-    startNativeOrBrowser();
+    try { startCapture(); } catch (_) { owner = null; }
   }, HANDOFF_DELAY_MS);
   return true;
 }
 
-export function releaseCapture(currentOwner, stopNativeOrBrowser) {
+export function releaseCapture(currentOwner, stopCapture) {
   if (owner !== currentOwner && pendingOwner !== currentOwner) return false;
   ++generation;
   clearPending();
   if (owner === currentOwner) owner = null;
-  stopNativeOrBrowser();
+  try { stopCapture(); } catch (_) {}
   return true;
 }
 
