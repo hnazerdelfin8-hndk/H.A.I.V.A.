@@ -164,8 +164,6 @@ export class VoiceInteraction {
         return;
       }
 
-      // V3 may complete a recognition window while TTS is still speaking.
-      // Keep the interruption channel alive until speaking actually finishes.
       this.v3CaptureSessionId = null;
       this.restartV3CaptureAfterTurn();
     });
@@ -187,6 +185,12 @@ export class VoiceInteraction {
 
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
+
+    window.addEventListener("haiva:native-speech-start", () => {
+      if (!this.active || !this.speaking || this.processing) return;
+      this.v3CaptureSessionId = null;
+      v3Capture.startCapture();
+    });
 
     window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing) return;
@@ -418,7 +422,10 @@ export class VoiceInteraction {
     const speakingTurn = this.turn;
     this.stopListening();
     this.lifecycle.beginSpeaking();
-    v3Capture.startCapture();
+
+    if (!this.nativeVoice) {
+      v3Capture.startCapture();
+    }
 
     try {
       await speak(text);
