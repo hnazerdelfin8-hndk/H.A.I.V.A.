@@ -53,6 +53,7 @@ export class VoiceInteraction {
     this.bindV1Events();
     this.bindNativeCaptureEvents();
     this.bindV3CaptureEvents();
+    v3Capture.setV1HandoffHandler(() => this.resumeV1AfterV3());
   }
 
   reportState(state, previousState) {
@@ -163,8 +164,8 @@ export class VoiceInteraction {
         return;
       }
 
-      // A V3 recognition turn can end without being an interruption.
-      // Keep V3 available while TTS is still speaking.
+      // V3 may complete a recognition window while TTS is still speaking.
+      // Keep the interruption channel alive until speaking actually finishes.
       this.v3CaptureSessionId = null;
       this.restartV3CaptureAfterTurn();
     });
@@ -296,6 +297,13 @@ export class VoiceInteraction {
     return true;
   }
 
+  resumeV1AfterV3() {
+    if (!this.active || this.processing || this.speaking || this.listening) return false;
+    this.captureSessionId = null;
+    this.lifecycle.returnToListening();
+    return this.startListening();
+  }
+
   handleInterruption(result) {
     const interruptedTurn = this.turn;
     this.turn = result.turn;
@@ -420,7 +428,7 @@ export class VoiceInteraction {
       }
       this.speaking = false;
       this.v3CaptureSessionId = null;
-      v3Capture.stopCapture();
+      v3Capture.handoffToV1();
     }
 
     return this.turn === speakingTurn;
