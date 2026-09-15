@@ -109,8 +109,8 @@ export class VoiceInteraction {
         const interruption = this.interruption.interrupt(text, this.turn);
         if (interruption.interrupted) {
           this.handleInterruption(interruption);
-          return;
         }
+        return;
       }
 
       if (!this.acceptResult()) return;
@@ -129,29 +129,31 @@ export class VoiceInteraction {
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
+    // Patch 3: V3 deliberately keeps native capture events alive while TTS is
+    // speaking. The capture session is still fenced by Patch 1 sessionId.
     window.addEventListener("haiva:native-voice-ready", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event, { establish: true })) return;
-      this.lifecycle.activateListening();
+      if (!this.speaking) this.lifecycle.activateListening();
       this.listening = true;
     });
 
     window.addEventListener("haiva:native-voice-begin", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event)) return;
       this.recoveryAttempts = 0;
-      this.lifecycle.activateListening();
+      if (!this.speaking) this.lifecycle.activateListening();
       this.listening = true;
     });
 
     window.addEventListener("haiva:native-voice-segment-end", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event)) return;
       this.listening = true;
     });
 
     window.addEventListener("haiva:native-voice-partial", event => {
-      if (!this.active || this.processing || this.speaking) return;
+      if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event)) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (!text) return;
@@ -181,8 +183,10 @@ export class VoiceInteraction {
         const interruption = this.interruption.interrupt(text, this.turn);
         if (interruption.interrupted) {
           this.handleInterruption(interruption);
-          return;
         }
+        // While TTS is speaking, only an explicit V3 interruption is allowed
+        // to cross the VoiceInteraction boundary. Ordinary speech is ignored.
+        return;
       }
 
       if (!this.acceptResult()) return;
