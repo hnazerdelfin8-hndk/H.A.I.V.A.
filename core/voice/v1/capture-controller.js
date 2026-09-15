@@ -4,7 +4,7 @@
 // V1 is the capture worker inside Voice Interaction.
 // V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
 
-import { acquireCapture, releaseCapture } from "../capture-handoff.js";
+import { acquireCapture, releaseCapture, registerCaptureOwner } from "../capture-handoff.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -79,6 +79,8 @@ function stopUnderlyingCapture() {
   stopBrowserCapture();
 }
 
+registerCaptureOwner("v1", stopUnderlyingCapture);
+
 function startCapture() {
   if (typeof window === "undefined") return;
   captureActive = true;
@@ -93,10 +95,6 @@ function startCapture() {
       }
     }
     startBrowserCapture();
-  }, owner => {
-    if (owner === "v3" && window.HaivaBridge?.stopV3VoiceCapture) {
-      try { window.HaivaBridge.stopV3VoiceCapture(); } catch (_) {}
-    }
   });
 }
 
