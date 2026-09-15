@@ -10,6 +10,9 @@ const dispatchVoiceEvent = (name, detail = {}) => {
 };
 
 let speechGeneration = 0;
+let activeNativeSpeechFinish = null;
+let ignoredNativeCompletion = false;
+let ignoredNativeCompletionTimer = null;
 
 export function setUIState(state) {
   const normalized = String(state).toLowerCase();
@@ -33,6 +36,18 @@ export function hasNativeVoiceBridge() {
 
 export function stopSpeaking() {
   const interruptedGeneration = ++speechGeneration;
+
+  if (activeNativeSpeechFinish) {
+    window.removeEventListener("haiva:native-speech-done", activeNativeSpeechFinish);
+    activeNativeSpeechFinish = null;
+  }
+  ignoredNativeCompletion = true;
+  if (ignoredNativeCompletionTimer) clearTimeout(ignoredNativeCompletionTimer);
+  ignoredNativeCompletionTimer = setTimeout(() => {
+    ignoredNativeCompletion = false;
+    ignoredNativeCompletionTimer = null;
+  }, 1500);
+
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.stopSpeaking === "function") {
     try {
       window.HaivaBridge.stopSpeaking();
@@ -60,6 +75,11 @@ export function speak(text) {
   if (!value) return Promise.resolve();
 
   const generation = ++speechGeneration;
+  ignoredNativeCompletion = false;
+  if (ignoredNativeCompletionTimer) {
+    clearTimeout(ignoredNativeCompletionTimer);
+    ignoredNativeCompletionTimer = null;
+  }
   dispatchVoiceEvent("haiva:speech-start", { text: value, generation });
 
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.speak === "function") {
@@ -67,7 +87,16 @@ export function speak(text) {
       let settled = false;
       const finish = event => {
         if (settled || generation !== speechGeneration) return;
+        if (ignoredNativeCompletion) {
+          ignoredNativeCompletion = false;
+          if (ignoredNativeCompletionTimer) {
+            clearTimeout(ignoredNativeCompletionTimer);
+            ignoredNativeCompletionTimer = null;
+          }
+          return;
+        }
         settled = true;
+        if (activeNativeSpeechFinish === finish) activeNativeSpeechFinish = null;
         window.removeEventListener("haiva:native-speech-done", finish);
         dispatchVoiceEvent("haiva:speech-done", {
           interrupted: event?.detail?.interrupted === true,
@@ -75,6 +104,7 @@ export function speak(text) {
         });
         resolve();
       };
+      activeNativeSpeechFinish = finish;
       window.addEventListener("haiva:native-speech-done", finish);
       try {
         window.HaivaBridge.speak(value);
