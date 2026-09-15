@@ -35,6 +35,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private lateinit var webView: WebView
     private lateinit var textToSpeech: TextToSpeech
     private var speechRecognizer: SpeechRecognizer? = null
+    private var v3SpeechRecognizer: SpeechRecognizer? = null
     private val voicePermissionRequestCode = 1001
     private val voiceFallbackRequestCode = 1002
 
@@ -49,17 +50,20 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private var ttsReady = false
     private var pendingSpeakText: String? = null
     private var pendingNativeVoiceStart = false
+    private var pendingNativeV3VoiceStart = false
     private var destroyed = false
     private var fallbackVoiceActive = false
 
     private val nativeVoiceWatchdog = Handler(Looper.getMainLooper())
+    private val nativeV3VoiceWatchdog = Handler(Looper.getMainLooper())
     private val nativeVoiceWatchdogMs = 5000L
     private var nativeVoiceRequestActive = false
-    // Monotonic native capture generation. Every recognizer start gets a new
-    // session id so late callbacks from an older recognizer session can be
-    // rejected by the VoiceInteraction coordinator.
+    private var nativeV3VoiceRequestActive = false
+
     private var nativeVoiceSessionGeneration = 0L
     private var activeNativeVoiceSessionId: Long? = null
+    private var nativeV3VoiceSessionGeneration = 0L
+    private var activeNativeV3VoiceSessionId: Long? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,7 +75,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             override fun onError(utteranceId: String?) { if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone() }
         })
 
-        if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            createSpeechRecognizer()
+            createV3SpeechRecognizer()
+        }
 
         webView = WebView(this)
         webView.setBackgroundColor(Color.rgb(2, 5, 11))
@@ -150,6 +157,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply { setRecognitionListener(recognitionListener) }
     }
 
+    private fun createV3SpeechRecognizer() {
+        try { v3SpeechRecognizer?.cancel(); v3SpeechRecognizer?.destroy() } catch (_: Exception) {}
+        v3SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply { setRecognitionListener(v3RecognitionListener) }
+    }
+
     override fun onInit(status: Int) {
         ttsReady = status == TextToSpeech.SUCCESS
         if (ttsReady) {
@@ -169,9 +181,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() {
-            dispatchVoiceEvent("haiva:native-voice-segment-end")
-        }
+        override fun onEndOfSpeech() { dispatchVoiceEvent("haiva:native-voice-segment-end") }
         override fun onPartialResults(partialResults: Bundle?) {
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
@@ -199,6 +209,48 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             val text = matches?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoiceResult(text)
             else dispatchVoiceCaptureComplete("empty_result")
+        }
+    }
+
+    private val v3RecognitionListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {
+            cancelNativeV3VoiceWatchdog()
+            dispatchV3VoiceEvent("haiva:v3-capture-ready")
+        }
+        override fun onBeginningOfSpeech() {
+            cancelNativeV3VoiceWatchdog()
+            dispatchV3VoiceEvent("haiva:v3-capture-begin")
+        }
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() { dispatchV3VoiceEvent("haiva:v3-capture-segment-end") }
+        override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val text = matches?.firstOrNull()?.trim().orEmpty()
+            if (text.isNotEmpty()) dispatchV3VoicePartial(text)
+        }
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+        override fun onError(error: Int) {
+            cancelNativeV3VoiceWatchdog()
+            nativeV3VoiceRequestActive = false
+            when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH,
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchV3VoiceComplete("no_speech")
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                SpeechRecognizer.ERROR_CLIENT -> {
+                    dispatchV3VoiceComplete("recoverable_client_state")
+                    createV3SpeechRecognizer()
+                }
+                else -> dispatchV3VoiceError(error)
+            }
+        }
+        override fun onResults(results: Bundle?) {
+            cancelNativeV3VoiceWatchdog()
+            nativeV3VoiceRequestActive = false
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val text = matches?.firstOrNull()?.trim().orEmpty()
+            if (text.isNotEmpty()) dispatchV3VoiceResult(text)
+            else dispatchV3VoiceComplete("empty_result")
         }
     }
 
@@ -247,8 +299,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             request?.let { try { it.grant(it.resources) } catch (_: Exception) {} }
             dispatchJsEvent("haiva:microphone-ready")
             if (pendingNativeVoiceStart) { pendingNativeVoiceStart = false; startNativeRecognition() }
+            if (pendingNativeV3VoiceStart) { pendingNativeV3VoiceStart = false; startV3NativeRecognition() }
         } else {
             pendingNativeVoiceStart = false
+            pendingNativeV3VoiceStart = false
             request?.let { try { it.deny() } catch (_: Exception) {} }
             Toast.makeText(this, "Microphone permission is required for H.A.I.V.A. voice mode.", Toast.LENGTH_LONG).show()
             dispatchVoiceUnavailable("microphone_permission_denied")
@@ -262,6 +316,40 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeVoiceStart = true; requestVoicePermission(); return@runOnUiThread }
             fallbackVoiceActive = false
             startNativeRecognition()
+        }
+    }
+
+    @JavascriptInterface
+    override fun stopVoiceCapture() {
+        runOnUiThread {
+            pendingNativeVoiceStart = false
+            fallbackVoiceActive = false
+            nativeVoiceRequestActive = false
+            activeNativeVoiceSessionId = null
+            cancelNativeVoiceWatchdog()
+            try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+            try { speechRecognizer?.cancel() } catch (_: Exception) {}
+        }
+    }
+
+    @JavascriptInterface
+    override fun startV3VoiceCapture() {
+        runOnUiThread {
+            if (destroyed) return@runOnUiThread
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeV3VoiceStart = true; requestVoicePermission(); return@runOnUiThread }
+            startV3NativeRecognition()
+        }
+    }
+
+    @JavascriptInterface
+    override fun stopV3VoiceCapture() {
+        runOnUiThread {
+            pendingNativeV3VoiceStart = false
+            nativeV3VoiceRequestActive = false
+            activeNativeV3VoiceSessionId = null
+            cancelNativeV3VoiceWatchdog()
+            try { v3SpeechRecognizer?.stopListening() } catch (_: Exception) {}
+            try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
         }
     }
 
@@ -296,6 +384,37 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
     }
 
+    private fun startV3NativeRecognition() {
+        if (destroyed) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeV3VoiceStart = true; requestVoicePermission(); return }
+        if (v3SpeechRecognizer == null) {
+            if (SpeechRecognizer.isRecognitionAvailable(this)) createV3SpeechRecognizer()
+            else { dispatchV3VoiceError(-1); return }
+        }
+        val recognizer = v3SpeechRecognizer ?: run { dispatchV3VoiceError(-1); return }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 700L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+        }
+        val sessionId = ++nativeV3VoiceSessionGeneration
+        activeNativeV3VoiceSessionId = sessionId
+        try {
+            nativeV3VoiceRequestActive = true
+            recognizer.startListening(intent)
+            startNativeV3VoiceWatchdog(sessionId)
+        } catch (_: Exception) {
+            nativeV3VoiceRequestActive = false
+            activeNativeV3VoiceSessionId = null
+            dispatchV3VoiceError(SpeechRecognizer.ERROR_CLIENT)
+        }
+    }
+
     private fun startNativeVoiceWatchdog(sessionId: Long) {
         cancelNativeVoiceWatchdog()
         nativeVoiceWatchdog.postDelayed({
@@ -307,20 +426,19 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }, nativeVoiceWatchdogMs)
     }
 
-    private fun cancelNativeVoiceWatchdog() { nativeVoiceWatchdog.removeCallbacksAndMessages(null) }
-
-    @JavascriptInterface
-    override fun stopVoiceCapture() {
-        runOnUiThread {
-            pendingNativeVoiceStart = false
-            fallbackVoiceActive = false
-            nativeVoiceRequestActive = false
-            activeNativeVoiceSessionId = null
-            cancelNativeVoiceWatchdog()
-            try { speechRecognizer?.stopListening() } catch (_: Exception) {}
-            try { speechRecognizer?.cancel() } catch (_: Exception) {}
-        }
+    private fun startNativeV3VoiceWatchdog(sessionId: Long) {
+        cancelNativeV3VoiceWatchdog()
+        nativeV3VoiceWatchdog.postDelayed({
+            if (destroyed || !nativeV3VoiceRequestActive || activeNativeV3VoiceSessionId != sessionId) return@postDelayed
+            nativeV3VoiceRequestActive = false
+            activeNativeV3VoiceSessionId = null
+            try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
+            dispatchV3VoiceEvent("haiva:v3-capture-complete", sessionId, "timeout")
+        }, nativeVoiceWatchdogMs)
     }
+
+    private fun cancelNativeVoiceWatchdog() { nativeVoiceWatchdog.removeCallbacksAndMessages(null) }
+    private fun cancelNativeV3VoiceWatchdog() { nativeV3VoiceWatchdog.removeCallbacksAndMessages(null) }
 
     @JavascriptInterface
     override fun speak(text: String) {
@@ -369,7 +487,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private fun dispatchVoiceResult(text: String) {
         val sessionId = activeNativeVoiceSessionId ?: return
-        Log.i("HAIVA-VOICE-DIAG", "PATCH1_NATIVE_RESULT_DISPATCH session=$sessionId event=haiva:native-voice-result")
         val quoted = org.json.JSONObject.quote(text)
         runOnUiThread {
             if (!destroyed && activeNativeVoiceSessionId == sessionId) {
@@ -395,6 +512,42 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         }
     }
 
+    private fun dispatchV3VoicePartial(text: String) {
+        val sessionId = activeNativeV3VoiceSessionId ?: return
+        val quoted = org.json.JSONObject.quote(text)
+        runOnUiThread {
+            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) {
+                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
+            }
+        }
+    }
+
+    private fun dispatchV3VoiceResult(text: String) {
+        val sessionId = activeNativeV3VoiceSessionId ?: return
+        val quoted = org.json.JSONObject.quote(text)
+        activeNativeV3VoiceSessionId = null
+        runOnUiThread {
+            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
+        }
+    }
+
+    private fun dispatchV3VoiceComplete(reason: String) {
+        val sessionId = activeNativeV3VoiceSessionId ?: return
+        val quoted = org.json.JSONObject.quote(reason)
+        activeNativeV3VoiceSessionId = null
+        runOnUiThread {
+            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-complete',{detail:{reason:$quoted,sessionId:$sessionId}}))", null)
+        }
+    }
+
+    private fun dispatchV3VoiceError(error: Int) {
+        val sessionId = activeNativeV3VoiceSessionId ?: return
+        activeNativeV3VoiceSessionId = null
+        runOnUiThread {
+            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-error',{detail:{code:${error.toString()},sessionId:$sessionId}}))", null)
+        }
+    }
+
     private fun dispatchVoiceUnavailable(reason: String) {
         nativeVoiceRequestActive = false
         activeNativeVoiceSessionId = null
@@ -408,6 +561,16 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         runOnUiThread {
             if (!destroyed && activeNativeVoiceSessionId == sessionId) {
                 webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null)
+            }
+        }
+    }
+
+    private fun dispatchV3VoiceEvent(name: String, sessionId: Long? = activeNativeV3VoiceSessionId, reason: String? = null) {
+        if (destroyed || sessionId == null) return
+        val reasonJson = reason?.let { ",reason:${org.json.JSONObject.quote(it)}" } ?: ""
+        runOnUiThread {
+            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) {
+                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null)
             }
         }
     }
@@ -426,14 +589,21 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         pendingWebPermissionRequest?.let { try { it.deny() } catch (_: Exception) {} }
         pendingWebPermissionRequest = null
         pendingNativeVoiceStart = false
+        pendingNativeV3VoiceStart = false
         fallbackVoiceActive = false
         nativeVoiceRequestActive = false
+        nativeV3VoiceRequestActive = false
         activeNativeVoiceSessionId = null
+        activeNativeV3VoiceSessionId = null
         cancelNativeVoiceWatchdog()
+        cancelNativeV3VoiceWatchdog()
         pendingSpeakText = null
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = null
+        try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
+        try { v3SpeechRecognizer?.destroy() } catch (_: Exception) {}
+        v3SpeechRecognizer = null
         try { textToSpeech.stop(); textToSpeech.shutdown() } catch (_: Exception) {}
         webView.destroy()
         super.onDestroy()
