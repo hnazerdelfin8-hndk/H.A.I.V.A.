@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 const app = readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
 const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
+const handoff = readFileSync(new URL("../core/voice/capture-handoff.js", import.meta.url), "utf8");
 const v1 = readFileSync(new URL("../core/voice/v1/capture-controller.js", import.meta.url), "utf8");
 const v3Logic = readFileSync(new URL("../core/voice/v3/interaction-v3.js", import.meta.url), "utf8");
 const v3Capture = readFileSync(new URL("../core/voice/v3/capture-controller.js", import.meta.url), "utf8");
@@ -11,71 +12,34 @@ const androidBridge = readFileSync(new URL("../android/app/src/main/java/com/hai
 const androidActivity = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 
 function nativeHandlerBody(source, eventName) {
-  const escaped = eventName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const start = source.search(
-    new RegExp(`window\\.addEventListener\\(\\s*[\"']${escaped}[\"']\\s*,`)
-  );
+  const escaped = eventName.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
+  const start = source.search(new RegExp(`window\\.addEventListener\\(\\s*[\\\"']${escaped}[\\\"']\\s*,`));
   assert.notEqual(start, -1, `${eventName} handler missing`);
-
   const arrowStart = source.indexOf("=>", start);
   assert.notEqual(arrowStart, -1, `${eventName} handler arrow missing`);
   const openBrace = source.indexOf("{", arrowStart);
   assert.notEqual(openBrace, -1, `${eventName} handler body missing`);
-
   let depth = 0;
   let quote = null;
   let escapedChar = false;
   let lineComment = false;
   let blockComment = false;
-
   for (let index = openBrace; index < source.length; index += 1) {
     const char = source[index];
     const next = source[index + 1];
-    if (lineComment) {
-      if (char === "\n") lineComment = false;
-      continue;
-    }
-    if (blockComment) {
-      if (char === "*" && next === "/") {
-        blockComment = false;
-        index += 1;
-      }
-      continue;
-    }
+    if (lineComment) { if (char === "\n") lineComment = false; continue; }
+    if (blockComment) { if (char === "*" && next === "/") { blockComment = false; index += 1; } continue; }
     if (quote) {
-      if (escapedChar) {
-        escapedChar = false;
-        continue;
-      }
-      if (char === "\\") {
-        escapedChar = true;
-        continue;
-      }
+      if (escapedChar) { escapedChar = false; continue; }
+      if (char === "\\") { escapedChar = true; continue; }
       if (char === quote) quote = null;
       continue;
     }
-    if (char === "/" && next === "/") {
-      lineComment = true;
-      index += 1;
-      continue;
-    }
-    if (char === "/" && next === "*") {
-      blockComment = true;
-      index += 1;
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      quote = char;
-      continue;
-    }
-    if (char === "{") {
-      depth += 1;
-      continue;
-    }
-    if (char === "}") {
-      depth -= 1;
-      if (depth === 0) return source.slice(openBrace + 1, index);
-    }
+    if (char === "/" && next === "/") { lineComment = true; index += 1; continue; }
+    if (char === "/" && next === "*") { blockComment = true; index += 1; continue; }
+    if (char === '"' || char === "'" || char === "`") { quote = char; continue; }
+    if (char === "{") { depth += 1; continue; }
+    if (char === "}") { depth -= 1; if (depth === 0) return source.slice(openBrace + 1, index); }
   }
   assert.fail(`${eventName} handler body is unbalanced`);
 }
@@ -102,6 +66,7 @@ test("voice boundary: V1 is normal-input capture only", () => {
   assert.match(v1, /startVoiceCapture/);
   assert.match(v1, /stopVoiceCapture/);
   assert.match(v1, /SpeechRecognition/);
+  assert.match(v1, /registerCaptureOwner\(\"v1\"/);
   assert.doesNotMatch(v1, /startV3VoiceCapture/);
   assert.doesNotMatch(v1, /stopV3VoiceCapture/);
 });
@@ -110,11 +75,19 @@ test("voice boundary: V3 has a separate capture worker and separate native chann
   assert.match(v3Capture, /startV3VoiceCapture/);
   assert.match(v3Capture, /stopV3VoiceCapture/);
   assert.match(v3Capture, /SpeechRecognition/);
+  assert.match(v3Capture, /registerCaptureOwner\(\"v3\"/);
+  assert.doesNotMatch(v3Capture, /startVoiceCapture/);
+  assert.doesNotMatch(v3Capture, /stopVoiceCapture/);
   assert.doesNotMatch(v3Logic, /SpeechRecognition/);
   assert.match(interaction, /bindV3CaptureEvents/);
 });
 
-test("voice boundary: V1 and V3 capture are exclusive", () => {
+test("voice boundary: V1 and V3 use one exclusive capture handoff arbiter", () => {
+  assert.match(handoff, /One microphone owner at a time/);
+  assert.match(handoff, /HANDOFF_DELAY_MS = 180/);
+  assert.match(handoff, /registerCaptureOwner/);
+  assert.match(handoff, /acquireCapture/);
+  assert.match(handoff, /releaseCapture/);
   assert.match(interaction, /this\.stopListening\(\);[\s\S]*v3Capture\.startCapture\(\)/);
   assert.match(interaction, /v3Capture\.stopCapture\(\);[\s\S]*this\.startListening\(\)/);
   assert.match(androidBridge, /startV3VoiceCapture\(\)/);
