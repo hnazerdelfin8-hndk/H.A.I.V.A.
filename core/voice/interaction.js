@@ -227,27 +227,42 @@ export class VoiceInteraction {
   }
 
   handleInterruption(result) {
+    // Patch 4: atomically invalidate the old speaking/capture turn before
+    // handing a stop+instruction command back to Core. This prevents late
+    // TTS/capture callbacks from completing the interrupted turn.
+    const interruptedTurn = this.turn;
+    this.turn = result.turn;
     this.speaking = false;
     this.processing = false;
     this.pendingResult = false;
     this.listening = false;
     this.captureSessionId = null;
-    this.turn = result.turn;
 
+    // Stop the old TTS first. The JS speech-generation fence in ui-bridge
+    // prevents its completion callback from resolving the new turn.
     stopSpeaking();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
       instruction: result.instruction || "",
       interrupted: true,
-      previousTurn: result.previousTurn
+      previousTurn: result.previousTurn ?? interruptedTurn
     });
 
     if (result.instruction) {
-      this.reportInput(result.instruction, "v3-interruption");
+      // Let the stop command finish its synchronous native/browser cancellation
+      // before Core begins processing the replacement instruction. This keeps
+      // the handoff event-driven without introducing an arbitrary sleep.
+      queueMicrotask(() => {
+        if (!this.active || this.turn !== result.turn) return;
+        this.reportInput(result.instruction, "v3-interruption");
+      });
     } else if (this.active) {
-      this.lifecycle.returnToListening();
-      this.startListening();
+      queueMicrotask(() => {
+        if (!this.active || this.turn !== result.turn) return;
+        this.lifecycle.returnToListening();
+        this.startListening();
+      });
     }
   }
 
