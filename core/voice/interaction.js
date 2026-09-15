@@ -39,10 +39,9 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.recoveryAttempts = 0;
     this.turn = 0;
-    // Patch 1: null means there is no currently accepted native capture.
-    // Native Android attaches a monotonically increasing sessionId to every
-    // callback, allowing stale recognizer events to be rejected safely.
     this.captureSessionId = null;
+    this.nativeCaptureRestartPending = false;
+    this.nativeCaptureRestartTimer = null;
     this.initialized = false;
   }
 
@@ -118,7 +117,7 @@ export class VoiceInteraction {
       this.reportInput(text, event.detail?.source || "v1");
     });
 
-    window.addEventListener("haiva:v1-capture-error", event => {
+    window.addEventListener("haiva:v1-capture-error", () => {
       if (!this.active || this.processing || this.speaking) return;
       this.listening = false;
       this.lifecycle.returnToListening();
@@ -129,11 +128,10 @@ export class VoiceInteraction {
   bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
 
-    // Patch 3: V3 deliberately keeps native capture events alive while TTS is
-    // speaking. The capture session is still fenced by Patch 1 sessionId.
     window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event, { establish: true })) return;
+      this.nativeCaptureRestartPending = false;
       if (!this.speaking) this.lifecycle.activateListening();
       this.listening = true;
     });
@@ -141,6 +139,7 @@ export class VoiceInteraction {
     window.addEventListener("haiva:native-voice-begin", event => {
       if (!this.active || this.processing) return;
       if (!this.acceptNativeCaptureEvent(event)) return;
+      this.nativeCaptureRestartPending = false;
       this.recoveryAttempts = 0;
       if (!this.speaking) this.lifecycle.activateListening();
       this.listening = true;
@@ -184,8 +183,6 @@ export class VoiceInteraction {
         if (interruption.interrupted) {
           this.handleInterruption(interruption);
         }
-        // While TTS is speaking, only an explicit V3 interruption is allowed
-        // to cross the VoiceInteraction boundary. Ordinary speech is ignored.
         return;
       }
 
@@ -202,7 +199,7 @@ export class VoiceInteraction {
       this.listening = false;
       this.pendingResult = false;
       this.lifecycle.returnToListening();
-      this.startListening();
+      this.restartListeningAfterNativeTurn();
     });
 
     window.addEventListener("haiva:native-voice-timeout", event => {
@@ -212,7 +209,7 @@ export class VoiceInteraction {
       this.listening = false;
       this.pendingResult = false;
       this.lifecycle.returnToListening();
-      this.startListening();
+      this.restartListeningAfterNativeTurn();
     });
 
     window.addEventListener("haiva:native-voice-error", event => {
@@ -222,14 +219,24 @@ export class VoiceInteraction {
       this.listening = false;
       this.pendingResult = false;
       this.lifecycle.returnToListening();
-      this.startListening();
+      this.restartListeningAfterNativeTurn();
     });
   }
 
+  restartListeningAfterNativeTurn() {
+    if (!this.active || this.processing || this.speaking) return false;
+    this.nativeCaptureRestartPending = true;
+    if (this.nativeCaptureRestartTimer) clearTimeout(this.nativeCaptureRestartTimer);
+    this.nativeCaptureRestartTimer = setTimeout(() => {
+      this.nativeCaptureRestartTimer = null;
+      if (!this.active || this.processing || this.speaking) return;
+      this.nativeCaptureRestartPending = false;
+      this.startListening();
+    }, 0);
+    return true;
+  }
+
   handleInterruption(result) {
-    // Patch 4: atomically invalidate the old speaking/capture turn before
-    // handing a stop+instruction command back to Core. This prevents late
-    // TTS/capture callbacks from completing the interrupted turn.
     const interruptedTurn = this.turn;
     this.turn = result.turn;
     this.speaking = false;
@@ -238,8 +245,6 @@ export class VoiceInteraction {
     this.listening = false;
     this.captureSessionId = null;
 
-    // Stop the old TTS first. The JS speech-generation fence in ui-bridge
-    // prevents its completion callback from resolving the new turn.
     stopSpeaking();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
@@ -250,9 +255,6 @@ export class VoiceInteraction {
     });
 
     if (result.instruction) {
-      // Let the stop command finish its synchronous native/browser cancellation
-      // before Core begins processing the replacement instruction. This keeps
-      // the handoff event-driven without introducing an arbitrary sleep.
       queueMicrotask(() => {
         if (!this.active || this.turn !== result.turn) return;
         this.reportInput(result.instruction, "v3-interruption");
@@ -296,15 +298,18 @@ export class VoiceInteraction {
     this.speaking = false;
     this.pendingResult = false;
     this.captureSessionId = null;
+    this.nativeCaptureRestartPending = false;
+    if (this.nativeCaptureRestartTimer) {
+      clearTimeout(this.nativeCaptureRestartTimer);
+      this.nativeCaptureRestartTimer = null;
+    }
     this.stopListening();
     this.lifecycle.endSession();
     stopSpeaking();
   }
 
-  // V3 may open a capture window while TTS is speaking. Native session ids
-  // make that capture window generation-safe without changing V2 lifecycle.
   startListening({ allowDuringSpeaking = false } = {}) {
-    if (!this.active || this.listening || this.processing || (this.speaking && !allowDuringSpeaking)) return false;
+    if (!this.active || this.listening || this.processing || this.nativeCaptureRestartPending || (this.speaking && !allowDuringSpeaking)) return false;
 
     this.captureSessionId = null;
     if (this.nativeVoice) {
@@ -365,7 +370,11 @@ export class VoiceInteraction {
     }
 
     this.lifecycle.returnToListening();
-    this.startListening();
+    if (this.nativeVoice) {
+      this.restartListeningAfterNativeTurn();
+    } else {
+      this.startListening();
+    }
   }
 
   isConversationActive() {
