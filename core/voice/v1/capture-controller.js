@@ -2,8 +2,9 @@
 // H.A.I.V.A. V1 VOICE CAPTURE CONTROLLER
 // =========================================
 // V1 is the capture worker inside Voice Interaction.
-// Voice Interaction owns the session and requests V1 capture.
 // V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
+
+import { acquireCapture, releaseCapture } from "../capture-handoff.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -58,9 +59,6 @@ function startBrowserCapture() {
       browserRecognizer = null;
       const wasActive = captureActive;
       captureActive = false;
-      // A browser recognizer can end without producing a final result.
-      // Report that capture boundary so VoiceInteraction can recover instead
-      // of leaving the conversational lifecycle stuck in LISTENING.
       if (wasActive) emitCaptureError("capture-ended");
     };
     recognition.start();
@@ -73,26 +71,37 @@ function startBrowserCapture() {
   }
 }
 
-function startCapture() {
-  if (typeof window === "undefined") return;
-  captureActive = true;
-  if (window.HaivaBridge?.startVoiceCapture) {
-    try {
-      window.HaivaBridge.startVoiceCapture();
-      return;
-    } catch (error) {
-      console.warn("[HAIVA] V1 native capture start failed:", error?.message || error);
-    }
-  }
-  startBrowserCapture();
-}
-
-function stopCapture() {
+function stopUnderlyingCapture() {
   captureActive = false;
   if (typeof window !== "undefined" && window.HaivaBridge?.stopVoiceCapture) {
     try { window.HaivaBridge.stopVoiceCapture(); } catch (_) {}
   }
   stopBrowserCapture();
+}
+
+function startCapture() {
+  if (typeof window === "undefined") return;
+  captureActive = true;
+  acquireCapture("v1", () => {
+    if (!captureActive) return;
+    if (window.HaivaBridge?.startVoiceCapture) {
+      try {
+        window.HaivaBridge.startVoiceCapture();
+        return;
+      } catch (error) {
+        console.warn("[HAIVA] V1 native capture start failed:", error?.message || error);
+      }
+    }
+    startBrowserCapture();
+  }, owner => {
+    if (owner === "v3" && window.HaivaBridge?.stopV3VoiceCapture) {
+      try { window.HaivaBridge.stopV3VoiceCapture(); } catch (_) {}
+    }
+  });
+}
+
+function stopCapture() {
+  releaseCapture("v1", stopUnderlyingCapture);
 }
 
 export const v1Capture = Object.freeze({ startCapture, stopCapture });
