@@ -69,6 +69,7 @@ test("voice boundary: V1 is normal-input capture only", () => {
   assert.match(v1, /registerCaptureOwner\(\"v1\"/);
   assert.doesNotMatch(v1, /startV3VoiceCapture/);
   assert.doesNotMatch(v1, /stopV3VoiceCapture/);
+  assert.doesNotMatch(v1, /v3Capture/);
 });
 
 test("voice boundary: V3 has a separate capture worker and separate native channel", () => {
@@ -82,14 +83,31 @@ test("voice boundary: V3 has a separate capture worker and separate native chann
   assert.match(interaction, /bindV3CaptureEvents/);
 });
 
-test("voice boundary: V1 and V3 use one exclusive capture handoff arbiter", () => {
+test("voice boundary: normal loop is V1/V2 and V3 is only the interruption branch", () => {
+  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*v3Capture\.startCapture\(\)/);
+  assert.match(interaction, /v3Capture\.setV1HandoffHandler\(\(\) => this\.resumeV1AfterV3\(\)\)/);
+  assert.match(interaction, /v3Capture\.handoffToV1\(\)/);
+  assert.match(interaction, /resumeV1AfterV3\(\)/);
+  assert.doesNotMatch(v1, /v3Capture/);
+});
+
+test("voice boundary: V3 handoff direction is V3 -> V1, never V1 -> V3", () => {
+  assert.match(v3Capture, /handoffToV1/);
+  assert.match(v3Capture, /handoffToV1Handler/);
+  assert.match(v3Capture, /handoffToV1Handler\(\)/);
+  assert.doesNotMatch(v1, /handoffToV3/);
+  assert.doesNotMatch(v1, /startV3VoiceCapture/);
+  assert.doesNotMatch(v1, /stopV3VoiceCapture/);
+});
+
+test("voice boundary: V1 and V3 use one exclusive capture handoff barrier", () => {
   assert.match(handoff, /One microphone owner at a time/);
   assert.match(handoff, /HANDOFF_DELAY_MS = 180/);
   assert.match(handoff, /registerCaptureOwner/);
   assert.match(handoff, /acquireCapture/);
   assert.match(handoff, /releaseCapture/);
-  assert.match(interaction, /this\.stopListening\(\);[\s\S]*v3Capture\.startCapture\(\)/);
-  assert.match(interaction, /v3Capture\.stopCapture\(\);[\s\S]*this\.startListening\(\)/);
+  assert.match(v3Capture, /releaseCapture\(\"v3\", stopUnderlyingCapture\)/);
+  assert.match(v1, /acquireCapture\(\"v1\"/);
   assert.match(androidBridge, /startV3VoiceCapture\(\)/);
   assert.match(androidBridge, /stopV3VoiceCapture\(\)/);
   assert.match(androidActivity, /speechRecognizer: SpeechRecognizer\?/);
