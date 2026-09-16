@@ -83,21 +83,28 @@ test("voice boundary: V3 has a separate capture worker and separate native chann
   assert.match(interaction, /bindV3CaptureEvents/);
 });
 
-test("voice boundary: normal loop is V1/V2 and V3 is only the interruption branch", () => {
+test("voice boundary: normal loop is coordinated by VoiceInteraction", () => {
   assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*v3Capture\.startCapture\(\)/);
-  assert.match(interaction, /v3Capture\.setV1HandoffHandler\(\(\) => this\.resumeV1AfterV3\(\)\)/);
-  assert.match(interaction, /v3Capture\.handoffToV1\(\)/);
-  assert.match(interaction, /resumeV1AfterV3\(\)/);
+  assert.match(interaction, /this\.interruption\.stopMonitoring\(speakingTurn\)/);
+  assert.match(interaction, /v3Capture\.stopCapture\(\)/);
+  assert.match(interaction, /this\.startListening\(\)/);
+  assert.doesNotMatch(interaction, /setV1HandoffHandler/);
+  assert.doesNotMatch(interaction, /handoffToV1/);
+  assert.doesNotMatch(interaction, /resumeV1AfterV3/);
+  assert.doesNotMatch(v3Capture, /handoffToV1/);
+  assert.doesNotMatch(v3Capture, /setV1HandoffHandler/);
+  assert.doesNotMatch(v3Logic, /HANDOFF/);
   assert.doesNotMatch(v1, /v3Capture/);
 });
 
-test("voice boundary: V3 handoff direction is V3 -> V1, never V1 -> V3", () => {
-  assert.match(v3Capture, /handoffToV1/);
-  assert.match(v3Capture, /handoffToV1Handler/);
-  assert.match(v3Capture, /handoffToV1Handler\(\)/);
-  assert.doesNotMatch(v1, /handoffToV3/);
-  assert.doesNotMatch(v1, /startV3VoiceCapture/);
-  assert.doesNotMatch(v1, /stopV3VoiceCapture/);
+test("voice boundary: V3 reports interruption only and never routes to V1", () => {
+  assert.match(v3Logic, /route: \"none\"/);
+  assert.match(v3Logic, /interrupt\(/);
+  assert.doesNotMatch(v3Capture, /handoffToV1/);
+  assert.doesNotMatch(v3Capture, /handoffToV1Handler/);
+  assert.doesNotMatch(v3Logic, /prepareHandoffToV1/);
+  assert.doesNotMatch(v3Logic, /completeHandoff/);
+  assert.doesNotMatch(v3Logic, /HANDOFF/);
 });
 
 test("voice boundary: V1 and V3 use one exclusive capture handoff barrier", () => {
