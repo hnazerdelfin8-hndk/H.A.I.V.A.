@@ -15,6 +15,13 @@ test("V3 interrupt vocabulary recognizes natural English and Tagalog stop phrase
   }
 });
 
+test("V3 interrupt matching recognizes a single-word interrupt after normal speech", () => {
+  for (const phrase of ["please stop", "okay teka", "wait please", "can you pause"]) {
+    const result = detectVoiceInterrupt(phrase);
+    assert.equal(result.interrupted, true, phrase);
+  }
+});
+
 test("V3 interrupt matching does not trigger on an unrelated sentence", () => {
   const result = detectVoiceInterrupt("the wait time is three seconds");
   assert.equal(result.interrupted, false);
@@ -52,14 +59,14 @@ test("V3 coordinator rejects stale turn results", () => {
   assert.equal(coordinator.commitResult(oldTurn, "stale"), null);
 });
 
-test("V3 interrupt creates a fresh turn generation", () => {
+test("V3 interrupt detects and invalidates the speaking turn without routing to V1", () => {
   const coordinator = createVoiceInteractionV3({ interruptKeywords: DEFAULT_INTERRUPT_KEYWORDS });
   const speakingTurn = coordinator.beginTurn();
   coordinator.beginMonitoring(speakingTurn);
   assert.equal(coordinator.getState(), V3_STATES.MONITORING);
   const interruption = coordinator.interrupt("Teka lang", speakingTurn);
   assert.equal(interruption.interrupted, true);
-  assert.equal(interruption.route, "v1");
+  assert.equal(interruption.route, "none");
   assert.notEqual(interruption.turn, speakingTurn);
   assert.equal(coordinator.isCurrent(interruption.turn), true);
 });
@@ -71,18 +78,18 @@ test("V3 interrupt invalidates the old turn for STOP plus instruction", () => {
   const interruption = coordinator.interrupt("Stop, gumawa ka ng summary", speakingTurn);
   assert.equal(interruption.interrupted, true);
   assert.equal(interruption.instruction, "gumawa ka ng summary");
-  assert.equal(interruption.route, "v1");
+  assert.equal(interruption.route, "none");
   assert.equal(coordinator.commitResult(speakingTurn, "old response"), null);
   assert.equal(coordinator.isCurrent(interruption.turn), true);
 });
 
-test("V3 normal speaking handoff routes back to V1 without interruption", () => {
+test("V3 compatibility handoff state does not claim V1 routing", () => {
   const coordinator = createVoiceInteractionV3();
   const speakingTurn = coordinator.beginTurn();
   assert.equal(coordinator.beginMonitoring(speakingTurn), true);
   const handoff = coordinator.prepareHandoffToV1(speakingTurn);
   assert.deepEqual(handoff, {
-    route: "v1",
+    route: "none",
     interrupted: false,
     instruction: "",
     turn: speakingTurn
