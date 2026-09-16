@@ -15,7 +15,9 @@ const androidBridge = readFileSync(new URL("../android/app/src/main/java/com/hai
 const androidActivity = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 
 test("voice boundary: VoiceInteraction owns the voice domain", () => {
-  assert.match(app, /createVoiceInteraction/);
+  assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
+  assert.match(app, /new VoiceInteraction\(/);
+  assert.doesNotMatch(app, /createVoiceInteraction\s*\(/);
   assert.match(interaction, /v1Capture/);
   assert.match(interaction, /v3Capture/);
   assert.match(interaction, /VoiceLifecycleV2/);
