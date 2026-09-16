@@ -1,20 +1,30 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>H.A.I.V.A. — C++ Hive Orb Prototype</title>
-  <style>
-    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020604;color:#d7ffe3;font-family:system-ui,sans-serif}
-    canvas{display:block;width:100%;height:100%}
-    .hud{position:fixed;top:18px;left:18px;letter-spacing:.12em;font-size:12px;text-shadow:0 0 12px #28ff75;pointer-events:none}
-    .hint{position:fixed;bottom:18px;left:18px;opacity:.65;font-size:11px;pointer-events:none}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>H.A.I.V.A. — Hive Orb</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020604;color:#d7ffe3;font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%}
+.hud{position:fixed;top:18px;left:18px;letter-spacing:.12em;font-size:12px;text-shadow:0 0 12px #28ff75;pointer-events:none}.hint{position:fixed;bottom:18px;left:18px;opacity:.65;font-size:11px;pointer-events:none}
+</style>
 </head>
 <body>
-<canvas id="orb"></canvas>
-<div class="hud">H.A.I.V.A. / HIVE ORB / C++ ENGINE PROTOTYPE</div>
-<div class="hint">Prototype visualization — drag to rotate • tap for impulse</div>
-<script src="hive-orb.js"></script>
-</body>
-</html>
+<canvas id="orb"></canvas><div class="hud">H.A.I.V.A. / HIVE ORB / NATIVE-READY PROTOTYPE</div><div class="hint">Drag to rotate • tap for impulse</div>
+<script>
+(()=>{
+const c=document.getElementById('orb'),g=c.getContext('webgl',{antialias:true,alpha:false});
+if(!g){document.body.innerHTML='<p style="padding:24px">WebGL is required.</p>';return}
+const vs=`attribute vec3 p;attribute float e;uniform mat4 mvp;varying float v;void main(){v=e;gl_Position=mvp*vec4(p,1.0);}`;
+const fs=`precision mediump float;varying float v;void main(){gl_FragColor=vec4(.05,.95,.32,.12+.88*v);}`;
+function sh(t,s){let x=g.createShader(t);g.shaderSource(x,s);g.compileShader(x);return x} const pr=g.createProgram();g.attachShader(pr,sh(g.VERTEX_SHADER,vs));g.attachShader(pr,sh(g.FRAGMENT_SHADER,fs));g.linkProgram(pr);g.useProgram(pr);
+const golden=Math.PI*(3-Math.sqrt(5)),cells=720,base=[];
+for(let i=0;i<cells;i++){let y=1-i/(cells-1)*2,r=Math.sqrt(1-y*y),th=golden*i,x=r*Math.cos(th),z=r*Math.sin(th);let ax=-y,ay=x,az=0,l=Math.hypot(ax,ay)||1;ax/=l;ay/=l;let bx=y*az-z*ay,by=z*ax-x*az,bz=x*ay-y*ax;for(let j=0;j<6;j++){let a=Math.PI/6+j*Math.PI/3,b=Math.PI/6+(j+1)*Math.PI/3;for(let q of [a,b])base.push(x+0.026*(ax*Math.cos(q)+bx*Math.sin(q)),y+0.026*(ay*Math.cos(q)+by*Math.sin(q)),z+0.026*(az*Math.cos(q)+bz*Math.sin(q)))} }
+const buf=g.createBuffer(),P=g.getAttribLocation(pr,'p'),A=g.getAttribLocation(pr,'e'),M=g.getUniformLocation(pr,'mvp');let ry=0,rx=.15,drag=false,last=0,imp=0;
+c.onpointerdown=e=>{drag=true;last=e.clientX;imp=1};c.onpointerup=()=>drag=false;c.onpointerleave=()=>drag=false;c.onpointermove=e=>{if(drag){ry+=(e.clientX-last)*.006;last=e.clientX}};c.onclick=()=>imp=1;
+function matrix(){let a=rx,b=ry,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);return new Float32Array([cb,0,-sb,0,sa*sb,ca,sa*cb,0,ca*sb,-sa,ca*cb,0,0,0,-3.2,1])}
+function frame(t){let d=Math.min(devicePixelRatio||1,2);if(c.width!==innerWidth*d||c.height!==innerHeight*d){c.width=innerWidth*d;c.height=innerHeight*d}g.viewport(0,0,c.width,c.height);g.clearColor(.002,.012,.006,1);g.clear(g.COLOR_BUFFER_BIT);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);imp=Math.max(0,imp-.018);let out=[];for(let i=0;i<cells;i++){let y=1-i/(cells-1)*2,r=Math.sqrt(1-y*y),th=golden*i;let wave=.5+.5*Math.sin(th*7-t*.006),e=.10+Math.pow(wave,10)*Math.max(.12+.08*Math.sin(t*.003),imp),k=1+.045*e;let s=i*12;for(let q=0;q<12;q+=4){out.push(base[s+q]*k,base[s+q+1]*k,base[s+q+2]*k,e,base[s+q+4]*k,base[s+q+5]*k,base[s+q+6]*k,e)}}g.bindBuffer(g.ARRAY_BUFFER,buf);g.bufferData(g.ARRAY_BUFFER,new Float32Array(out),g.DYNAMIC_DRAW);g.enableVertexAttribArray(P);g.vertexAttribPointer(P,3,g.FLOAT,false,16,0);g.enableVertexAttribArray(A);g.vertexAttribPointer(A,1,g.FLOAT,false,16,12);g.uniformMatrix4fv(M,false,matrix());g.drawArrays(g.LINES,0,out.length/4);requestAnimationFrame(frame)}requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
