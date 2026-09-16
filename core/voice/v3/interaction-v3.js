@@ -44,14 +44,18 @@ export function createVoiceInteractionV3() {
   const isMonitoring = turn => state === V3_STATES.MONITORING && monitoringTurn === turn;
   const isCurrent = turn => turn === generation;
 
-  // V3 only commits the raw capture once for the active speaking turn.
-  // Semantic classification is deliberately outside this module.
   const commitCapture = (turn, text) => {
     if (!isCurrent(turn) || committed) return null;
     const value = String(text ?? "").trim();
     if (!value) return null;
     committed = true;
     return Object.freeze({ turn, text: value, source: "v3" });
+  };
+
+  const releaseCapture = (turn = generation) => {
+    if (!isCurrent(turn)) return false;
+    committed = false;
+    return true;
   };
 
   return Object.freeze({
@@ -61,6 +65,7 @@ export function createVoiceInteractionV3() {
     getState,
     isMonitoring,
     isCurrent,
-    commitCapture
+    commitCapture,
+    releaseCapture
   });
 }
