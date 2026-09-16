@@ -1,10 +1,14 @@
 // =========================================
 // H.A.I.V.A. V1 VOICE CAPTURE CONTROLLER
 // =========================================
-// V1 is the capture worker inside Voice Interaction.
-// V1 never reads or calls Core App, V2, V3, Brain, Skills, Boot, or UI.
+// V1 is the normal speech-capture worker inside Voice Interaction.
+// V1 requests microphone ownership from V4; it never hands control to V3.
 
-import { acquireCapture, releaseCapture, registerCaptureOwner } from "../capture-handoff.js";
+import {
+  handoffToV1,
+  releaseFromV1,
+  registerVoiceCaptureOwner
+} from "../v4/gateway.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -79,12 +83,12 @@ function stopUnderlyingCapture() {
   stopBrowserCapture();
 }
 
-registerCaptureOwner("v1", stopUnderlyingCapture);
+registerVoiceCaptureOwner("v1", stopUnderlyingCapture);
 
 function startCapture() {
   if (typeof window === "undefined") return;
   captureActive = true;
-  acquireCapture("v1", () => {
+  handoffToV1(() => {
     if (!captureActive) return;
     if (window.HaivaBridge?.startVoiceCapture) {
       try {
@@ -99,7 +103,7 @@ function startCapture() {
 }
 
 function stopCapture() {
-  releaseCapture("v1", stopUnderlyingCapture);
+  return releaseFromV1(stopUnderlyingCapture);
 }
 
 export const v1Capture = Object.freeze({ startCapture, stopCapture });
