@@ -24,6 +24,9 @@ export const DEFAULT_INTERRUPT_KEYWORDS = Object.freeze([
 const normalize = value => String(value ?? "").toLowerCase().trim().replace(/\s+/g, " ");
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const DIRECT_CUES = Object.freeze(["please", "okay", "ok", "can you", "could you"]);
+const COMMAND_SUFFIXES = Object.freeze(["now"]);
+
 export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS) {
   const normalized = normalize(text);
   if (!normalized) return { interrupted: false, phrase: null };
@@ -35,15 +38,36 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
 
   for (const phrase of ordered) {
     const escaped = escapeRegExp(phrase);
-    // Multi-word phrases and single-word interrupt commands may occur naturally
-    // anywhere in the utterance, but must remain token-bounded to avoid matching
-    // unrelated words such as "stopping" for "stop".
-    const pattern = new RegExp(
-      `(^|\\s)${escaped}(?=$|\\s|[,.!?])`,
-      "i"
+    const boundary = `(^|\\s)${escaped}(?=$|\\s|[,.!?])`;
+    const pattern = new RegExp(boundary, "i");
+
+    if (!pattern.test(normalized)) continue;
+
+    // Multi-word commands are explicit enough to match anywhere in natural speech.
+    if (phrase.includes(" ")) {
+      return { interrupted: true, phrase };
+    }
+
+    // Single-word commands need interruption context so ordinary speech such as
+    // "the wait time is three seconds" does not stop TTS accidentally.
+    const tokenMatch = normalized.match(new RegExp(boundary, "i"));
+    if (!tokenMatch) continue;
+
+    const index = tokenMatch.index ?? -1;
+    const before = normalized.slice(0, index).trim();
+    const after = normalized.slice(index + tokenMatch[0].length).trim();
+
+    const beforeCue = DIRECT_CUES.some(cue =>
+      new RegExp(`(?:^|\\s)${escapeRegExp(cue)}\\s*$`, "i").test(before)
+    );
+    const afterCue = DIRECT_CUES.some(cue =>
+      new RegExp(`^${escapeRegExp(cue)}(?:\\s|$)`, "i").test(after)
+    );
+    const commandSuffix = COMMAND_SUFFIXES.some(suffix =>
+      new RegExp(`^${escapeRegExp(suffix)}(?:\\s|$)`, "i").test(after)
     );
 
-    if (pattern.test(normalized)) {
+    if (!before || !after || beforeCue || afterCue || commandSuffix) {
       return { interrupted: true, phrase };
     }
   }
@@ -165,14 +189,12 @@ export function createVoiceInteractionV3(options = {}) {
       interrupted: true,
       phrase: parsed.phrase,
       instruction: parsed.instruction,
-      // V3 reports detection only. It does NOT route to V1.
       route: "none",
       previousTurn,
       turn: nextTurn
     };
   };
 
-  // Compatibility state only. V4 will own actual mic handoff/routing.
   const prepareHandoffToV1 = (turn = generation) => {
     if (!isCurrent(turn)) return null;
     state = V3_STATES.HANDOFF;
