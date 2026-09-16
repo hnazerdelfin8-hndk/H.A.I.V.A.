@@ -440,7 +440,6 @@ export class VoiceInteraction {
 
       this.speaking = false;
       this.v3CaptureSessionId = null;
-      this.v3CaptureSessionId = null;
       this.interruption.stopMonitoring(speakingTurn);
       v3Capture.stopCapture();
       this.lifecycle.returnToListening();
