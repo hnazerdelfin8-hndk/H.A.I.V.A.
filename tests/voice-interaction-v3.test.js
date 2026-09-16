@@ -1,105 +1,60 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  DEFAULT_INTERRUPT_KEYWORDS,
-  V3_STATES,
-  createVoiceInteractionV3,
-  detectVoiceInterrupt,
-  parseStopAndInstruction
-} from "../core/voice/v3/interaction-v3.js";
+import { V3_STATES, createVoiceInteractionV3 } from "../core/voice/v3/interaction-v3.js";
 
-test("V3 interrupt vocabulary recognizes natural English and Tagalog stop phrases", () => {
-  for (const phrase of ["stop", "hinto", "hinto muna", "teka lang", "sandali", "wait lang", "huwag na", "never mind"]) {
-    const result = detectVoiceInterrupt(phrase);
-    assert.equal(result.interrupted, true, phrase);
-  }
-});
-
-test("V3 interrupt matching recognizes a single-word interrupt after normal speech", () => {
-  for (const phrase of ["please stop", "okay teka", "wait please", "can you pause"]) {
-    const result = detectVoiceInterrupt(phrase);
-    assert.equal(result.interrupted, true, phrase);
-  }
-});
-
-test("V3 interrupt matching does not trigger on an unrelated sentence", () => {
-  const result = detectVoiceInterrupt("the wait time is three seconds");
-  assert.equal(result.interrupted, false);
-});
-
-test("V3 parser treats STOP alone as interruption with no new instruction", () => {
-  for (const phrase of ["Stop", "Hinto.", "Teka lang!"]) {
-    const result = parseStopAndInstruction(phrase);
-    assert.equal(result.interrupted, true, phrase);
-    assert.equal(result.instruction, "", phrase);
-  }
-});
-
-test("V3 parser extracts a new instruction after STOP", () => {
-  const result = parseStopAndInstruction("Stop, gumawa ka ng summary.");
-  assert.deepEqual(result, { interrupted: true, phrase: "stop", instruction: "gumawa ka ng summary" });
-});
-
-test("V3 parser extracts a new instruction after HINTO", () => {
-  const result = parseStopAndInstruction("Hinto, buksan mo ang calendar");
-  assert.deepEqual(result, { interrupted: true, phrase: "hinto", instruction: "buksan mo ang calendar" });
-});
-
-test("V3 coordinator commits one authoritative result per turn", () => {
+test("V3 coordinator monitors the active speaking turn", () => {
   const coordinator = createVoiceInteractionV3();
   const turn = coordinator.beginTurn();
-  assert.deepEqual(coordinator.commitResult(turn, "Hello Haiva"), { turn, text: "hello haiva" });
-  assert.equal(coordinator.commitResult(turn, "duplicate"), null);
+  assert.equal(coordinator.beginMonitoring(turn), true);
+  assert.equal(coordinator.getState(), V3_STATES.MONITORING);
+  assert.equal(coordinator.isMonitoring(turn), true);
 });
 
-test("V3 coordinator rejects stale turn results", () => {
+test("V3 commits one raw capture per speaking turn", () => {
+  const coordinator = createVoiceInteractionV3();
+  const turn = coordinator.beginTurn();
+  coordinator.beginMonitoring(turn);
+  assert.deepEqual(coordinator.commitCapture(turn, "Stop, gumawa ka ng summary"), {
+    turn,
+    text: "Stop, gumawa ka ng summary",
+    source: "v3"
+  });
+  assert.equal(coordinator.commitCapture(turn, "duplicate"), null);
+});
+
+test("V3 releases a non-interruption capture without changing the turn", () => {
+  const coordinator = createVoiceInteractionV3();
+  const turn = coordinator.beginTurn();
+  coordinator.beginMonitoring(turn);
+  assert.ok(coordinator.commitCapture(turn, "the wait time is three seconds"));
+  assert.equal(coordinator.releaseCapture(turn), true);
+  assert.deepEqual(coordinator.commitCapture(turn, "another capture"), {
+    turn,
+    text: "another capture",
+    source: "v3"
+  });
+});
+
+test("V3 rejects stale capture results", () => {
   const coordinator = createVoiceInteractionV3();
   const oldTurn = coordinator.beginTurn();
   coordinator.beginTurn();
-  assert.equal(coordinator.commitResult(oldTurn, "stale"), null);
+  assert.equal(coordinator.commitCapture(oldTurn, "stale"), null);
 });
 
-test("V3 interrupt detects and invalidates the speaking turn without routing to V1", () => {
-  const coordinator = createVoiceInteractionV3({ interruptKeywords: DEFAULT_INTERRUPT_KEYWORDS });
-  const speakingTurn = coordinator.beginTurn();
-  coordinator.beginMonitoring(speakingTurn);
-  assert.equal(coordinator.getState(), V3_STATES.MONITORING);
-  const interruption = coordinator.interrupt("Teka lang", speakingTurn);
-  assert.equal(interruption.interrupted, true);
-  assert.equal(interruption.route, "none");
-  assert.notEqual(interruption.turn, speakingTurn);
-  assert.equal(coordinator.isCurrent(interruption.turn), true);
-  assert.equal(coordinator.getState(), V3_STATES.INTERRUPTED);
-});
-
-test("V3 interrupt invalidates the old turn for STOP plus instruction", () => {
+test("V3 has no semantic interruption parser or V1 routing API", () => {
   const coordinator = createVoiceInteractionV3();
-  const speakingTurn = coordinator.beginTurn();
-  coordinator.beginMonitoring(speakingTurn);
-  const interruption = coordinator.interrupt("Stop, gumawa ka ng summary", speakingTurn);
-  assert.equal(interruption.interrupted, true);
-  assert.equal(interruption.instruction, "gumawa ka ng summary");
-  assert.equal(interruption.route, "none");
-  assert.equal(coordinator.commitResult(speakingTurn, "old response"), null);
-  assert.equal(coordinator.isCurrent(interruption.turn), true);
+  assert.equal("interrupt" in coordinator, false);
+  assert.equal("detectVoiceInterrupt" in coordinator, false);
+  assert.equal("parseStopAndInstruction" in coordinator, false);
+  assert.equal("routeToV1" in coordinator, false);
 });
 
-test("V3 ignores stale interruption results from an old speaking turn", () => {
+test("V3 monitoring stops cleanly", () => {
   const coordinator = createVoiceInteractionV3();
-  const oldTurn = coordinator.beginTurn();
-  coordinator.beginMonitoring(oldTurn);
-  const currentTurn = coordinator.beginTurn();
-  const interruption = coordinator.interrupt("stop", oldTurn);
-  assert.equal(interruption.interrupted, false);
-  assert.equal(interruption.route, "none");
-  assert.equal(interruption.turn, currentTurn);
+  const turn = coordinator.beginTurn();
+  assert.equal(coordinator.beginMonitoring(turn), true);
+  assert.equal(coordinator.stopMonitoring(turn), true);
   assert.equal(coordinator.getState(), V3_STATES.IDLE);
-});
-
-test("V3 monitoring can stop cleanly without creating a V1 handoff state", () => {
-  const coordinator = createVoiceInteractionV3();
-  const speakingTurn = coordinator.beginTurn();
-  assert.equal(coordinator.beginMonitoring(speakingTurn), true);
-  assert.equal(coordinator.stopMonitoring(speakingTurn), true);
-  assert.equal(coordinator.getState(), V3_STATES.IDLE);
+  assert.equal(coordinator.isMonitoring(turn), false);
 });
