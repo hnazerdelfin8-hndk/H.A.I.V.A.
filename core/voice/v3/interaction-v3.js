@@ -1,11 +1,11 @@
 // =========================================
 // H.A.I.V.A. VOICE INTERACTION V3
 // =========================================
-// V3 is the interruption gateway during SPEAKING.
-// It does not own recognition, TTS, V1, or V2 lifecycle state.
-// Its only job is to monitor the active speaking turn, detect an
-// explicit interruption, extract a new order, invalidate the old turn,
-// and return a single handoff result for the VoiceInteraction coordinator.
+// V3 is the interruption sensor during SPEAKING.
+// It does not own recognition, TTS, V1, V2 lifecycle state, or routing.
+// Its job is to monitor the active speaking turn, detect an explicit
+// interruption, extract an optional new order, and invalidate the old turn.
+// Mic ownership / routing belongs to the future V4 layer.
 
 export const V3_STATES = Object.freeze({
   IDLE: "IDLE",
@@ -37,7 +37,7 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
     const escaped = escapeRegExp(phrase);
     const pattern = phrase.includes(" ")
       ? new RegExp(`(^|\\s)${escaped}(?=$|\\s|[,.!?])`, "i")
-      : new RegExp(`^${escaped}(?:$|[,.!?])`, "i");
+      : new RegExp(`^${escaped}(?=$|\\s|[,.!?])`, "i");
 
     if (pattern.test(normalized)) {
       return { interrupted: true, phrase };
@@ -161,18 +161,20 @@ export function createVoiceInteractionV3(options = {}) {
       interrupted: true,
       phrase: parsed.phrase,
       instruction: parsed.instruction,
-      route: "v1",
+      // V3 reports detection only. It does NOT route to V1.
+      route: "none",
       previousTurn,
       turn: nextTurn
     };
   };
 
+  // Compatibility state only. V4 will own actual mic handoff/routing.
   const prepareHandoffToV1 = (turn = generation) => {
     if (!isCurrent(turn)) return null;
     state = V3_STATES.HANDOFF;
     monitoringTurn = null;
     return {
-      route: "v1",
+      route: "none",
       interrupted: false,
       instruction: "",
       turn
