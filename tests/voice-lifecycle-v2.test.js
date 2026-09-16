@@ -31,20 +31,16 @@ test("V2 lifecycle: invalid jumps are rejected", () => {
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.READY);
 });
 
-test("V2 session: ordinary acknowledgement does not end conversation", () => {
+test("V2 boundary: lifecycle has no speech semantic decision API", () => {
   const lifecycle = new VoiceLifecycleV2();
-  lifecycle.activateListening();
-  assert.equal(lifecycle.shouldEndConversation("Okay"), false);
-  assert.equal(lifecycle.shouldEndConversation("Thanks"), false);
-  assert.equal(lifecycle.isConversationActive(), true);
+  assert.equal("shouldEndConversation" in lifecycle, false);
+  assert.equal("detectVoiceInterrupt" in lifecycle, false);
 });
 
-test("V2 session: explicit farewell ends conversation", () => {
+test("V2 session ends only when its owner explicitly ends the session", () => {
   const lifecycle = new VoiceLifecycleV2();
   lifecycle.activateListening();
-  assert.equal(lifecycle.shouldEndConversation("Okay, goodbye."), true);
-  assert.equal(lifecycle.shouldEndConversation("Bye H.A.I.V.A."), true);
-  assert.equal(lifecycle.shouldEndConversation("Okay, thank you H.A.I.V.A., goodbye."), true);
+  assert.equal(lifecycle.isConversationActive(), true);
   assert.equal(lifecycle.endSession(), true);
   assert.equal(lifecycle.state, VOICE_LIFECYCLE_STATES.READY);
   assert.equal(lifecycle.isConversationActive(), false);
