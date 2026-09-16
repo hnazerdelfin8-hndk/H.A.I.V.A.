@@ -19,7 +19,9 @@ test("Core App connects to Voice Interaction only", async () => {
   const app = await read("core/app.js");
   const interaction = await read("core/voice/interaction.js");
 
-  assert.match(app, /createVoiceInteraction/);
+  assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
+  assert.match(app, /new VoiceInteraction\(/);
+  assert.doesNotMatch(app, /createVoiceInteraction\s*\(/);
   assert.doesNotMatch(app, /createSpeechRecognition/);
   assert.doesNotMatch(app, /v1Capture/);
   assert.doesNotMatch(app, /VoiceLifecycleV2/);
