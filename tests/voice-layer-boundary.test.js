@@ -110,12 +110,16 @@ test("voice boundary: V3 reports interruption only and never routes to V1", () =
   assert.doesNotMatch(v3Logic, /HANDOFF/);
 });
 
-test("voice boundary: V1 and V3 use one exclusive capture handoff barrier", () => {
+test("voice boundary: V1 and V3 use one exclusive immediate capture handoff barrier", () => {
   assert.match(handoff, /One microphone owner at a time/);
-  assert.match(handoff, /HANDOFF_DELAY_MS = 180/);
+  assert.doesNotMatch(handoff, /HANDOFF_DELAY_MS/);
+  assert.doesNotMatch(handoff, /generation/);
+  assert.doesNotMatch(handoff, /setTimeout/);
+  assert.doesNotMatch(handoff, /pendingTimer/);
   assert.match(handoff, /registerCaptureOwner/);
   assert.match(handoff, /acquireCapture/);
   assert.match(handoff, /releaseCapture/);
+  assert.match(handoff, /owner = nextOwner;[\s\S]*startCapture\(\)/);
   assert.match(v3Capture, /releaseCapture\(\"v3\", stopUnderlyingCapture\)/);
   assert.match(v1, /acquireCapture\(\"v1\"/);
   assert.match(androidBridge, /startV3VoiceCapture\(\)/);
