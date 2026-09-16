@@ -69,6 +69,7 @@ test("V3 interrupt detects and invalidates the speaking turn without routing to 
   assert.equal(interruption.route, "none");
   assert.notEqual(interruption.turn, speakingTurn);
   assert.equal(coordinator.isCurrent(interruption.turn), true);
+  assert.equal(coordinator.getState(), V3_STATES.INTERRUPTED);
 });
 
 test("V3 interrupt invalidates the old turn for STOP plus instruction", () => {
@@ -83,25 +84,22 @@ test("V3 interrupt invalidates the old turn for STOP plus instruction", () => {
   assert.equal(coordinator.isCurrent(interruption.turn), true);
 });
 
-test("V3 compatibility handoff state does not claim V1 routing", () => {
+test("V3 ignores stale interruption results from an old speaking turn", () => {
   const coordinator = createVoiceInteractionV3();
-  const speakingTurn = coordinator.beginTurn();
-  assert.equal(coordinator.beginMonitoring(speakingTurn), true);
-  const handoff = coordinator.prepareHandoffToV1(speakingTurn);
-  assert.deepEqual(handoff, {
-    route: "none",
-    interrupted: false,
-    instruction: "",
-    turn: speakingTurn
-  });
-  assert.equal(coordinator.getState(), V3_STATES.HANDOFF);
-  assert.equal(coordinator.completeHandoff(speakingTurn), true);
+  const oldTurn = coordinator.beginTurn();
+  coordinator.beginMonitoring(oldTurn);
+  const currentTurn = coordinator.beginTurn();
+  const interruption = coordinator.interrupt("stop", oldTurn);
+  assert.equal(interruption.interrupted, false);
+  assert.equal(interruption.route, "none");
+  assert.equal(interruption.turn, currentTurn);
   assert.equal(coordinator.getState(), V3_STATES.IDLE);
 });
 
-test("V3 rejects stale normal handoff", () => {
+test("V3 monitoring can stop cleanly without creating a V1 handoff state", () => {
   const coordinator = createVoiceInteractionV3();
-  const oldTurn = coordinator.beginTurn();
-  coordinator.beginTurn();
-  assert.equal(coordinator.prepareHandoffToV1(oldTurn), null);
+  const speakingTurn = coordinator.beginTurn();
+  assert.equal(coordinator.beginMonitoring(speakingTurn), true);
+  assert.equal(coordinator.stopMonitoring(speakingTurn), true);
+  assert.equal(coordinator.getState(), V3_STATES.IDLE);
 });
