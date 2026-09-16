@@ -36,28 +36,6 @@ export const CONFIG = {
       "hey haiva",
       "hi haiva",
       "haiva"
-    ],
-
-    // V3 voice-command vocabulary. These are intentionally kept separate
-    // from wake words so the recognition lifecycle remains event-driven.
-    interruptKeywords: [
-      "stop",
-      "stop muna",
-      "teka",
-      "teka lang",
-      "wait",
-      "wait lang",
-      "hold on",
-      "pause",
-      "sandali",
-      "sandali lang",
-      "hintay",
-      "hintay lang",
-      "cancel",
-      "cancel muna",
-      "wag na",
-      "huwag na",
-      "never mind"
     ]
   },
 
