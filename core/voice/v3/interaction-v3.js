@@ -1,123 +1,16 @@
 // =========================================
 // H.A.I.V.A. VOICE INTERACTION V3
 // =========================================
-// V3 is the interruption sensor during SPEAKING.
-// It does not own recognition, TTS, V1, V2 lifecycle state, or routing.
-// Its job is to monitor the active speaking turn, detect an explicit
-// interruption, extract an optional new order, and invalidate the old turn.
-// Mic ownership / routing belongs to the future V4 layer.
+// V3 is the interruption/barge-in capture mechanism during SPEAKING.
+// It does not interpret speech, decide intent, parse commands, own TTS,
+// control V1, or decide conversation state. The Brain owns meaning.
 
 export const V3_STATES = Object.freeze({
   IDLE: "IDLE",
-  MONITORING: "MONITORING",
-  INTERRUPTED: "INTERRUPTED"
+  MONITORING: "MONITORING"
 });
 
-export const DEFAULT_INTERRUPT_KEYWORDS = Object.freeze([
-  "stop", "stop muna", "hinto", "hinto muna", "teka", "teka lang",
-  "wait", "wait lang", "hold on", "pause", "sandali", "sandali lang",
-  "hintay", "hintay lang", "cancel", "cancel muna", "wag na", "huwag na",
-  "never mind"
-]);
-
-const normalize = value => String(value ?? "").toLowerCase().trim().replace(/\s+/g, " ");
-const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const DIRECT_CUES = Object.freeze(["please", "okay", "ok", "can you", "could you"]);
-const COMMAND_SUFFIXES = Object.freeze(["now"]);
-
-export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS) {
-  const normalized = normalize(text);
-  if (!normalized) return { interrupted: false, phrase: null };
-
-  const ordered = [...keywords]
-    .map(normalize)
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
-
-  for (const phrase of ordered) {
-    const escaped = escapeRegExp(phrase);
-    const boundary = `(^|\\s)${escaped}(?=$|\\s|[,.!?])`;
-    const pattern = new RegExp(boundary, "i");
-
-    if (!pattern.test(normalized)) continue;
-
-    // Multi-word commands are explicit enough to match anywhere in natural speech.
-    if (phrase.includes(" ")) {
-      return { interrupted: true, phrase };
-    }
-
-    // Single-word commands need interruption context so ordinary speech such as
-    // "the wait time is three seconds" does not stop TTS accidentally.
-    const tokenMatch = normalized.match(new RegExp(boundary, "i"));
-    if (!tokenMatch) continue;
-
-    const index = tokenMatch.index ?? -1;
-    const before = normalized.slice(0, index).trim();
-    const after = normalized.slice(index + tokenMatch[0].length).trim();
-
-    const beforeCue = DIRECT_CUES.some(cue =>
-      new RegExp(`(?:^|\\s)${escapeRegExp(cue)}\\s*$`, "i").test(before)
-    );
-    const afterCue = DIRECT_CUES.some(cue =>
-      new RegExp(`^${escapeRegExp(cue)}(?:\\s|$)`, "i").test(after)
-    );
-    const commandSuffix = COMMAND_SUFFIXES.some(suffix =>
-      new RegExp(`^${escapeRegExp(suffix)}(?:\\s|$)`, "i").test(after)
-    );
-
-    if (!before || !after || beforeCue || afterCue || commandSuffix) {
-      return { interrupted: true, phrase };
-    }
-  }
-
-  return { interrupted: false, phrase: null };
-}
-
-export function parseStopAndInstruction(text, keywords = DEFAULT_INTERRUPT_KEYWORDS) {
-  const normalized = normalize(text);
-  if (!normalized) {
-    return { interrupted: false, phrase: null, instruction: "" };
-  }
-
-  const ordered = [...keywords]
-    .map(normalize)
-    .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
-
-  for (const phrase of ordered) {
-    const escaped = escapeRegExp(phrase);
-    const match = normalized.match(
-      new RegExp(
-        `^${escaped}(?:\\s*[,.:!?-]?\\s+|\\s+|[,.:!?-]+\\s*)(.*)$`,
-        "i"
-      )
-    );
-
-    if (!match) continue;
-
-    return {
-      interrupted: true,
-      phrase,
-      instruction: normalize(match[1] ?? "").replace(/[.,!?]+$/, "").trim()
-    };
-  }
-
-  const detection = detectVoiceInterrupt(normalized, keywords);
-  return {
-    interrupted: detection.interrupted,
-    phrase: detection.phrase,
-    instruction: ""
-  };
-}
-
-export function createVoiceInteractionV3(options = {}) {
-  const keywords = Object.freeze(
-    [...(options.interruptKeywords ?? DEFAULT_INTERRUPT_KEYWORDS)]
-      .map(normalize)
-      .filter(Boolean)
-  );
-
+export function createVoiceInteractionV3() {
   let generation = 0;
   let state = V3_STATES.IDLE;
   let monitoringTurn = null;
@@ -151,47 +44,14 @@ export function createVoiceInteractionV3(options = {}) {
   const isMonitoring = turn => state === V3_STATES.MONITORING && monitoringTurn === turn;
   const isCurrent = turn => turn === generation;
 
-  const commitResult = (turn, text) => {
+  // V3 only commits the raw capture once for the active speaking turn.
+  // Semantic classification is deliberately outside this module.
+  const commitCapture = (turn, text) => {
     if (!isCurrent(turn) || committed) return null;
+    const value = String(text ?? "").trim();
+    if (!value) return null;
     committed = true;
-    return { turn, text: normalize(text) };
-  };
-
-  const interrupt = (text, turn = generation) => {
-    if (!isCurrent(turn)) {
-      return {
-        interrupted: false,
-        phrase: null,
-        instruction: "",
-        route: "none",
-        turn: generation
-      };
-    }
-
-    const parsed = parseStopAndInstruction(text, keywords);
-    if (!parsed.interrupted) {
-      return {
-        interrupted: false,
-        phrase: null,
-        instruction: "",
-        route: "none",
-        turn: generation
-      };
-    }
-
-    const previousTurn = turn;
-    const nextTurn = beginTurn();
-    state = V3_STATES.INTERRUPTED;
-    monitoringTurn = null;
-
-    return {
-      interrupted: true,
-      phrase: parsed.phrase,
-      instruction: parsed.instruction,
-      route: "none",
-      previousTurn,
-      turn: nextTurn
-    };
+    return Object.freeze({ turn, text: value, source: "v3" });
   };
 
   return Object.freeze({
@@ -201,7 +61,6 @@ export function createVoiceInteractionV3(options = {}) {
     getState,
     isMonitoring,
     isCurrent,
-    commitResult,
-    interrupt
+    commitCapture
   });
 }
