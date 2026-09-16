@@ -99,7 +99,10 @@ test("voice boundary: normal loop is coordinated by VoiceInteraction", () => {
 
 test("voice boundary: V3 reports interruption only and never routes to V1", () => {
   assert.match(v3Logic, /route: \"none\"/);
-  assert.match(v3Logic, /interrupt\(/);
+  // Accept either a function declaration/method call form or a named function
+  // expression. The boundary is semantic: V3 must expose an interrupt operation,
+  // not depend on one exact JavaScript formatting style.
+  assert.match(v3Logic, /(?:const\s+interrupt\s*=\s*\(|interrupt\s*\()/);
   assert.doesNotMatch(v3Capture, /handoffToV1/);
   assert.doesNotMatch(v3Capture, /handoffToV1Handler/);
   assert.doesNotMatch(v3Logic, /prepareHandoffToV1/);
