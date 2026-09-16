@@ -1,11 +1,12 @@
 // =========================================
 // H.A.I.V.A. VOICE INTERACTION
 // =========================================
-// Single owner/authority for the voice domain.
+// Single executor/coordinator for the voice domain.
 // V1 = normal input capture worker.
 // V2 = lifecycle worker.
-// V3 = interruption logic + dedicated interruption capture worker.
-// Core App receives voice input/outcomes from this boundary only.
+// V3 = raw interruption capture worker.
+// V4 = capture routing barrier.
+// Brain = semantic decision authority.
 
 import { v1Capture } from "./v1/capture-controller.js";
 import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
@@ -21,11 +22,12 @@ export const VOICE_INTERACTION_EVENTS = Object.freeze({
 });
 
 export class VoiceInteraction {
-  constructor({ onInput = null, onOutcome = null, onStateChange = null, onTranscript = null } = {}) {
+  constructor({ onInput = null, onOutcome = null, onStateChange = null, onTranscript = null, onBrainDecision = null } = {}) {
     this.onInput = typeof onInput === "function" ? onInput : null;
     this.onOutcome = typeof onOutcome === "function" ? onOutcome : null;
     this.onStateChange = typeof onStateChange === "function" ? onStateChange : null;
     this.onTranscript = typeof onTranscript === "function" ? onTranscript : null;
+    this.onBrainDecision = typeof onBrainDecision === "function" ? onBrainDecision : null;
 
     this.lifecycle = new VoiceLifecycleV2({
       onStateChange: (state, previousState) => this.reportState(state, previousState)
@@ -161,12 +163,21 @@ export class VoiceInteraction {
       const text = event.detail?.text;
       if (!text) return;
 
-      const interruption = this.interruption.interrupt(text, this.turn);
-      if (interruption.interrupted) {
-        this.handleInterruption(interruption);
+      const capture = this.interruption.commitCapture(this.turn, text);
+      if (!capture) return;
+
+      const decision = this.onBrainDecision?.(capture.text, {
+        phase: "SPEAKING",
+        source: "v3",
+        turn: capture.turn
+      });
+
+      if (decision?.action === "interrupt") {
+        this.handleInterruption(capture, decision);
         return;
       }
 
+      this.interruption.releaseCapture(this.turn);
       this.v3CaptureSessionId = null;
       this.restartV3CaptureAfterTurn();
     });
@@ -231,18 +242,6 @@ export class VoiceInteraction {
     });
 
     window.addEventListener("haiva:native-voice-result", event => {
-      console.info("[HAIVA-VOICE-DIAG] PATCH1_NATIVE_RESULT_IN", {
-        sessionId: event.detail?.sessionId ?? null,
-        acceptedSessionId: this.captureSessionId,
-        textPresent: Boolean(event.detail?.text),
-        textLength: String(event.detail?.text || "").length,
-        active: this.active,
-        processing: this.processing,
-        pendingResult: this.pendingResult,
-        listening: this.listening,
-        speaking: this.speaking,
-        turn: this.turn
-      });
       if (!this.acceptNativeCaptureEvent(event)) return;
       if (!this.active || this.processing || this.pendingResult || this.speaking) return;
       const text = event.detail?.text;
@@ -309,9 +308,9 @@ export class VoiceInteraction {
     return true;
   }
 
-  handleInterruption(result) {
+  handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
-    this.turn = result.turn;
+    this.turn = this.interruption.beginTurn();
     this.speaking = false;
     this.processing = false;
     this.pendingResult = false;
@@ -325,19 +324,20 @@ export class VoiceInteraction {
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
-      instruction: result.instruction || "",
+      instruction: decision.instruction || "",
       interrupted: true,
-      previousTurn: result.previousTurn ?? interruptedTurn
+      previousTurn: interruptedTurn,
+      sourceInput: capture.text
     });
 
-    if (result.instruction) {
+    if (decision.instruction) {
       queueMicrotask(() => {
-        if (!this.active || this.turn !== result.turn) return;
-        this.reportInput(result.instruction, "v3-interruption");
+        if (!this.active || this.turn !== this.interruption.isCurrent(this.turn) && this.turn !== this.turn) return;
+        this.reportInput(decision.instruction, "v3-interruption");
       });
     } else if (this.active) {
       queueMicrotask(() => {
-        if (!this.active || this.turn !== result.turn) return;
+        if (!this.active) return;
         this.lifecycle.returnToListening();
         this.startListening();
       });
@@ -434,9 +434,7 @@ export class VoiceInteraction {
     try {
       await speak(text);
     } finally {
-      if (this.turn !== speakingTurn) {
-        return false;
-      }
+      if (this.turn !== speakingTurn) return false;
 
       this.speaking = false;
       this.v3CaptureSessionId = null;
@@ -444,9 +442,7 @@ export class VoiceInteraction {
       v3Capture.stopCapture();
       this.lifecycle.returnToListening();
 
-      if (this.active) {
-        this.startListening();
-      }
+      if (this.active) this.startListening();
     }
 
     return this.turn === speakingTurn;
@@ -466,17 +462,11 @@ export class VoiceInteraction {
       return;
     }
 
-    // VoiceInteraction owns the lifecycle transition.
-    // V3 only reports interruption events; it never routes to V1.
     this.lifecycle.returnToListening();
   }
 
   isConversationActive() {
     return this.lifecycle.isConversationActive();
-  }
-
-  shouldEndConversation(command) {
-    return this.lifecycle.shouldEndConversation(command);
   }
 
   reportError(source, error) {
