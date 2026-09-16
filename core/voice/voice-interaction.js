@@ -7,6 +7,5 @@
 
 export {
   VoiceInteraction,
-  createVoiceInteraction,
   VOICE_INTERACTION_EVENTS
 } from "./interaction.js";
