@@ -5,6 +5,7 @@
 import { CONFIG } from "./config.js";
 import { routeRequest } from "./router.js";
 import { setUIState } from "./ui-bridge.js";
+import { decideVoiceControl } from "./brain/decision.js";
 
 function normalize(text) {
   return String(text || "")
@@ -49,15 +50,16 @@ function getOfflineResponse(command) {
   const text = String(command || "").trim();
   if (!text) return null;
 
-  // The local conversation layer intentionally remains useful without an API key.
-  // It prevents the APK chat/voice pipeline from becoming a dead end while the
-  // remote AI service is being configured.
   return `I received your message: “${text}”. My AI brain is currently offline, but the H.A.I.V.A. conversation system is working. You can continue testing chat and voice mode. Master.`;
 }
 
 export class HAIVAAssistant {
   constructor() {
     this.processing = false;
+  }
+
+  decideVoiceInput(command, phase = "LISTENING") {
+    return decideVoiceControl(command, { phase });
   }
 
   async respond(command) {
@@ -71,8 +73,6 @@ export class HAIVAAssistant {
     try {
       setUIState("THINKING");
 
-      // Basic interaction stays available even when the AI backend
-      // is not configured yet.
       const basicResponse = getBasicResponse(text);
       if (basicResponse) return basicResponse;
 
