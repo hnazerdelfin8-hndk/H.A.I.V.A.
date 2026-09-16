@@ -5,13 +5,20 @@
 // V1 = normal input capture worker.
 // V2 = lifecycle worker.
 // V3 = raw interruption capture worker.
-// V4 = capture routing barrier.
+// V4 = voice routing gateway.
 // Brain = semantic decision authority.
 
 import { v1Capture } from "./v1/capture-controller.js";
 import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
 import { createVoiceInteractionV3 } from "./v3/interaction-v3.js";
 import { v3Capture } from "./v3/capture-controller.js";
+import {
+  registerVoiceInterruptHandler,
+  registerV3StopHandler,
+  registerVoiceOutputStopHandler,
+  requestV3Stop,
+  requestVoiceOutputStop
+} from "./v4/gateway.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../ui-bridge.js";
 
 export const VOICE_INTERACTION_EVENTS = Object.freeze({
@@ -44,11 +51,17 @@ export class VoiceInteraction {
     this.nativeCaptureRestartPending = false;
     this.nativeCaptureRestartTimer = null;
     this.initialized = false;
+    this.unregisterV4InterruptHandler = null;
+    this.unregisterV3StopHandler = null;
+    this.unregisterVoiceOutputStopHandler = null;
   }
 
   initialize() {
     if (this.initialized) return;
     this.initialized = true;
+    this.unregisterV4InterruptHandler = registerVoiceInterruptHandler(candidate => this.handleV3InterruptCandidate(candidate));
+    this.unregisterV3StopHandler = registerV3StopHandler(() => v3Capture.stopCapture());
+    this.unregisterVoiceOutputStopHandler = registerVoiceOutputStopHandler(() => stopSpeaking());
     this.bindV1Events();
     this.bindNativeCaptureEvents();
     this.bindV3CaptureEvents();
@@ -116,6 +129,30 @@ export class VoiceInteraction {
     });
   }
 
+  handleV3InterruptCandidate(candidate) {
+    if (!this.interruption.isMonitoring(this.turn)) return false;
+    if (!this.active || !this.speaking || this.processing) return false;
+
+    const capture = this.interruption.commitCapture(this.turn, candidate?.text);
+    if (!capture) return false;
+
+    const decision = this.onBrainDecision?.(capture.text, {
+      phase: "SPEAKING",
+      source: candidate?.source || "v3",
+      turn: capture.turn
+    });
+
+    if (decision?.action === "interrupt") {
+      this.handleInterruption(capture, decision);
+      return true;
+    }
+
+    this.interruption.releaseCapture(this.turn);
+    this.v3CaptureSessionId = null;
+    this.restartV3CaptureAfterTurn();
+    return true;
+  }
+
   bindV3CaptureEvents() {
     if (typeof window === "undefined") return;
     window.addEventListener("haiva:v3-capture-ready", event => {
@@ -131,22 +168,6 @@ export class VoiceInteraction {
       if (!this.acceptNativeV3CaptureEvent(event)) return;
       const text = normalizeSpeech(event.detail?.text || "");
       if (text) this.onTranscript?.(text);
-    });
-    window.addEventListener("haiva:v3-capture-result", event => {
-      if (!this.interruption.isMonitoring(this.turn) || !this.acceptNativeV3CaptureEvent(event)) return;
-      if (!this.active || !this.speaking || this.processing) return;
-      const capture = this.interruption.commitCapture(this.turn, event.detail?.text);
-      if (!capture) return;
-
-      const decision = this.onBrainDecision?.(capture.text, { phase: "SPEAKING", source: "v3", turn: capture.turn });
-      if (decision?.action === "interrupt") {
-        this.handleInterruption(capture, decision);
-        return;
-      }
-
-      this.interruption.releaseCapture(this.turn);
-      this.v3CaptureSessionId = null;
-      this.restartV3CaptureAfterTurn();
     });
     window.addEventListener("haiva:v3-capture-complete", event => {
       if (!this.interruption.isMonitoring(this.turn) || !this.acceptNativeV3CaptureEvent(event)) return;
@@ -249,9 +270,9 @@ export class VoiceInteraction {
     this.captureSessionId = null;
     this.v3CaptureSessionId = null;
 
-    v3Capture.stopCapture();
+    requestV3Stop("voice-interrupt");
     this.interruption.stopMonitoring(interruptedTurn);
-    stopSpeaking();
+    requestVoiceOutputStop("voice-interrupt");
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
