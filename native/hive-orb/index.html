@@ -1,30 +1,110 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>H.A.I.V.A. — Hive Orb</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020604;color:#d7ffe3;font-family:system-ui,sans-serif}
-canvas{display:block;width:100%;height:100%}
+canvas{display:block;width:100%;height:100%;touch-action:none}
 .hud{position:fixed;top:18px;left:18px;letter-spacing:.12em;font-size:12px;text-shadow:0 0 12px #28ff75;pointer-events:none}.hint{position:fixed;bottom:18px;left:18px;opacity:.65;font-size:11px;pointer-events:none}
 </style>
 </head>
 <body>
-<canvas id="orb"></canvas><div class="hud">H.A.I.V.A. / HIVE ORB / NATIVE-READY PROTOTYPE</div><div class="hint">Drag to rotate • tap for impulse</div>
+<canvas id="orb"></canvas>
+<div class="hud">H.A.I.V.A. / HIVE ORB</div>
+<div class="hint">Drag to rotate • tap for impulse</div>
 <script>
 (()=>{
-const c=document.getElementById('orb'),g=c.getContext('webgl',{antialias:true,alpha:false});
-if(!g){document.body.innerHTML='<p style="padding:24px">WebGL is required.</p>';return}
+const c=document.getElementById('orb');
+const gl=c.getContext('webgl',{antialias:true,alpha:false});
+if(!gl){document.body.innerHTML='<p style="padding:24px">WebGL is required.</p>';return;}
+
 const vs=`attribute vec3 p;attribute float e;uniform mat4 mvp;varying float v;void main(){v=e;gl_Position=mvp*vec4(p,1.0);}`;
-const fs=`precision mediump float;varying float v;void main(){gl_FragColor=vec4(.05,.95,.32,.12+.88*v);}`;
-function sh(t,s){let x=g.createShader(t);g.shaderSource(x,s);g.compileShader(x);return x} const pr=g.createProgram();g.attachShader(pr,sh(g.VERTEX_SHADER,vs));g.attachShader(pr,sh(g.FRAGMENT_SHADER,fs));g.linkProgram(pr);g.useProgram(pr);
-const golden=Math.PI*(3-Math.sqrt(5)),cells=720,base=[];
-for(let i=0;i<cells;i++){let y=1-i/(cells-1)*2,r=Math.sqrt(1-y*y),th=golden*i,x=r*Math.cos(th),z=r*Math.sin(th);let ax=-y,ay=x,az=0,l=Math.hypot(ax,ay)||1;ax/=l;ay/=l;let bx=y*az-z*ay,by=z*ax-x*az,bz=x*ay-y*ax;for(let j=0;j<6;j++){let a=Math.PI/6+j*Math.PI/3,b=Math.PI/6+(j+1)*Math.PI/3;for(let q of [a,b])base.push(x+0.026*(ax*Math.cos(q)+bx*Math.sin(q)),y+0.026*(ay*Math.cos(q)+by*Math.sin(q)),z+0.026*(az*Math.cos(q)+bz*Math.sin(q)))} }
-const buf=g.createBuffer(),P=g.getAttribLocation(pr,'p'),A=g.getAttribLocation(pr,'e'),M=g.getUniformLocation(pr,'mvp');let ry=0,rx=.15,drag=false,last=0,imp=0;
-c.onpointerdown=e=>{drag=true;last=e.clientX;imp=1};c.onpointerup=()=>drag=false;c.onpointerleave=()=>drag=false;c.onpointermove=e=>{if(drag){ry+=(e.clientX-last)*.006;last=e.clientX}};c.onclick=()=>imp=1;
-function matrix(){let a=rx,b=ry,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);return new Float32Array([cb,0,-sb,0,sa*sb,ca,sa*cb,0,ca*sb,-sa,ca*cb,0,0,0,-3.2,1])}
-function frame(t){let d=Math.min(devicePixelRatio||1,2);if(c.width!==innerWidth*d||c.height!==innerHeight*d){c.width=innerWidth*d;c.height=innerHeight*d}g.viewport(0,0,c.width,c.height);g.clearColor(.002,.012,.006,1);g.clear(g.COLOR_BUFFER_BIT);g.enable(g.BLEND);g.blendFunc(g.SRC_ALPHA,g.ONE);imp=Math.max(0,imp-.018);let out=[];for(let i=0;i<cells;i++){let y=1-i/(cells-1)*2,r=Math.sqrt(1-y*y),th=golden*i;let wave=.5+.5*Math.sin(th*7-t*.006),e=.10+Math.pow(wave,10)*Math.max(.12+.08*Math.sin(t*.003),imp),k=1+.045*e;let s=i*12;for(let q=0;q<12;q+=4){out.push(base[s+q]*k,base[s+q+1]*k,base[s+q+2]*k,e,base[s+q+4]*k,base[s+q+5]*k,base[s+q+6]*k,e)}}g.bindBuffer(g.ARRAY_BUFFER,buf);g.bufferData(g.ARRAY_BUFFER,new Float32Array(out),g.DYNAMIC_DRAW);g.enableVertexAttribArray(P);g.vertexAttribPointer(P,3,g.FLOAT,false,16,0);g.enableVertexAttribArray(A);g.vertexAttribPointer(A,1,g.FLOAT,false,16,12);g.uniformMatrix4fv(M,false,matrix());g.drawArrays(g.LINES,0,out.length/4);requestAnimationFrame(frame)}requestAnimationFrame(frame);
+const fs=`precision mediump float;varying float v;void main(){float glow=.15+.85*v;gl_FragColor=vec4(.05,.95,.32,glow);}`;
+function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+const program=gl.createProgram();
+gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));
+gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+gl.useProgram(program);
+
+const golden=Math.PI*(3-Math.sqrt(5));
+const cells=720;
+const centers=[];
+for(let i=0;i<cells;i++){
+  const y=1-i/(cells-1)*2;
+  const r=Math.sqrt(Math.max(0,1-y*y));
+  const th=golden*i;
+  centers.push([r*Math.cos(th),y,r*Math.sin(th)]);
+}
+
+const P=gl.getAttribLocation(program,'p');
+const E=gl.getAttribLocation(program,'e');
+const M=gl.getUniformLocation(program,'mvp');
+const buffer=gl.createBuffer();
+let ry=0,rx=.12,drag=false,lastX=0,impulse=0;
+
+c.onpointerdown=e=>{drag=true;lastX=e.clientX;impulse=1;};
+c.onpointerup=()=>drag=false;
+c.onpointercancel=()=>drag=false;
+c.onpointerleave=()=>drag=false;
+c.onpointermove=e=>{if(drag){ry+=(e.clientX-lastX)*.006;lastX=e.clientX;}};
+c.onclick=()=>{impulse=1;};
+
+function perspective(fov,aspect,near,far){
+  const f=1/Math.tan(fov/2),nf=1/(near-far);
+  return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,(2*far*near)*nf,0]);
+}
+function multiply(a,b){const o=new Float32Array(16);for(let r=0;r<4;r++)for(let col=0;col<4;col++){o[col*4+r]=a[r]*b[col*4]+a[4+r]*b[col*4+1]+a[8+r]*b[col*4+2]+a[12+r]*b[col*4+3];}return o;}
+function rotation(x,y){const cx=Math.cos(x),sx=Math.sin(x),cy=Math.cos(y),sy=Math.sin(y);return new Float32Array([cy,sx*sy,-cx*sy,0,0,cx,sx,0,sy,-sx*cy,cx*cy,0,0,0,0,1]);}
+function translation(z){const m=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,z,1]);return m;}
+
+function frame(ms){
+  const d=Math.min(window.devicePixelRatio||1,2);
+  if(c.width!==Math.floor(innerWidth*d)||c.height!==Math.floor(innerHeight*d)){c.width=Math.floor(innerWidth*d);c.height=Math.floor(innerHeight*d);}
+  gl.viewport(0,0,c.width,c.height);
+  gl.clearColor(.002,.012,.006,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  impulse=Math.max(0,impulse-.018);
+
+  const aspect=c.width/c.height;
+  const proj=perspective(Math.PI/3,aspect,.1,100);
+  const model=multiply(translation(-3.4),rotation(rx,ry+ms*.00008));
+  gl.uniformMatrix4fv(M,false,multiply(proj,model));
+
+  const out=[];
+  for(let i=0;i<cells;i++){
+    const n=centers[i],nx=n[0],ny=n[1],nz=n[2];
+    let tx=-nz,ty=0,tz=nx;
+    let tl=Math.hypot(tx,ty,tz)||1;tx/=tl;ty/=tl;tz/=tl;
+    let bx=ny*tz-nz*ty,by=nz*tx-nx*tz,bz=nx*ty-ny*tx;
+    const wave=.5+.5*Math.sin(golden*i*7-ms*.004);
+    const e=.08+Math.pow(wave,10)*(.2+.8*impulse);
+    const radius=.075*(1+.18*e);
+    for(let j=0;j<6;j++){
+      const a=Math.PI/6+j*Math.PI/3,b=Math.PI/6+(j+1)*Math.PI/3;
+      const ax=nx+radius*(tx*Math.cos(a)+bx*Math.sin(a));
+      const ay=ny+radius*(ty*Math.cos(a)+by*Math.sin(a));
+      const az=nz+radius*(tz*Math.cos(a)+bz*Math.sin(a));
+      const cx=nx+radius*(tx*Math.cos(b)+bx*Math.sin(b));
+      const cy=ny+radius*(ty*Math.cos(b)+by*Math.sin(b));
+      const cz=nz+radius*(tz*Math.cos(b)+bz*Math.sin(b));
+      out.push(ax,ay,az,e,cx,cy,cz,e);
+    }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(out),gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(P);gl.vertexAttribPointer(P,3,gl.FLOAT,false,16,0);
+  gl.enableVertexAttribArray(E);gl.vertexAttribPointer(E,1,gl.FLOAT,false,16,12);
+  gl.drawArrays(gl.LINES,0,out.length/4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
 })();
 </script>
-</body></html>
+</body>
+</html>
