@@ -8,7 +8,7 @@ import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { setUIState, setVoiceButtonActive, hasNativeVoiceBridge } from "./ui-bridge.js";
 import { bootCheckpoint } from "./boot-diagnostics.js";
-import { createVoiceInteraction } from "./voice/interaction.js";
+import { VoiceInteraction } from "./voice/interaction.js";
 
 bootCheckpoint("JS_ENTRY_STARTED", "core/app.js module evaluated");
 
@@ -26,7 +26,7 @@ class HAIVA {
     this.assistant = new HAIVAAssistant();
     this.lastTranscript = "";
 
-    this.voiceInteraction = createVoiceInteraction({
+    this.voiceInteraction = new VoiceInteraction({
       onInput: (command, detail) => {
         this.voiceActivated = this.voiceInteraction.active;
         this.voiceTurn = detail.turn;
