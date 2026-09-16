@@ -1,10 +1,10 @@
 // =========================================
 // H.A.I.V.A. V2 VOICE LIFECYCLE COORDINATOR
 // =========================================
-// V2 owns lifecycle/state sequencing and conversation-session authority.
-// V1 owns capture. V3 owns interruption control.
+// V2 owns lifecycle/state sequencing only.
+// V1 owns capture. V3 owns interruption capture/events.
 // V2 reports state only to its owning Voice Interaction coordinator.
-// It never calls V1, V3, Boot Loader, UI, Core App, Brain, or Skills.
+// It never interprets user speech or decides conversation meaning.
 
 const STATES = Object.freeze({
   READY: "READY",
@@ -19,13 +19,6 @@ const TRANSITIONS = Object.freeze({
   THINKING: new Set([STATES.SPEAKING, STATES.READY]),
   SPEAKING: new Set([STATES.LISTENING, STATES.THINKING, STATES.READY])
 });
-
-const END_CONVERSATION_PATTERNS = Object.freeze([
-  /\b(?:okay|ok)\s*(?:,)?\s*(?:goodbye|bye)\b/i,
-  /\b(?:thank(?:s| you))\b[\s,]*(?:h\.?a\.?i\.?v\.?a\.?\s*)?(?:goodbye|bye)\b/i,
-  /\bbye\s*(?:h\.?a\.?i\.?v\.?a\.?)?\b/i,
-  /\bgoodbye\s*(?:h\.?a\.?i\.?v\.?a\.?)?\b/i
-]);
 
 export class VoiceLifecycleV2 {
   constructor({ onStateChange = null } = {}) {
@@ -72,12 +65,6 @@ export class VoiceLifecycleV2 {
 
   isConversationActive() {
     return this.sessionActive;
-  }
-
-  shouldEndConversation(text) {
-    const normalized = String(text || "").trim();
-    if (!normalized) return false;
-    return END_CONVERSATION_PATTERNS.some(pattern => pattern.test(normalized));
   }
 
   activateListening() {
