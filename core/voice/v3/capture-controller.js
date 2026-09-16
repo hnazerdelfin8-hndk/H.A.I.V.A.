@@ -2,10 +2,14 @@
 // H.A.I.V.A. V3 VOICE CAPTURE CONTROLLER
 // =========================================
 // V3 owns only the interruption-capture worker.
-// VoiceInteraction remains the sole voice-domain orchestrator.
-// V3 never routes or hands capture directly to V1.
+// V3 reports interruption events to Voice Interaction.
+// V3 requests microphone ownership from V4; it never hands control to V1.
 
-import { acquireCapture, releaseCapture, registerCaptureOwner } from "../capture-handoff.js";
+import {
+  handoffToV3,
+  releaseFromV3,
+  registerVoiceCaptureOwner
+} from "../v4/gateway.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -74,12 +78,12 @@ function stopUnderlyingCapture() {
   stopBrowserCapture();
 }
 
-registerCaptureOwner("v3", stopUnderlyingCapture);
+registerVoiceCaptureOwner("v3", stopUnderlyingCapture);
 
 function startCapture() {
   if (typeof window === "undefined") return false;
   captureActive = true;
-  return acquireCapture("v3", () => {
+  return handoffToV3(() => {
     if (!captureActive) return;
     if (window.HaivaBridge?.startV3VoiceCapture) {
       try {
@@ -94,7 +98,7 @@ function startCapture() {
 }
 
 function stopCapture() {
-  return releaseCapture("v3", stopUnderlyingCapture);
+  return releaseFromV3(stopUnderlyingCapture);
 }
 
 export const v3Capture = Object.freeze({
