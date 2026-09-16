@@ -10,8 +10,7 @@
 export const V3_STATES = Object.freeze({
   IDLE: "IDLE",
   MONITORING: "MONITORING",
-  INTERRUPTED: "INTERRUPTED",
-  HANDOFF: "HANDOFF"
+  INTERRUPTED: "INTERRUPTED"
 });
 
 export const DEFAULT_INTERRUPT_KEYWORDS = Object.freeze([
@@ -195,25 +194,6 @@ export function createVoiceInteractionV3(options = {}) {
     };
   };
 
-  const prepareHandoffToV1 = (turn = generation) => {
-    if (!isCurrent(turn)) return null;
-    state = V3_STATES.HANDOFF;
-    monitoringTurn = null;
-    return {
-      route: "none",
-      interrupted: false,
-      instruction: "",
-      turn
-    };
-  };
-
-  const completeHandoff = (turn = generation) => {
-    if (!isCurrent(turn) || state !== V3_STATES.HANDOFF) return false;
-    state = V3_STATES.IDLE;
-    committed = false;
-    return true;
-  };
-
   return Object.freeze({
     beginTurn,
     beginMonitoring,
@@ -222,8 +202,6 @@ export function createVoiceInteractionV3(options = {}) {
     isMonitoring,
     isCurrent,
     commitResult,
-    interrupt,
-    prepareHandoffToV1,
-    completeHandoff
+    interrupt
   });
 }
