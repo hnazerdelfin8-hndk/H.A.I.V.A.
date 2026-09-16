@@ -53,7 +53,6 @@ export class VoiceInteraction {
     this.bindV1Events();
     this.bindNativeCaptureEvents();
     this.bindV3CaptureEvents();
-    v3Capture.setV1HandoffHandler(() => this.resumeV1AfterV3());
   }
 
   reportState(state, previousState) {
@@ -310,15 +309,6 @@ export class VoiceInteraction {
     return true;
   }
 
-  resumeV1AfterV3() {
-    if (!this.active || this.processing || this.speaking || this.listening) return false;
-    this.captureSessionId = null;
-    this.lifecycle.returnToListening();
-    const started = this.startListening();
-    if (started) this.interruption.completeHandoff(this.turn);
-    return started;
-  }
-
   handleInterruption(result) {
     const interruptedTurn = this.turn;
     this.turn = result.turn;
@@ -330,6 +320,7 @@ export class VoiceInteraction {
     this.v3CaptureSessionId = null;
 
     v3Capture.stopCapture();
+    this.interruption.stopMonitoring(interruptedTurn);
     stopSpeaking();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
@@ -392,6 +383,7 @@ export class VoiceInteraction {
     }
     this.stopListening();
     v3Capture.stopCapture();
+    this.interruption.stopMonitoring(this.turn);
     this.lifecycle.endSession();
     stopSpeaking();
   }
@@ -445,11 +437,17 @@ export class VoiceInteraction {
       if (this.turn !== speakingTurn) {
         return false;
       }
+
       this.speaking = false;
       this.v3CaptureSessionId = null;
-      const handoff = this.interruption.prepareHandoffToV1(speakingTurn);
-      if (!handoff) return false;
-      v3Capture.handoffToV1();
+      this.v3CaptureSessionId = null;
+      this.interruption.stopMonitoring(speakingTurn);
+      v3Capture.stopCapture();
+      this.lifecycle.returnToListening();
+
+      if (this.active) {
+        this.startListening();
+      }
     }
 
     return this.turn === speakingTurn;
@@ -464,12 +462,13 @@ export class VoiceInteraction {
       this.stopListening();
       v3Capture.stopCapture();
       this.v3CaptureSessionId = null;
+      this.interruption.stopMonitoring(this.turn);
       this.lifecycle.endSession();
       return;
     }
 
-    // V3 owns the post-speaking handoff back to V1.
-    // Do not restart V1 here; finishCommand only closes the turn state.
+    // VoiceInteraction owns the lifecycle transition.
+    // V3 only reports interruption events; it never routes to V1.
     this.lifecycle.returnToListening();
   }
 
