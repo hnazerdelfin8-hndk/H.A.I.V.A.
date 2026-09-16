@@ -33,6 +33,7 @@ class HAIVA {
         this.pendingVoiceResult = this.voiceInteraction.pendingResult;
         void this.handleTextCommand(command, true);
       },
+      onBrainDecision: (text, context) => this.assistant.decideVoiceInput(text, context?.phase || "LISTENING"),
       onStateChange: state => {
         this.isListening = this.voiceInteraction.listening;
         this.isSpeaking = this.voiceInteraction.speaking;
@@ -123,6 +124,10 @@ class HAIVA {
 
   async handleTextCommand(command, speakResponse = false) {
     const isVoiceTurn = Boolean(speakResponse);
+    const voiceDecision = isVoiceTurn
+      ? this.assistant.decideVoiceInput(command, "LISTENING")
+      : null;
+
     if (isVoiceTurn) {
       this.voiceInteraction.beginProcessing();
       this.voiceActivated = this.voiceInteraction.active;
@@ -142,8 +147,7 @@ class HAIVA {
       if (speakResponse) {
         const completedTurn = await this.voiceInteraction.beginSpeaking(answer);
         if (!completedTurn) return;
-        const shouldEndConversation = this.voiceInteraction.shouldEndConversation(command);
-        this.voiceInteraction.finishCommand(shouldEndConversation);
+        this.voiceInteraction.finishCommand(Boolean(voiceDecision?.endConversation));
       } else {
         this.setState("READY");
       }
@@ -198,8 +202,6 @@ class HAIVA {
     window.addEventListener("haiva:reminder", async event => {
       const message = event.detail?.message;
       if (!message || !this.voiceInteraction.active) return;
-
-      // Reminder is only a trigger. VoiceInteraction owns TTS and lifecycle.
       const response = `Reminder: ${message}.`;
       this.showResponse(response);
       const completedTurn = await this.voiceInteraction.beginSpeaking(response);
