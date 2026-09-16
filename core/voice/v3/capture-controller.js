@@ -2,13 +2,14 @@
 // H.A.I.V.A. V3 VOICE CAPTURE CONTROLLER
 // =========================================
 // V3 owns only the interruption-capture worker.
-// V3 reports interruption events to Voice Interaction.
+// V3 routes interruption candidates through V4.
 // V3 requests microphone ownership from V4; it never hands control to V1.
 
 import {
   handoffToV3,
   releaseFromV3,
-  registerVoiceCaptureOwner
+  registerVoiceCaptureOwner,
+  routeV3InterruptCandidate
 } from "../v4/gateway.js";
 
 const SpeechRecognitionCtor = typeof window !== "undefined"
@@ -21,6 +22,20 @@ let captureActive = false;
 function emit(name, detail = {}) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function routeNativeV3Result(event) {
+  if (typeof window === "undefined") return;
+  const detail = event?.detail || {};
+  if (!detail.text) return;
+  routeV3InterruptCandidate({
+    ...detail,
+    source: detail.source || "v3-native"
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("haiva:v3-capture-result", routeNativeV3Result);
 }
 
 function stopBrowserCapture() {
@@ -44,7 +59,12 @@ function startBrowserCapture() {
         const result = event.results[i];
         if (result.isFinal) finalText += result[0]?.transcript || "";
       }
-      if (finalText.trim()) emit("haiva:v3-capture-result", { text: finalText.trim(), source: "v3" });
+      if (finalText.trim()) {
+        routeV3InterruptCandidate({
+          text: finalText.trim(),
+          source: "v3"
+        });
+      }
     };
 
     recognition.onerror = error => {
