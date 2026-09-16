@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { V3_STATES, createVoiceInteractionV3 } from "../core/voice/v3/interaction-v3.js";
 
-test("V3 coordinator monitors the active speaking turn", () => {
+test("V3 coordinator arms the active speaking turn without owning a microphone", () => {
   const coordinator = createVoiceInteractionV3();
   const turn = coordinator.beginTurn();
   assert.equal(coordinator.beginMonitoring(turn), true);
-  assert.equal(coordinator.getState(), V3_STATES.MONITORING);
+  assert.equal(coordinator.getState(), V3_STATES.ARMED);
   assert.equal(coordinator.isMonitoring(turn), true);
 });
 
-test("V3 commits one raw capture per speaking turn", () => {
+test("V3 commits one raw interrupt candidate per speaking turn", () => {
   const coordinator = createVoiceInteractionV3();
   const turn = coordinator.beginTurn();
   coordinator.beginMonitoring(turn);
@@ -22,7 +22,7 @@ test("V3 commits one raw capture per speaking turn", () => {
   assert.equal(coordinator.commitCapture(turn, "duplicate"), null);
 });
 
-test("V3 releases a non-interruption capture without changing the turn", () => {
+test("V3 releases a non-interruption candidate without changing the turn", () => {
   const coordinator = createVoiceInteractionV3();
   const turn = coordinator.beginTurn();
   coordinator.beginMonitoring(turn);
