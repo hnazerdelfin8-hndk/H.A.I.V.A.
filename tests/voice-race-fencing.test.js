@@ -23,14 +23,19 @@ test("voice race fence: stale native results cannot cross an invalidated capture
 });
 
 test("voice race fence: interruption invalidates the old capture turn before handoff", () => {
-  const interruptionIndex = interaction.indexOf("handleInterruption(result)");
+  const interruptionIndex = interaction.indexOf("handleInterruption(capture, decision)");
   assert.ok(interruptionIndex >= 0);
   const interruptionBody = interaction.slice(interruptionIndex, interaction.indexOf("\n  acceptResult()", interruptionIndex));
+  assert.match(interruptionBody, /const interruptedTurn = this\.turn/);
+  assert.match(interruptionBody, /this\.turn = this\.interruption\.beginTurn\(\)/);
   assert.match(interruptionBody, /this\.speaking = false/);
   assert.match(interruptionBody, /this\.captureSessionId = null/);
+  assert.match(interruptionBody, /this\.v3CaptureSessionId = null/);
   assert.match(interruptionBody, /stopSpeaking\(\)/);
   assert.match(interruptionBody, /queueMicrotask\(\(\) =>/);
-  assert.match(interruptionBody, /this\.turn !== result\.turn/);
+  assert.match(interruptionBody, /this\.interruption\.isCurrent\(this\.turn\)/);
+  assert.match(interruptionBody, /previousTurn: interruptedTurn/);
+  assert.match(interruptionBody, /sourceInput: capture\.text/);
 });
 
 test("voice race fence: interrupted TTS cannot finish the replacement turn", () => {
