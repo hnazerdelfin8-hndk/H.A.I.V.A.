@@ -22,27 +22,37 @@ export const V4_CAPTURE_ROUTES = Object.freeze({
 let voiceInterruptHandler = null;
 let v3StopHandler = null;
 let voiceOutputStopHandler = null;
+let handoffGeneration = 0;
 
 export function registerVoiceCaptureOwner(owner, releaseHandler) {
   return registerCaptureOwner(owner, releaseHandler);
 }
 
-// V4 does not start the microphone. The worker supplies the callback
-// that performs its own capture operation after routing is granted.
+// V4 grants the route synchronously. A generation token prevents an older,
+// queued worker start from becoming valid after a newer handoff has happened.
+function routeCaptureTo(owner, startWorkerCapture) {
+  const generation = ++handoffGeneration;
+  return routeCapture(owner, () => {
+    if (generation !== handoffGeneration) return;
+    startWorkerCapture?.();
+  });
+}
+
 export function handoffToV1(startWorkerCapture) {
-  return routeCapture(V4_CAPTURE_ROUTES.V1, startWorkerCapture);
+  return routeCaptureTo(V4_CAPTURE_ROUTES.V1, startWorkerCapture);
 }
 
 export function handoffToV3(startWorkerCapture) {
-  return routeCapture(V4_CAPTURE_ROUTES.V3, startWorkerCapture);
+  return routeCaptureTo(V4_CAPTURE_ROUTES.V3, startWorkerCapture);
 }
 
-// V4 only routes release. The worker supplies its own stop operation.
 export function releaseFromV1(stopWorkerCapture) {
+  ++handoffGeneration;
   return releaseRoutedCapture(V4_CAPTURE_ROUTES.V1, stopWorkerCapture);
 }
 
 export function releaseFromV3(stopWorkerCapture) {
+  ++handoffGeneration;
   return releaseRoutedCapture(V4_CAPTURE_ROUTES.V3, stopWorkerCapture);
 }
 
@@ -91,8 +101,6 @@ export function requestVoiceOutputStop(reason = "interrupt") {
   return true;
 }
 
-// Diagnostic only: which worker is currently routed through the arbiter.
-// This does NOT mean V4 owns the microphone.
 export function getCaptureRoute() {
   return getCaptureOwner();
 }
