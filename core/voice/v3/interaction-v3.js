@@ -35,9 +35,13 @@ export function detectVoiceInterrupt(text, keywords = DEFAULT_INTERRUPT_KEYWORDS
 
   for (const phrase of ordered) {
     const escaped = escapeRegExp(phrase);
-    const pattern = phrase.includes(" ")
-      ? new RegExp(`(^|\\s)${escaped}(?=$|\\s|[,.!?])`, "i")
-      : new RegExp(`^${escaped}(?=$|\\s|[,.!?])`, "i");
+    // Multi-word phrases and single-word interrupt commands may occur naturally
+    // anywhere in the utterance, but must remain token-bounded to avoid matching
+    // unrelated words such as "stopping" for "stop".
+    const pattern = new RegExp(
+      `(^|\\s)${escaped}(?=$|\\s|[,.!?])`,
+      "i"
+    );
 
     if (pattern.test(normalized)) {
       return { interrupted: true, phrase };
