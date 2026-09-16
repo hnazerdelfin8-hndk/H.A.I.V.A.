@@ -5,6 +5,7 @@ import { test } from "node:test";
 const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../core/ui-bridge.js", import.meta.url), "utf8");
 const native = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
+const gateway = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
 
 test("voice race fence: native callbacks carry and validate a capture session", () => {
   assert.match(native, /nativeVoiceSessionGeneration/);
@@ -31,11 +32,15 @@ test("voice race fence: interruption invalidates the old capture turn before han
   assert.match(interruptionBody, /this\.speaking = false/);
   assert.match(interruptionBody, /this\.captureSessionId = null/);
   assert.match(interruptionBody, /this\.v3CaptureSessionId = null/);
-  assert.match(interruptionBody, /stopSpeaking\(\)/);
+  assert.match(interruptionBody, /requestV3Stop\("voice-interrupt"\)/);
+  assert.match(interruptionBody, /requestVoiceOutputStop\("voice-interrupt"\)/);
+  assert.doesNotMatch(interruptionBody, /[^A-Za-z]stopSpeaking\(\)/);
   assert.match(interruptionBody, /queueMicrotask\(\(\) =>/);
   assert.match(interruptionBody, /this\.interruption\.isCurrent\(this\.turn\)/);
   assert.match(interruptionBody, /previousTurn: interruptedTurn/);
   assert.match(interruptionBody, /sourceInput: capture\.text/);
+  assert.match(gateway, /registerVoiceOutputStopHandler/);
+  assert.match(gateway, /requestVoiceOutputStop/);
 });
 
 test("voice race fence: interrupted TTS cannot finish the replacement turn", () => {
