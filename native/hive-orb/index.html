@@ -21,7 +21,7 @@ const gl=c.getContext('webgl',{antialias:true,alpha:false});
 if(!gl){document.body.innerHTML='<p style="padding:24px">WebGL is required.</p>';return;}
 
 const vs=`attribute vec3 p;attribute float e;uniform mat4 mvp;varying float v;void main(){v=e;gl_Position=mvp*vec4(p,1.0);}`;
-const fs=`precision mediump float;varying float v;void main(){float glow=.15+.85*v;gl_FragColor=vec4(.05,.95,.32,glow);}`;
+const fs=`precision mediump float;varying float v;void main(){float glow=.12+.88*v;vec3 base=mix(vec3(.02,.45,.12),vec3(.15,1.0,.48),v);gl_FragColor=vec4(base,glow);}`;
 function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
 const program=gl.createProgram();
 gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));
@@ -59,23 +59,11 @@ function perspective(fov,aspect,near,far){
 }
 function multiply(a,b){const o=new Float32Array(16);for(let r=0;r<4;r++)for(let col=0;col<4;col++){o[col*4+r]=a[r]*b[col*4]+a[4+r]*b[col*4+1]+a[8+r]*b[col*4+2]+a[12+r]*b[col*4+3];}return o;}
 function rotation(x,y){const cx=Math.cos(x),sx=Math.sin(x),cy=Math.cos(y),sy=Math.sin(y);return new Float32Array([cy,sx*sy,-cx*sy,0,0,cx,sx,0,sy,-sx*cy,cx*cy,0,0,0,0,1]);}
-function translation(z){const m=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,z,1]);return m;}
+function rotationY(y){const c=Math.cos(y),s=Math.sin(y);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1]);}
+function translation(z){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,z,1]);}
+function scale(s){return new Float32Array([s,0,0,0,0,s,0,0,0,0,s,0,0,0,0,1]);}
 
-function frame(ms){
-  const d=Math.min(window.devicePixelRatio||1,2);
-  if(c.width!==Math.floor(innerWidth*d)||c.height!==Math.floor(innerHeight*d)){c.width=Math.floor(innerWidth*d);c.height=Math.floor(innerHeight*d);}
-  gl.viewport(0,0,c.width,c.height);
-  gl.clearColor(.002,.012,.006,1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-  impulse=Math.max(0,impulse-.018);
-
-  const aspect=c.width/c.height;
-  const proj=perspective(Math.PI/3,aspect,.1,100);
-  const model=multiply(translation(-3.4),rotation(rx,ry+ms*.00008));
-  gl.uniformMatrix4fv(M,false,multiply(proj,model));
-
+function drawOuter(ms){
   const out=[];
   for(let i=0;i<cells;i++){
     const n=centers[i],nx=n[0],ny=n[1],nz=n[2];
@@ -101,6 +89,55 @@ function frame(ms){
   gl.enableVertexAttribArray(P);gl.vertexAttribPointer(P,3,gl.FLOAT,false,16,0);
   gl.enableVertexAttribArray(E);gl.vertexAttribPointer(E,1,gl.FLOAT,false,16,12);
   gl.drawArrays(gl.LINES,0,out.length/4);
+}
+
+function drawInnerCore(ms){
+  // A true 3D hexagonal prism: two hexagonal faces plus six connecting edges.
+  const out=[];
+  const pulse=1+.12*Math.sin(ms*.005)+.20*impulse;
+  const r=.42*pulse;
+  const depth=.34*pulse;
+  const top=[];
+  const bottom=[];
+  for(let i=0;i<6;i++){
+    const a=Math.PI/6+i*Math.PI/3;
+    top.push([r*Math.cos(a),depth,r*Math.sin(a)]);
+    bottom.push([r*Math.cos(a),-depth,r*Math.sin(a)]);
+  }
+  const edge=(a,b,e)=>out.push(a[0],a[1],a[2],e,b[0],b[1],b[2],e);
+  const energy=.72+.25*(.5+.5*Math.sin(ms*.006));
+  for(let i=0;i<6;i++){
+    const n=(i+1)%6;
+    edge(top[i],top[n],energy);
+    edge(bottom[i],bottom[n],energy*.92);
+    edge(top[i],bottom[i],energy*.98);
+  }
+  // Inner vertical axis adds a second spatial layer to the core.
+  edge([0,-depth*1.18,0],[0,depth*1.18,0],1.0);
+
+  const coreModel=multiply(scale(.72),rotationY(-ms*.0009));
+  const baseModel=multiply(translation(-3.4),multiply(rotation(rx,ry+ms*.00008),coreModel));
+  const proj=perspective(Math.PI/3,c.width/c.height,.1,100);
+  gl.uniformMatrix4fv(M,false,multiply(proj,baseModel));
+  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(out),gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(P);gl.vertexAttribPointer(P,3,gl.FLOAT,false,16,0);
+  gl.enableVertexAttribArray(E);gl.vertexAttribPointer(E,1,gl.FLOAT,false,16,12);
+  gl.drawArrays(gl.LINES,0,out.length/4);
+}
+
+function frame(ms){
+  const d=Math.min(window.devicePixelRatio||1,2);
+  if(c.width!==Math.floor(innerWidth*d)||c.height!==Math.floor(innerHeight*d)){c.width=Math.floor(innerWidth*d);c.height=Math.floor(innerHeight*d);}
+  gl.viewport(0,0,c.width,c.height);
+  gl.clearColor(.002,.012,.006,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  impulse=Math.max(0,impulse-.018);
+
+  drawOuter(ms);
+  drawInnerCore(ms);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
