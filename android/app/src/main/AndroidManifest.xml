@@ -5,6 +5,7 @@
         android:theme="@style/Theme.HAIVA"
         android:label="H.A.I.V.A."
         android:usesCleartextTraffic="false">
+        <activity android:name=".HiveOrbActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
