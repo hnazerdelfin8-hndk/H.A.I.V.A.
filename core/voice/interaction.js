@@ -17,7 +17,8 @@ import {
   registerV3StopHandler,
   registerVoiceOutputStopHandler,
   requestV3Stop,
-  requestVoiceOutputStop
+  requestVoiceOutputStop,
+  handoffToV1
 } from "./v4/gateway.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../ui-bridge.js";
 
@@ -147,9 +148,18 @@ export class VoiceInteraction {
       return true;
     }
 
+    // No interrupt: V3 monitoring turn is complete. Release V3 through V4,
+    // then let V4 hand the microphone back to V1 for the next user turn.
     this.interruption.releaseCapture(this.turn);
     this.v3CaptureSessionId = null;
-    this.restartV3CaptureAfterTurn();
+    v3Capture.stopCapture();
+    this.lifecycle.returnToListening();
+    if (this.active && !this.processing && !this.speaking) {
+      handoffToV1(() => {
+        if (!this.active || this.processing || this.speaking) return;
+        v1Capture.startCapture();
+      });
+    }
     return true;
   }
 
@@ -375,7 +385,7 @@ export class VoiceInteraction {
     this.stopListening();
     this.lifecycle.beginSpeaking();
     this.interruption.beginMonitoring(speakingTurn);
-    if (!this.nativeVoice) v3Capture.startCapture();
+    v3Capture.startCapture();
 
     try {
       await speak(text);
@@ -391,30 +401,8 @@ export class VoiceInteraction {
     return this.turn === speakingTurn;
   }
 
-  finishCommand(shouldEnd = false) {
-    this.processing = false;
-    this.pendingResult = false;
-    if (shouldEnd || !this.active) {
-      this.active = false;
-      this.stopListening();
-      v3Capture.stopCapture();
-      this.v3CaptureSessionId = null;
-      this.interruption.stopMonitoring(this.turn);
-      this.lifecycle.endSession();
-      return;
-    }
-    this.lifecycle.returnToListening();
-  }
-
-  isConversationActive() {
-    return this.lifecycle.isConversationActive();
-  }
-
-  reportError(source, error) {
-    const detail = { type: "VOICE_ERROR", source, error, turn: this.turn };
+  reportError(type, code) {
+    const detail = { type, code, source: "voice-interaction", turn: this.turn };
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(VOICE_INTERACTION_EVENTS.ERROR, { detail }));
-    this.onOutcome?.(detail);
   }
 }
-
-export const createVoiceInteraction = options => new VoiceInteraction(options);
