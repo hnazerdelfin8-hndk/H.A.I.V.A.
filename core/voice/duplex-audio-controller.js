@@ -9,6 +9,8 @@
 //   startDuplexInterruptMonitor()
 //   stopDuplexInterruptMonitor()
 //   haiva:duplex-interrupt-detected
+//   haiva:duplex-monitor-ready
+//   haiva:duplex-monitor-error
 //
 // The native monitor should use AudioRecord + platform echo/noise processing
 // where available. It only reports speech onset; V3 starts STT after the
@@ -31,6 +33,7 @@ export class DuplexAudioController {
     this.onReady = typeof onReady === "function" ? onReady : null;
     this.onError = typeof onError === "function" ? onError : null;
     this.active = false;
+    this.ready = false;
     this.turn = null;
     this.bound = false;
     this.bindEvents();
@@ -50,7 +53,7 @@ export class DuplexAudioController {
     this.bound = true;
 
     window.addEventListener(DUPLEX_AUDIO_EVENTS.INTERRUPT_DETECTED, event => {
-      if (!this.active) return;
+      if (!this.active || !this.ready) return;
       const detail = event?.detail || {};
       if (detail.turn != null && this.turn != null && Number(detail.turn) !== Number(this.turn)) return;
       this.onInterruptDetected?.({
@@ -61,12 +64,20 @@ export class DuplexAudioController {
 
     window.addEventListener(DUPLEX_AUDIO_EVENTS.MONITOR_READY, event => {
       if (!this.active) return;
-      this.onReady?.(event?.detail || {});
+      const detail = event?.detail || {};
+      if (detail.turn != null && this.turn != null && Number(detail.turn) !== Number(this.turn)) return;
+      this.ready = true;
+      this.onReady?.(detail);
     });
 
     window.addEventListener(DUPLEX_AUDIO_EVENTS.MONITOR_ERROR, event => {
       if (!this.active) return;
-      this.onError?.(event?.detail || {});
+      const detail = event?.detail || {};
+      if (detail.turn != null && this.turn != null && Number(detail.turn) !== Number(this.turn)) return;
+      this.active = false;
+      this.ready = false;
+      this.turn = null;
+      this.onError?.(detail);
     });
   }
 
@@ -75,11 +86,15 @@ export class DuplexAudioController {
     if (this.active) return this.turn === turn;
     try {
       this.active = true;
+      this.ready = false;
       this.turn = turn;
       window.HaivaBridge.startDuplexInterruptMonitor(Number(turn));
+      // Native startup is asynchronous. `true` means the start request was
+      // accepted; `ready` becomes true only after MONITOR_READY arrives.
       return true;
     } catch (error) {
       this.active = false;
+      this.ready = false;
       this.turn = null;
       this.onError?.({ source: "duplex-controller", message: error?.message || String(error) });
       return false;
@@ -89,6 +104,7 @@ export class DuplexAudioController {
   stopInterruptMonitor() {
     if (!this.active) return false;
     this.active = false;
+    this.ready = false;
     this.turn = null;
     try { bridge()?.stopDuplexInterruptMonitor?.(); } catch (_) {}
     return true;
@@ -96,6 +112,10 @@ export class DuplexAudioController {
 
   isActive() {
     return this.active;
+  }
+
+  isReady() {
+    return this.active && this.ready;
   }
 
   getTurn() {
