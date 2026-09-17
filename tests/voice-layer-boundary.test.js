@@ -10,6 +10,7 @@ const v2 = readFileSync(new URL("../core/voice/v2/lifecycle-coordinator.js", imp
 const v3Logic = readFileSync(new URL("../core/voice/v3/interaction-v3.js", import.meta.url), "utf8");
 const v3Capture = readFileSync(new URL("../core/voice/v3/capture-controller.js", import.meta.url), "utf8");
 const v4 = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
+const duplex = readFileSync(new URL("../core/voice/duplex-audio-controller.js", import.meta.url), "utf8");
 const brain = readFileSync(new URL("../core/brain/decision.js", import.meta.url), "utf8");
 const androidBridge = readFileSync(new URL("../android/app/src/main/java/com/haiva/bridge/HaivaBridge.kt", import.meta.url), "utf8");
 const androidActivity = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
@@ -58,7 +59,20 @@ test("voice boundary: V3 owns interruption state and routes through V4", () => {
   assert.match(v3Capture, /releaseFromV3/);
   assert.match(v3Capture, /routeV3InterruptCandidate/);
   assert.match(v3Capture, /haiva:v3-interrupt-signal/);
+  assert.match(v3Capture, /DuplexAudioController/);
+  assert.match(v3Capture, /startInterruptMonitor/);
+  assert.match(v3Capture, /startRecognitionAfterDuplex/);
   assert.doesNotMatch(v3Capture, /new SpeechRecognizer|SpeechRecognition/);
+});
+
+test("voice boundary: duplex monitor detects onset before V3 starts full STT", () => {
+  assert.match(duplex, /startDuplexInterruptMonitor/);
+  assert.match(duplex, /stopDuplexInterruptMonitor/);
+  assert.match(duplex, /haiva:duplex-interrupt-detected/);
+  assert.doesNotMatch(duplex, /SpeechRecognition|startV3VoiceCapture/);
+  assert.match(interaction, /haiva:v3-duplex-speech-start/);
+  assert.match(interaction, /requestVoiceOutputStop\("duplex-speech-start"\)/);
+  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
 });
 
 test("voice boundary: V4 carries capture and interrupt control without owning a recognizer", () => {
@@ -92,9 +106,9 @@ test("voice boundary: V1 and V3 use one exclusive physical capture route", () =>
   assert.match(androidActivity, /NativeCaptureMode\.INTERRUPT/);
 });
 
-test("voice boundary: speaking loop routes the same native recognizer as V3", () => {
+test("voice boundary: speaking loop uses duplex onset then the same native recognizer as V3", () => {
   assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\)/);
-  assert.match(interaction, /v3Capture\.startCapture\(\)/);
+  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
   assert.match(v3Capture, /handoffToV3/);
   assert.match(interaction, /this\.interruption\.stopMonitoring\(speakingTurn\)/);
   assert.match(interaction, /v3Capture\.stopCapture\(\)/);
