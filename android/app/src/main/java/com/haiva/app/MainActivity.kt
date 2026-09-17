@@ -33,10 +33,12 @@ import com.haiva.bridge.HaivaBridge
 import java.util.Locale
 
 class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
+    private enum class NativeCaptureMode { NORMAL, INTERRUPT }
+
     private lateinit var webView: WebView
     private lateinit var textToSpeech: TextToSpeech
     private var speechRecognizer: SpeechRecognizer? = null
-    private var v3SpeechRecognizer: SpeechRecognizer? = null
+    private var nativeCaptureMode = NativeCaptureMode.NORMAL
     private val voicePermissionRequestCode = 1001
     private val voiceFallbackRequestCode = 1002
 
@@ -56,15 +58,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private var fallbackVoiceActive = false
 
     private val nativeVoiceWatchdog = Handler(Looper.getMainLooper())
-    private val nativeV3VoiceWatchdog = Handler(Looper.getMainLooper())
     private val nativeVoiceWatchdogMs = 5000L
     private var nativeVoiceRequestActive = false
-    private var nativeV3VoiceRequestActive = false
-
     private var nativeVoiceSessionGeneration = 0L
     private var activeNativeVoiceSessionId: Long? = null
     private var nativeV3VoiceSessionGeneration = 0L
     private var activeNativeV3VoiceSessionId: Long? = null
+    private var pendingNativeCaptureStart: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,29 +78,17 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         )
         textToSpeech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
-                if (utteranceId == "HAIVA_RESPONSE") {
-                    Log.i("HAIVA-AUDIO", "TTS_START utterance=HAIVA_RESPONSE")
-                    dispatchJsEvent("haiva:native-speech-start")
-                }
+                if (utteranceId == "HAIVA_RESPONSE") Log.i("HAIVA-AUDIO", "TTS_START utterance=HAIVA_RESPONSE")
             }
             override fun onDone(utteranceId: String?) {
-                if (utteranceId == "HAIVA_RESPONSE") {
-                    Log.i("HAIVA-AUDIO", "TTS_DONE utterance=HAIVA_RESPONSE")
-                    dispatchSpeechDone()
-                }
+                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
             }
             override fun onError(utteranceId: String?) {
-                if (utteranceId == "HAIVA_RESPONSE") {
-                    Log.e("HAIVA-AUDIO", "TTS_ERROR utterance=HAIVA_RESPONSE")
-                    dispatchSpeechDone()
-                }
+                if (utteranceId == "HAIVA_RESPONSE") dispatchSpeechDone()
             }
         })
 
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            createSpeechRecognizer()
-            createV3SpeechRecognizer()
-        }
+        if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
 
         webView = WebView(this)
         webView.setBackgroundColor(Color.rgb(2, 5, 11))
@@ -127,8 +115,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 if (request == null) return null
-                return assetLoader.shouldInterceptRequest(request.url)
-                    ?: super.shouldInterceptRequest(view, request)
+                return assetLoader.shouldInterceptRequest(request.url) ?: super.shouldInterceptRequest(view, request)
             }
             override fun onPageFinished(view: WebView?, url: String?) {
                 Log.i("HAIVA-BOOT", "PAGE_FINISHED url=$url")
@@ -179,11 +166,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply { setRecognitionListener(recognitionListener) }
     }
 
-    private fun createV3SpeechRecognizer() {
-        try { v3SpeechRecognizer?.cancel(); v3SpeechRecognizer?.destroy() } catch (_: Exception) {}
-        v3SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply { setRecognitionListener(v3RecognitionListener) }
-    }
-
     override fun onInit(status: Int) {
         ttsReady = status == TextToSpeech.SUCCESS
         if (ttsReady) {
@@ -195,24 +177,48 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
             cancelNativeVoiceWatchdog()
-            dispatchVoiceEvent("haiva:native-voice-ready")
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-ready")
+            else dispatchVoiceEvent("haiva:native-voice-ready")
         }
+
         override fun onBeginningOfSpeech() {
             cancelNativeVoiceWatchdog()
-            dispatchVoiceEvent("haiva:native-voice-begin")
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-begin")
+            else dispatchVoiceEvent("haiva:native-voice-begin")
         }
+
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { dispatchVoiceEvent("haiva:native-voice-segment-end") }
-        override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchVoicePartial(text)
+
+        override fun onEndOfSpeech() {
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-segment-end")
+            else dispatchVoiceEvent("haiva:native-voice-segment-end")
         }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+            if (text.isEmpty()) return
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoicePartial(text)
+            else dispatchVoicePartial(text)
+        }
+
         override fun onEvent(eventType: Int, params: Bundle?) {}
+
         override fun onError(error: Int) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) {
+                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    dispatchV3VoiceComplete("no_speech")
+                } else if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                    dispatchV3VoiceComplete("recoverable_client_state")
+                    createSpeechRecognizer()
+                } else {
+                    dispatchV3VoiceError(error)
+                }
+                return
+            }
+
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchVoiceCaptureComplete("no_speech")
@@ -224,68 +230,25 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 else -> dispatchVoiceError(error)
             }
         }
+
         override fun onResults(results: Bundle?) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
-            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchVoiceResult(text)
-            else dispatchVoiceCaptureComplete("empty_result")
-        }
-    }
-
-    private val v3RecognitionListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {
-            cancelNativeV3VoiceWatchdog()
-            Log.i("HAIVA-AUDIO", "V3_READY session=$activeNativeV3VoiceSessionId ttsReady=$ttsReady")
-            dispatchV3VoiceEvent("haiva:v3-capture-ready")
-        }
-        override fun onBeginningOfSpeech() {
-            cancelNativeV3VoiceWatchdog()
-            Log.i("HAIVA-AUDIO", "V3_BEGIN session=$activeNativeV3VoiceSessionId")
-            dispatchV3VoiceEvent("haiva:v3-capture-begin")
-        }
-        override fun onRmsChanged(rmsdB: Float) {}
-        override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() {
-            Log.i("HAIVA-AUDIO", "V3_END_OF_SPEECH session=$activeNativeV3VoiceSessionId")
-            dispatchV3VoiceEvent("haiva:v3-capture-segment-end")
-        }
-        override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull()?.trim().orEmpty()
-            if (text.isNotEmpty()) dispatchV3VoicePartial(text)
-        }
-        override fun onEvent(eventType: Int, params: Bundle?) {}
-        override fun onError(error: Int) {
-            cancelNativeV3VoiceWatchdog()
-            nativeV3VoiceRequestActive = false
-            Log.w("HAIVA-AUDIO", "V3_ERROR session=$activeNativeV3VoiceSessionId code=$error")
-            when (error) {
-                SpeechRecognizer.ERROR_NO_MATCH,
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchV3VoiceComplete("no_speech")
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-                SpeechRecognizer.ERROR_CLIENT -> {
-                    dispatchV3VoiceComplete("recoverable_client_state")
-                    createV3SpeechRecognizer()
-                }
-                else -> dispatchV3VoiceError(error)
+            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+            if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) {
+                if (text.isNotEmpty()) dispatchV3VoiceResult(text) else dispatchV3VoiceComplete("empty_result")
+            } else {
+                if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceCaptureComplete("empty_result")
             }
-        }
-        override fun onResults(results: Bundle?) {
-            cancelNativeV3VoiceWatchdog()
-            nativeV3VoiceRequestActive = false
-            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull()?.trim().orEmpty()
-            Log.i("HAIVA-AUDIO", "V3_RESULT session=$activeNativeV3VoiceSessionId textPresent=${text.isNotEmpty()}")
-            if (text.isNotEmpty()) dispatchV3VoiceResult(text)
-            else dispatchV3VoiceComplete("empty_result")
         }
     }
 
     private fun startSystemVoiceFallback() {
         if (destroyed || fallbackVoiceActive) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { dispatchVoiceUnavailable("microphone_permission_required"); return }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            dispatchVoiceUnavailable("microphone_permission_required")
+            return
+        }
         fallbackVoiceActive = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -298,7 +261,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
         }
-        try { startActivityForResult(intent, voiceFallbackRequestCode) } catch (_: Exception) { fallbackVoiceActive = false; dispatchVoiceUnavailable("system_voice_fallback_unavailable") }
+        try { startActivityForResult(intent, voiceFallbackRequestCode) } catch (_: Exception) {
+            fallbackVoiceActive = false
+            dispatchVoiceUnavailable("system_voice_fallback_unavailable")
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -342,7 +308,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun startVoiceCapture() {
         runOnUiThread {
             if (destroyed) return@runOnUiThread
-            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeVoiceStart = true; requestVoicePermission(); return@runOnUiThread }
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                pendingNativeVoiceStart = true
+                requestVoicePermission()
+                return@runOnUiThread
+            }
             fallbackVoiceActive = false
             startNativeRecognition()
         }
@@ -353,11 +323,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         runOnUiThread {
             pendingNativeVoiceStart = false
             fallbackVoiceActive = false
-            nativeVoiceRequestActive = false
-            activeNativeVoiceSessionId = null
-            cancelNativeVoiceWatchdog()
-            try { speechRecognizer?.stopListening() } catch (_: Exception) {}
-            try { speechRecognizer?.cancel() } catch (_: Exception) {}
+            stopNativeRecognition()
         }
     }
 
@@ -365,7 +331,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun startV3VoiceCapture() {
         runOnUiThread {
             if (destroyed) return@runOnUiThread
-            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeV3VoiceStart = true; requestVoicePermission(); return@runOnUiThread }
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                pendingNativeV3VoiceStart = true
+                requestVoicePermission()
+                return@runOnUiThread
+            }
             startV3NativeRecognition()
         }
     }
@@ -374,102 +344,115 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun stopV3VoiceCapture() {
         runOnUiThread {
             pendingNativeV3VoiceStart = false
-            nativeV3VoiceRequestActive = false
-            activeNativeV3VoiceSessionId = null
-            cancelNativeV3VoiceWatchdog()
-            try { v3SpeechRecognizer?.stopListening() } catch (_: Exception) {}
-            try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
+            stopNativeRecognition()
         }
+    }
+
+    private fun stopNativeRecognition() {
+        pendingNativeCaptureStart?.let { nativeVoiceWatchdog.removeCallbacks(it) }
+        pendingNativeCaptureStart = null
+        nativeVoiceRequestActive = false
+        activeNativeVoiceSessionId = null
+        activeNativeV3VoiceSessionId = null
+        cancelNativeVoiceWatchdog()
+        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+        try { speechRecognizer?.cancel() } catch (_: Exception) {}
     }
 
     private fun startNativeRecognition() {
-        if (destroyed) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeVoiceStart = true; requestVoicePermission(); return }
-        if (speechRecognizer == null) {
-            if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
-            else { dispatchVoiceUnavailable("speech_recognizer_unavailable"); return }
-        }
-        val recognizer = speechRecognizer ?: run { dispatchVoiceUnavailable("speech_recognizer_initialization_failed"); return }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000L)
-        }
-        val sessionId = ++nativeVoiceSessionGeneration
-        activeNativeVoiceSessionId = sessionId
-        try {
-            nativeVoiceRequestActive = true
-            recognizer.startListening(intent)
-            startNativeVoiceWatchdog(sessionId)
-        } catch (_: Exception) {
-            nativeVoiceRequestActive = false
-            activeNativeVoiceSessionId = null
-            startSystemVoiceFallback()
-        }
+        startNativeRecognitionWithMode(NativeCaptureMode.NORMAL)
     }
 
     private fun startV3NativeRecognition() {
-        if (destroyed) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { pendingNativeV3VoiceStart = true; requestVoicePermission(); return }
-        if (v3SpeechRecognizer == null) {
-            if (SpeechRecognizer.isRecognitionAvailable(this)) createV3SpeechRecognizer()
-            else { dispatchV3VoiceError(-1); return }
-        }
-        val recognizer = v3SpeechRecognizer ?: run { dispatchV3VoiceError(-1); return }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 700L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
-        }
-        val sessionId = ++nativeV3VoiceSessionGeneration
-        activeNativeV3VoiceSessionId = sessionId
-        try {
-            nativeV3VoiceRequestActive = true
-            Log.i("HAIVA-AUDIO", "V3_START_LISTENING session=$sessionId ttsReady=$ttsReady")
-            recognizer.startListening(intent)
-            startNativeV3VoiceWatchdog(sessionId)
-        } catch (_: Exception) {
-            nativeV3VoiceRequestActive = false
-            activeNativeV3VoiceSessionId = null
-            Log.e("HAIVA-AUDIO", "V3_START_FAILED session=$sessionId")
-            dispatchV3VoiceError(SpeechRecognizer.ERROR_CLIENT)
-        }
+        startNativeRecognitionWithMode(NativeCaptureMode.INTERRUPT)
     }
 
-    private fun startNativeVoiceWatchdog(sessionId: Long) {
+    private fun startNativeRecognitionWithMode(mode: NativeCaptureMode) {
+        if (destroyed) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            if (mode == NativeCaptureMode.INTERRUPT) pendingNativeV3VoiceStart = true else pendingNativeVoiceStart = true
+            requestVoicePermission()
+            return
+        }
+
+        pendingNativeCaptureStart?.let { nativeVoiceWatchdog.removeCallbacks(it) }
+        pendingNativeCaptureStart = Runnable {
+            if (destroyed) return@Runnable
+            nativeCaptureMode = mode
+            if (speechRecognizer == null) {
+                if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
+                else {
+                    if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1)
+                    else dispatchVoiceUnavailable("speech_recognizer_unavailable")
+                    return@Runnable
+                }
+            }
+
+            val recognizer = speechRecognizer ?: run {
+                if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1)
+                else dispatchVoiceUnavailable("speech_recognizer_initialization_failed")
+                return@Runnable
+            }
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault().toLanguageTag())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, if (mode == NativeCaptureMode.INTERRUPT) 700L else 1000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, if (mode == NativeCaptureMode.INTERRUPT) 1500L else 10000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (mode == NativeCaptureMode.INTERRUPT) 2000L else 10000L)
+            }
+
+            if (mode == NativeCaptureMode.INTERRUPT) {
+                val sessionId = ++nativeV3VoiceSessionGeneration
+                activeNativeV3VoiceSessionId = sessionId
+                activeNativeVoiceSessionId = null
+            } else {
+                val sessionId = ++nativeVoiceSessionGeneration
+                activeNativeVoiceSessionId = sessionId
+                activeNativeV3VoiceSessionId = null
+            }
+
+            try {
+                nativeVoiceRequestActive = true
+                recognizer.startListening(intent)
+                val sessionId = if (mode == NativeCaptureMode.INTERRUPT) activeNativeV3VoiceSessionId else activeNativeVoiceSessionId
+                if (sessionId != null) startNativeVoiceWatchdog(sessionId, mode)
+            } catch (_: Exception) {
+                nativeVoiceRequestActive = false
+                if (mode == NativeCaptureMode.INTERRUPT) {
+                    activeNativeV3VoiceSessionId = null
+                    dispatchV3VoiceError(SpeechRecognizer.ERROR_CLIENT)
+                } else {
+                    activeNativeVoiceSessionId = null
+                    startSystemVoiceFallback()
+                }
+            }
+        }
+        nativeVoiceWatchdog.post(pendingNativeCaptureStart!!)
+    }
+
+    private fun startNativeVoiceWatchdog(sessionId: Long, mode: NativeCaptureMode) {
         cancelNativeVoiceWatchdog()
         nativeVoiceWatchdog.postDelayed({
-            if (destroyed || !nativeVoiceRequestActive || activeNativeVoiceSessionId != sessionId) return@postDelayed
+            val activeSession = if (mode == NativeCaptureMode.INTERRUPT) activeNativeV3VoiceSessionId else activeNativeVoiceSessionId
+            if (destroyed || !nativeVoiceRequestActive || activeSession != sessionId) return@postDelayed
             nativeVoiceRequestActive = false
-            activeNativeVoiceSessionId = null
-            try { speechRecognizer?.cancel() } catch (_: Exception) {}
-            dispatchVoiceEvent("haiva:native-voice-timeout", sessionId)
-        }, nativeVoiceWatchdogMs)
-    }
-
-    private fun startNativeV3VoiceWatchdog(sessionId: Long) {
-        cancelNativeV3VoiceWatchdog()
-        nativeV3VoiceWatchdog.postDelayed({
-            if (destroyed || !nativeV3VoiceRequestActive || activeNativeV3VoiceSessionId != sessionId) return@postDelayed
-            nativeV3VoiceRequestActive = false
-            activeNativeV3VoiceSessionId = null
-            try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
-            dispatchV3VoiceEvent("haiva:v3-capture-complete", sessionId, "timeout")
+            if (mode == NativeCaptureMode.INTERRUPT) {
+                activeNativeV3VoiceSessionId = null
+                try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                dispatchV3VoiceEvent("haiva:v3-capture-complete", sessionId, "timeout")
+            } else {
+                activeNativeVoiceSessionId = null
+                try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                dispatchVoiceEvent("haiva:native-voice-timeout", sessionId)
+            }
         }, nativeVoiceWatchdogMs)
     }
 
     private fun cancelNativeVoiceWatchdog() { nativeVoiceWatchdog.removeCallbacksAndMessages(null) }
-    private fun cancelNativeV3VoiceWatchdog() { nativeV3VoiceWatchdog.removeCallbacksAndMessages(null) }
 
     @JavascriptInterface
     override fun speak(text: String) {
@@ -485,9 +468,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     override fun stopSpeaking() {
         runOnUiThread {
             pendingSpeakText = null
-            if (!destroyed && ttsReady) {
-                try { textToSpeech.stop() } catch (_: Exception) {}
-            }
+            if (!destroyed && ttsReady) try { textToSpeech.stop() } catch (_: Exception) {}
             dispatchSpeechDone()
         }
     }
@@ -511,19 +492,16 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         val sessionId = activeNativeVoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
         runOnUiThread {
-            if (!destroyed && activeNativeVoiceSessionId == sessionId) {
-                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-            }
+            if (!destroyed && activeNativeVoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
         }
     }
 
     private fun dispatchVoiceResult(text: String) {
         val sessionId = activeNativeVoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
+        activeNativeVoiceSessionId = null
         runOnUiThread {
-            if (!destroyed && activeNativeVoiceSessionId == sessionId) {
-                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-            }
+            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
         }
     }
 
@@ -548,9 +526,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         val sessionId = activeNativeV3VoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
         runOnUiThread {
-            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) {
-                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-            }
+            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
         }
     }
 
@@ -591,9 +567,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private fun dispatchVoiceEvent(name: String, sessionId: Long? = activeNativeVoiceSessionId) {
         if (destroyed || sessionId == null) return
         runOnUiThread {
-            if (!destroyed && activeNativeVoiceSessionId == sessionId) {
-                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null)
-            }
+            if (!destroyed && activeNativeVoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null)
         }
     }
 
@@ -601,9 +575,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         if (destroyed || sessionId == null) return
         val reasonJson = reason?.let { ",reason:${org.json.JSONObject.quote(it)}" } ?: ""
         runOnUiThread {
-            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) {
-                webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null)
-            }
+            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null)
         }
     }
 
@@ -624,18 +596,15 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         pendingNativeV3VoiceStart = false
         fallbackVoiceActive = false
         nativeVoiceRequestActive = false
-        nativeV3VoiceRequestActive = false
         activeNativeVoiceSessionId = null
         activeNativeV3VoiceSessionId = null
+        pendingNativeCaptureStart?.let { nativeVoiceWatchdog.removeCallbacks(it) }
+        pendingNativeCaptureStart = null
         cancelNativeVoiceWatchdog()
-        cancelNativeV3VoiceWatchdog()
         pendingSpeakText = null
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = null
-        try { v3SpeechRecognizer?.cancel() } catch (_: Exception) {}
-        try { v3SpeechRecognizer?.destroy() } catch (_: Exception) {}
-        v3SpeechRecognizer = null
         try { textToSpeech.stop(); textToSpeech.shutdown() } catch (_: Exception) {}
         webView.destroy()
         super.onDestroy()
