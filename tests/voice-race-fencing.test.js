@@ -10,7 +10,7 @@ const gateway = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.
 test("voice race fence: native callbacks carry session ids for JS-side validation", () => {
   assert.match(native, /nativeVoiceSessionGeneration/);
   assert.match(native, /activeNativeVoiceSessionId/);
-  assert.match(native, /sessionId = \+\+nativeVoiceSessionGeneration/);
+  assert.match(native, /activeNativeVoiceSessionId = \+\+nativeVoiceSessionGeneration/);
   assert.match(native, /sessionId:\$sessionId/);
   assert.match(interaction, /acceptNativeCaptureEvent\(event/);
   assert.match(interaction, /sessionId === this\.captureSessionId/);
