@@ -89,9 +89,7 @@ object DuplexAudioMonitor {
                 )
                 .setBufferSizeInBytes(bufferBytes)
                 .apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        setPrivacySensitive(false)
-                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) setPrivacySensitive(false)
                 }
                 .build()
 
@@ -139,7 +137,6 @@ object DuplexAudioMonitor {
                     continue
                 }
 
-                // Slowly track quieter background noise without following speech.
                 if (db < noiseDb + 3.0) noiseDb = (noiseDb * 0.92) + (db * 0.08)
 
                 if (db >= noiseDb + SPEECH_MARGIN_DB) {
@@ -157,7 +154,7 @@ object DuplexAudioMonitor {
                     speechFrames = 0
                 }
             }
-        } catch (security: SecurityException) {
+        } catch (_: SecurityException) {
             dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to "microphone_permission"))
         } catch (error: Exception) {
             dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to (error.message ?: "audio_monitor_error")))
@@ -193,9 +190,8 @@ object DuplexAudioMonitor {
     private fun dispatch(activity: Activity, eventName: String, detail: Map<String, Any>) {
         activity.runOnUiThread {
             if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-            val webView = activity.findViewById<WebView>(android.R.id.content)
-                ?.let { root -> findWebView(root) }
-                ?: return@runOnUiThread
+            val root = activity.findViewById<android.view.View>(android.R.id.content) ?: return@runOnUiThread
+            val webView = findWebView(root) ?: return@runOnUiThread
             val json = JSONObject()
             detail.forEach { (key, value) -> json.put(key, value) }
             val script = "window.dispatchEvent(new CustomEvent(${JSONObject.quote(eventName)},{detail:${json}}))"
