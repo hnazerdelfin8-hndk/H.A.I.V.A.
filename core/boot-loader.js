@@ -34,33 +34,38 @@ function createLoadingOverlay() {
   overlay.setAttribute("aria-live", "polite");
   overlay.innerHTML = `
     <div class="haiva-boot-card">
-      <div class="haiva-boot-name">H.A.I.V.A.</div>
-      <div class="haiva-boot-subtitle">Hnazer Artificial Intelligence Voice Assistant</div>
-      <div class="haiva-boot-status" id="haiva-boot-status">INITIALIZING</div>
-      <div class="haiva-boot-message" id="haiva-boot-message">Loading H.A.I.V.A. core…</div>
-      <div class="haiva-boot-progress"><div id="haiva-boot-progress-bar"></div></div>
-      <div class="haiva-boot-percent" id="haiva-boot-percent">0%</div>
-      <div class="haiva-boot-steps" id="haiva-boot-steps">
-        <div id="boot-step-app">● Starting application</div>
-        <div id="boot-step-core">○ Loading H.A.I.V.A. core</div>
-        <div id="boot-step-runtime">○ Preparing runtime</div>
-        <div id="boot-step-interface">○ Launching interface</div>
+      <div class="haiva-boot-hex">
+        <div class="haiva-boot-glass">
+          <div class="haiva-boot-progress-ring" id="haiva-boot-progress-ring">
+            <div class="haiva-boot-progress-core">
+              <div class="haiva-boot-percent" id="haiva-boot-percent">0%</div>
+            </div>
+          </div>
+        </div>
       </div>
+      <div class="haiva-boot-loading">LOADING<span class="haiva-boot-dots">...</span></div>
       <div class="haiva-boot-error" id="haiva-boot-error" hidden></div>
       <button id="haiva-boot-retry" type="button" hidden>RETRY</button>
     </div>`;
 
   const style = document.createElement("style");
   style.textContent = `
-    #haiva-boot-screen{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:24px;background:#05070b;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    .haiva-boot-card{width:min(560px,100%);padding:32px;border:1px solid rgba(255,255,255,.14);border-radius:20px;background:rgba(12,16,24,.98);box-shadow:0 20px 80px rgba(0,0,0,.45)}
-    .haiva-boot-name{font-size:30px;font-weight:800;letter-spacing:.08em}.haiva-boot-subtitle{margin-top:6px;opacity:.65;font-size:13px}
-    .haiva-boot-status{margin-top:28px;font-size:12px;font-weight:800;letter-spacing:.18em}.haiva-boot-message{margin-top:10px;font-size:18px}
-    .haiva-boot-progress{height:8px;margin-top:24px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.12)}
-    #haiva-boot-progress-bar{width:0%;height:100%;border-radius:inherit;background:#fff;transition:width .35s ease}
-    .haiva-boot-percent{margin-top:10px;text-align:right;font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
-    .haiva-boot-steps{margin-top:24px;display:grid;gap:10px;font-size:14px;opacity:.78}.haiva-boot-error{margin-top:22px;padding:14px;border-radius:12px;background:rgba(255,60,60,.1);border:1px solid rgba(255,90,90,.35);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-    #haiva-boot-retry{margin-top:18px;padding:11px 18px;border:0;border-radius:10px;cursor:pointer;font-weight:800}
+    #haiva-boot-screen{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;overflow:hidden;padding:24px;background:radial-gradient(circle at 50% 42%,rgba(20,70,150,.22),transparent 34%),radial-gradient(circle at 20% 85%,rgba(75,40,190,.16),transparent 28%),#030712;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #haiva-boot-screen:before,#haiva-boot-screen:after{content:"";position:absolute;width:34vw;height:34vw;max-width:420px;max-height:420px;border:1px solid rgba(70,150,255,.09);transform:rotate(30deg);pointer-events:none}
+    #haiva-boot-screen:before{top:-18vw;left:-12vw}.#haiva-boot-screen:after{bottom:-18vw;right:-12vw}
+    .haiva-boot-card{position:relative;width:min(520px,92vw);min-height:540px;display:grid;place-items:center;padding:28px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(30,65,120,.06));border:1px solid rgba(130,190,255,.08);border-radius:32px;box-shadow:0 30px 100px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+    .haiva-boot-hex{position:relative;width:min(78vw,390px);aspect-ratio:1;display:grid;place-items:center;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%);background:linear-gradient(135deg,rgba(100,190,255,.85),rgba(95,55,255,.72),rgba(30,180,255,.75));filter:drop-shadow(0 0 24px rgba(40,140,255,.28))}
+    .haiva-boot-hex:before{content:"";position:absolute;inset:2px;clip-path:inherit;background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(20,35,75,.38) 45%,rgba(60,30,130,.22));}
+    .haiva-boot-glass{position:relative;width:92%;height:92%;display:grid;place-items:center;clip-path:inherit;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(8,20,45,.68));border:1px solid rgba(180,220,255,.25);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 50px rgba(50,140,255,.08)}
+    .haiva-boot-progress-ring{--progress:0%;width:64%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#16c8ff var(--progress),rgba(95,120,180,.16) var(--progress));box-shadow:0 0 30px rgba(15,180,255,.24),inset 0 0 20px rgba(255,255,255,.05)}
+    .haiva-boot-progress-ring:before{content:"";position:absolute;width:calc(64% - 10px);aspect-ratio:1;border-radius:50%;background:#071326;border:1px solid rgba(120,190,255,.15)}
+    .haiva-boot-progress-core{position:relative;width:calc(100% - 12px);height:calc(100% - 12px);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,rgba(16,42,78,.96),rgba(3,10,24,.98) 70%);z-index:1}
+    .haiva-boot-percent{font-size:clamp(34px,8vw,54px);font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(55,200,255,.65)}
+    .haiva-boot-loading{position:absolute;bottom:56px;font-size:12px;font-weight:700;letter-spacing:.48em;padding-left:.48em;opacity:.9;text-shadow:0 0 12px rgba(80,180,255,.55)}
+    .haiva-boot-dots{letter-spacing:.15em;opacity:.7}
+    .haiva-boot-error{position:absolute;left:24px;right:24px;bottom:22px;padding:12px;border-radius:12px;background:rgba(255,60,60,.1);border:1px solid rgba(255,90,90,.35);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+    #haiva-boot-retry{position:absolute;bottom:20px;right:24px;padding:9px 16px;border:0;border-radius:10px;cursor:pointer;font-weight:800}
+    @media (max-height:620px){.haiva-boot-card{min-height:92vh}.haiva-boot-hex{width:min(58vh,330px)}.haiva-boot-loading{bottom:22px}}
   `;
   overlay.appendChild(style);
   document.body.appendChild(overlay);
@@ -69,17 +74,10 @@ function createLoadingOverlay() {
 
 function setProgress(percent, message, step) {
   const value = Math.max(0, Math.min(100, Number(percent) || 0));
-  const bar = document.getElementById("haiva-boot-progress-bar");
+  const ring = document.getElementById("haiva-boot-progress-ring");
   const label = document.getElementById("haiva-boot-percent");
-  const text = document.getElementById("haiva-boot-message");
-  if (bar) bar.style.width = `${value}%`;
+  if (ring) ring.style.setProperty("--progress", `${value}%`);
   if (label) label.textContent = `${Math.round(value)}%`;
-  if (text && message) text.textContent = message;
-  if (step) {
-    const ids = ["boot-step-app","boot-step-core","boot-step-runtime","boot-step-interface"];
-    const index = Math.max(0, Math.min(ids.length - 1, Number(step)));
-    ids.forEach((id, i) => { const el = document.getElementById(id); if (el) el.textContent = `${i < index ? "✓" : i === index ? "●" : "○"} ${el.textContent.slice(2)}`; });
-  }
 }
 
 window.haivaBootProgress = setProgress;
@@ -90,11 +88,9 @@ function showError(reason, stage = "BOOT_FAILED") {
   const message = reason?.message || String(reason || "Unknown startup error");
   bootCheckpoint(stage, message);
   console.error("[HAIVA-BOOT]", stage, reason);
-  setProgress(0, "H.A.I.V.A. could not complete startup.", 0);
-  const status = document.getElementById("haiva-boot-status");
+  setProgress(0);
   const error = document.getElementById("haiva-boot-error");
   const retry = document.getElementById("haiva-boot-retry");
-  if (status) status.textContent = "BOOT ERROR";
   if (error) { error.hidden = false; error.textContent = `ERROR: ${message}\nSTEP: ${stage}`; }
   if (retry) { retry.hidden = false; retry.addEventListener("click", () => window.location.reload(), { once: true }); }
 }
@@ -102,14 +98,14 @@ function showError(reason, stage = "BOOT_FAILED") {
 function finishReady() {
   if (finished || document.body.dataset.haivaState !== "ready") return;
   finished = true;
-  setProgress(100, "H.A.I.V.A. core is online. Ready, Master.", 4);
+  setProgress(100);
   bootCheckpoint("BOOT_LOADER_READY", "runtime reached READY; revealing H.A.I.V.A. UI");
   setTimeout(() => { loadingOverlay?.remove(); loadingOverlay = null; }, 450);
 }
 
 bootCheckpoint("BOOT_LOADER_STARTED");
 createLoadingOverlay();
-setProgress(8, "Starting H.A.I.V.A. application…", 0);
+setProgress(8);
 bootCheckpoint("LOADING_UI_READY");
 
 window.addEventListener("haiva:boot-failure", event => showError(event.detail?.message || "H.A.I.V.A. core failed during startup.", event.detail?.stage || "BOOT_FAILED"), true);
@@ -122,10 +118,10 @@ observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiv
 
 async function handoffToBoot() {
   bootCheckpoint("BOOT_LOADER_HANDOFF");
-  setProgress(18, "Loading H.A.I.V.A. boot runtime…", 1);
+  setProgress(18);
   try {
     await import("./boot.js");
-    setProgress(30, "Preparing H.A.I.V.A. core…", 2);
+    setProgress(30);
     bootCheckpoint("BOOT_MODULE_LOADED");
   } catch (error) {
     showError(error, "BOOT_MODULE_LOAD_FAILED");
