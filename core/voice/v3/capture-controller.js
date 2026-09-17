@@ -8,8 +8,7 @@
 
 import {
   handoffToV3,
-  releaseFromV3,
-  routeV3InterruptCandidate
+  releaseFromV3
 } from "../v4/gateway.js";
 import { DuplexAudioController } from "../duplex-audio-controller.js";
 
@@ -32,6 +31,11 @@ function ensureDuplexController() {
         turn: detail?.turn ?? duplexTurn,
         source: detail?.source || "native-duplex"
       });
+    },
+    onError: detail => {
+      if (!armed) return;
+      console.warn("[HAIVA] Duplex interrupt monitor unavailable:", detail?.reason || detail?.message || "unknown error");
+      duplexMonitor?.stopInterruptMonitor();
     }
   });
   return duplexMonitor;
