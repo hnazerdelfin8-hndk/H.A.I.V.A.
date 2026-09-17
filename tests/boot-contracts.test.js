@@ -6,7 +6,7 @@ const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("boot loader hands off immediately and does not own a second timeout", async () => {
   const source = await read("core/boot-loader.js");
-  assert.match(source, /core\/boot\.js is the single startup authority/);
+  assert.match(source, /core\/boot\.js (?:is|remains) the single startup authority/);
   assert.match(source, /void handoffToBoot\(\);/);
   assert.doesNotMatch(source, /BOOT_TIMEOUT_MS\s*=\s*15000/);
   assert.doesNotMatch(source, /bootTimer\s*=\s*setTimeout/);
