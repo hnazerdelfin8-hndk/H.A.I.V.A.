@@ -42,6 +42,9 @@ jobs:
       - name: Run single-recognizer duplex routing tests
         run: node --test tests/voice-duplex-single-recognizer.test.js
 
+      - name: Run native duplex audio barge-in tests
+        run: node --test tests/voice-duplex-audio-controller.test.js
+
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
 
