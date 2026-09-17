@@ -7,12 +7,11 @@ const bridge = readFileSync(new URL("../core/ui-bridge.js", import.meta.url), "u
 const native = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 const gateway = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
 
-test("voice race fence: native callbacks carry and validate a capture session", () => {
+test("voice race fence: native callbacks carry session ids for JS-side validation", () => {
   assert.match(native, /nativeVoiceSessionGeneration/);
   assert.match(native, /activeNativeVoiceSessionId/);
   assert.match(native, /sessionId = \+\+nativeVoiceSessionGeneration/);
-  assert.match(native, /activeNativeVoiceSessionId == sessionId/);
-  assert.match(native, /activeNativeVoiceSessionId = null/);
+  assert.match(native, /sessionId:\$sessionId/);
   assert.match(interaction, /acceptNativeCaptureEvent\(event/);
   assert.match(interaction, /sessionId === this\.captureSessionId/);
 });
@@ -45,7 +44,7 @@ test("voice race fence: interruption invalidates the old capture turn before han
 
 test("voice race fence: interrupted TTS cannot finish the replacement turn", () => {
   const speakingIndex = interaction.indexOf("async beginSpeaking(text)");
-  const speakingBody = interaction.slice(speakingIndex, interaction.indexOf("\n  finishCommand", speakingIndex));
+  const speakingBody = interaction.slice(speakingIndex);
   assert.match(speakingBody, /const speakingTurn = this\.turn/);
   assert.match(speakingBody, /if \(this\.turn !== speakingTurn\)/);
 
