@@ -180,45 +180,40 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-ready")
             else dispatchVoiceEvent("haiva:native-voice-ready")
         }
-
         override fun onBeginningOfSpeech() {
             cancelNativeVoiceWatchdog()
             if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-begin")
             else dispatchVoiceEvent("haiva:native-voice-begin")
         }
-
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-
         override fun onEndOfSpeech() {
             if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceEvent("haiva:v3-capture-segment-end")
             else dispatchVoiceEvent("haiva:native-voice-segment-end")
         }
-
         override fun onPartialResults(partialResults: Bundle?) {
             val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
             if (text.isEmpty()) return
             if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) dispatchV3VoicePartial(text)
             else dispatchVoicePartial(text)
         }
-
         override fun onEvent(eventType: Int, params: Bundle?) {}
-
         override fun onError(error: Int) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
             if (nativeCaptureMode == NativeCaptureMode.INTERRUPT) {
-                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                    dispatchV3VoiceComplete("no_speech")
-                } else if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
-                    dispatchV3VoiceComplete("recoverable_client_state")
-                    createSpeechRecognizer()
-                } else {
-                    dispatchV3VoiceError(error)
+                when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchV3VoiceComplete("no_speech")
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                    SpeechRecognizer.ERROR_CLIENT -> {
+                        dispatchV3VoiceComplete("recoverable_client_state")
+                        createSpeechRecognizer()
+                    }
+                    else -> dispatchV3VoiceError(error)
                 }
                 return
             }
-
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchVoiceCaptureComplete("no_speech")
@@ -230,7 +225,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 else -> dispatchVoiceError(error)
             }
         }
-
         override fun onResults(results: Bundle?) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
@@ -359,13 +353,9 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
     }
 
-    private fun startNativeRecognition() {
-        startNativeRecognitionWithMode(NativeCaptureMode.NORMAL)
-    }
+    private fun startNativeRecognition() = startNativeRecognitionWithMode(NativeCaptureMode.NORMAL)
 
-    private fun startV3NativeRecognition() {
-        startNativeRecognitionWithMode(NativeCaptureMode.INTERRUPT)
-    }
+    private fun startV3NativeRecognition() = startNativeRecognitionWithMode(NativeCaptureMode.INTERRUPT)
 
     private fun startNativeRecognitionWithMode(mode: NativeCaptureMode) {
         if (destroyed) return
@@ -382,18 +372,14 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             if (speechRecognizer == null) {
                 if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
                 else {
-                    if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1)
-                    else dispatchVoiceUnavailable("speech_recognizer_unavailable")
+                    if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1) else dispatchVoiceUnavailable("speech_recognizer_unavailable")
                     return@Runnable
                 }
             }
-
             val recognizer = speechRecognizer ?: run {
-                if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1)
-                else dispatchVoiceUnavailable("speech_recognizer_initialization_failed")
+                if (mode == NativeCaptureMode.INTERRUPT) dispatchV3VoiceError(-1) else dispatchVoiceUnavailable("speech_recognizer_initialization_failed")
                 return@Runnable
             }
-
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
@@ -404,17 +390,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, if (mode == NativeCaptureMode.INTERRUPT) 1500L else 10000L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, if (mode == NativeCaptureMode.INTERRUPT) 2000L else 10000L)
             }
-
             if (mode == NativeCaptureMode.INTERRUPT) {
-                val sessionId = ++nativeV3VoiceSessionGeneration
-                activeNativeV3VoiceSessionId = sessionId
+                activeNativeV3VoiceSessionId = ++nativeV3VoiceSessionGeneration
                 activeNativeVoiceSessionId = null
             } else {
-                val sessionId = ++nativeVoiceSessionGeneration
-                activeNativeVoiceSessionId = sessionId
+                activeNativeVoiceSessionId = ++nativeVoiceSessionGeneration
                 activeNativeV3VoiceSessionId = null
             }
-
             try {
                 nativeVoiceRequestActive = true
                 recognizer.startListening(intent)
@@ -491,69 +473,53 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private fun dispatchVoicePartial(text: String) {
         val sessionId = activeNativeVoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
-        runOnUiThread {
-            if (!destroyed && activeNativeVoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchVoiceResult(text: String) {
         val sessionId = activeNativeVoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
         activeNativeVoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchVoiceCaptureComplete(reason: String) {
         val sessionId = activeNativeVoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(reason)
         activeNativeVoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-complete',{detail:{reason:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-complete',{detail:{reason:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchVoiceError(error: Int) {
         val sessionId = activeNativeVoiceSessionId ?: return
         activeNativeVoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:${error.toString()},sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-error',{detail:{code:${error.toString()},sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchV3VoicePartial(text: String) {
         val sessionId = activeNativeV3VoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
-        runOnUiThread {
-            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-partial',{detail:{text:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchV3VoiceResult(text: String) {
         val sessionId = activeNativeV3VoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(text)
         activeNativeV3VoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-result',{detail:{text:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchV3VoiceComplete(reason: String) {
         val sessionId = activeNativeV3VoiceSessionId ?: return
         val quoted = org.json.JSONObject.quote(reason)
         activeNativeV3VoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-complete',{detail:{reason:$quoted,sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-complete',{detail:{reason:$quoted,sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchV3VoiceError(error: Int) {
         val sessionId = activeNativeV3VoiceSessionId ?: return
         activeNativeV3VoiceSessionId = null
-        runOnUiThread {
-            if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-error',{detail:{code:${error.toString()},sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:v3-capture-error',{detail:{code:${error.toString()},sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchVoiceUnavailable(reason: String) {
@@ -566,17 +532,13 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
 
     private fun dispatchVoiceEvent(name: String, sessionId: Long? = activeNativeVoiceSessionId) {
         if (destroyed || sessionId == null) return
-        runOnUiThread {
-            if (!destroyed && activeNativeVoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null) }
     }
 
     private fun dispatchV3VoiceEvent(name: String, sessionId: Long? = activeNativeV3VoiceSessionId, reason: String? = null) {
         if (destroyed || sessionId == null) return
         val reasonJson = reason?.let { ",reason:${org.json.JSONObject.quote(it)}" } ?: ""
-        runOnUiThread {
-            if (!destroyed && activeNativeV3VoiceSessionId == sessionId) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null)
-        }
+        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null) }
     }
 
     private fun dispatchJsEvent(name: String) {
