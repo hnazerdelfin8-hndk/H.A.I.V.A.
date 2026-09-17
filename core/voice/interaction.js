@@ -6,11 +6,12 @@
 // V2 = lifecycle authority.
 // V3 = interruption capture/decision boundary.
 // V4 = physical capture routing + interrupt gateway.
+// DuplexAudioController = native speech-onset monitor while TTS is active.
 // Brain = semantic decision authority.
 //
 // IMPORTANT: V1 and V3 never own the physical microphone at the same time.
-// Android uses one native SpeechRecognizer instance; V4 changes its logical
-// route between V1 and V3.
+// During SPEAKING, V3 uses the native duplex monitor. Full STT starts only
+// after speech onset is detected and TTS has been stopped.
 
 import { v1Capture } from "./v1/capture-controller.js";
 import { VoiceLifecycleV2 } from "./v2/lifecycle-coordinator.js";
@@ -49,6 +50,7 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
+    this.duplexInterruptPending = false;
     this.turn = 0;
     this.captureSessionId = null;
     this.v3CaptureSessionId = null;
@@ -66,6 +68,7 @@ export class VoiceInteraction {
     this.bindV1Events();
     this.bindNativeCaptureEvents();
     this.bindV3CaptureEvents();
+    this.bindDuplexEvents();
   }
 
   reportState(state, previousState) {
@@ -130,6 +133,26 @@ export class VoiceInteraction {
     });
   }
 
+  bindDuplexEvents() {
+    if (typeof window === "undefined") return;
+    window.addEventListener("haiva:v3-duplex-speech-start", event => {
+      if (!this.active || !this.speaking || this.processing || this.duplexInterruptPending) return;
+      if (!this.interruption.isMonitoring(this.turn)) return;
+      const turn = event.detail?.turn;
+      if (turn != null && Number(turn) !== Number(this.turn)) return;
+
+      // Fence the current TTS completion before stopping output. The pending
+      // flag prevents beginSpeaking()'s finally block from releasing V3 before
+      // the post-duplex STT session has produced the user's utterance.
+      this.duplexInterruptPending = true;
+      requestVoiceOutputStop("duplex-speech-start");
+      queueMicrotask(() => {
+        if (!this.active || !this.speaking || !this.duplexInterruptPending) return;
+        v3Capture.startRecognitionAfterDuplex();
+      });
+    });
+  }
+
   handleV3InterruptCandidate(candidate) {
     if (!this.active || !this.speaking || this.processing) return false;
     if (!this.interruption.isMonitoring(this.turn)) return false;
@@ -148,6 +171,8 @@ export class VoiceInteraction {
       return true;
     }
 
+    this.duplexInterruptPending = false;
+    this.speaking = false;
     this.interruption.releaseCapture(this.turn);
     this.v3CaptureSessionId = null;
     v3Capture.stopCapture();
@@ -187,8 +212,18 @@ export class VoiceInteraction {
     for (const eventName of ["complete", "timeout", "error"]) {
       window.addEventListener(`haiva:v3-capture-${eventName}`, event => {
         if (!this.acceptNativeV3CaptureEvent(event)) return;
-        if (!this.active || !this.speaking || this.processing) return;
+        if (!this.active || this.processing) return;
         this.v3CaptureSessionId = null;
+        if (this.duplexInterruptPending) {
+          this.duplexInterruptPending = false;
+          this.speaking = false;
+          this.interruption.stopMonitoring(this.turn);
+          v3Capture.stopCapture();
+          this.lifecycle.returnToListening();
+          this.startListening();
+          return;
+        }
+        if (!this.speaking || !this.interruption.isMonitoring(this.turn)) return;
         this.restartV3CaptureAfterTurn();
       });
     }
@@ -257,7 +292,7 @@ export class VoiceInteraction {
     queueMicrotask(() => {
       if (!this.active || !this.speaking || this.processing || !this.interruption.isMonitoring(this.turn)) return;
       this.v3CaptureSessionId = null;
-      v3Capture.startCapture();
+      v3Capture.startCapture(this.turn);
     });
     return true;
   }
@@ -265,6 +300,7 @@ export class VoiceInteraction {
   handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
     this.turn = this.interruption.beginTurn();
+    this.duplexInterruptPending = false;
     this.speaking = false;
     this.processing = false;
     this.pendingResult = false;
@@ -314,6 +350,7 @@ export class VoiceInteraction {
     this.active = true;
     this.turn = this.interruption.beginTurn();
     this.pendingResult = false;
+    this.duplexInterruptPending = false;
     this.captureSessionId = null;
     this.v3CaptureSessionId = null;
     this.lifecycle.startSession();
@@ -326,6 +363,7 @@ export class VoiceInteraction {
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
+    this.duplexInterruptPending = false;
     this.captureSessionId = null;
     this.v3CaptureSessionId = null;
     this.nativeCaptureRestartPending = false;
@@ -363,6 +401,7 @@ export class VoiceInteraction {
     this.stopListening();
     v3Capture.stopCapture();
     this.v3CaptureSessionId = null;
+    this.duplexInterruptPending = false;
     this.lifecycle.beginThinking();
   }
 
@@ -370,16 +409,20 @@ export class VoiceInteraction {
     if (!this.active) return false;
     this.processing = false;
     this.speaking = true;
+    this.duplexInterruptPending = false;
     const speakingTurn = this.turn;
     this.stopListening();
     this.lifecycle.beginSpeaking();
     this.interruption.beginMonitoring(speakingTurn);
-    v3Capture.startCapture();
+    v3Capture.startCapture(speakingTurn);
 
     try {
       await speak(text);
     } finally {
       if (this.turn !== speakingTurn) return false;
+      // A duplex speech onset has stopped TTS but is still waiting for the
+      // post-interrupt STT result. Keep V3/VoiceInteraction alive for it.
+      if (this.duplexInterruptPending) return false;
       this.speaking = false;
       this.v3CaptureSessionId = null;
       this.interruption.stopMonitoring(speakingTurn);
