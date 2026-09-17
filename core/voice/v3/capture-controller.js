@@ -1,14 +1,15 @@
 // =========================================
 // H.A.I.V.A. V3 INTERRUPT CAPTURE CONTROLLER
 // =========================================
-// V3 is now mic-neutral during SPEAKING.
-// It does NOT start a second Android SpeechRecognizer because that competes
-// with the native audio/TTS path and destabilizes VoiceInteraction.
-//
-// A future native duplex/low-level detector may call
-// routeV3InterruptCandidate(...) directly. V4 remains the only route between
-// V3 and VoiceInteraction.
+// V3 is the logical interruption capture worker.
+// It never creates its own recognizer. V4 owns the physical capture route.
+// Native Android must use the same underlying recognizer/session as V1;
+// V3 only changes the logical route while H.A.I.V.A. is speaking.
 
+import {
+  handoffToV3,
+  releaseFromV3
+} from "../v4/gateway.js";
 import { routeV3InterruptCandidate } from "../v4/gateway.js";
 
 let armed = false;
@@ -28,18 +29,30 @@ if (typeof window !== "undefined") {
 }
 
 function startCapture() {
-  // Keep the existing API for VoiceInteraction compatibility. This only arms
-  // V3 logically; it never acquires the Android microphone.
+  if (typeof window === "undefined") return false;
   armed = true;
-  return true;
+  return handoffToV3(() => {
+    if (!armed) return;
+    if (window.HaivaBridge?.startV3VoiceCapture) {
+      try {
+        window.HaivaBridge.startV3VoiceCapture();
+        return;
+      } catch (error) {
+        console.warn("[HAIVA] V3 native capture start failed:", error?.message || error);
+      }
+    }
+  });
+}
+
+function stopUnderlyingCapture() {
+  armed = false;
+  if (typeof window !== "undefined" && window.HaivaBridge?.stopV3VoiceCapture) {
+    try { window.HaivaBridge.stopV3VoiceCapture(); } catch (_) {}
+  }
 }
 
 function stopCapture() {
-  armed = false;
-  return true;
+  return releaseFromV3(stopUnderlyingCapture);
 }
 
-export const v3Capture = Object.freeze({
-  startCapture,
-  stopCapture
-});
+export const v3Capture = Object.freeze({ startCapture, stopCapture });
