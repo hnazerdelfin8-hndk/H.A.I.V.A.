@@ -8,13 +8,28 @@
 
 import {
   handoffToV3,
-  releaseFromV3
+  releaseFromV3,
+  routeV3InterruptCandidate
 } from "../v4/gateway.js";
 import { DuplexAudioController } from "../duplex-audio-controller.js";
 
 let armed = false;
 let duplexTurn = null;
 let duplexMonitor = null;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("haiva:v3-interrupt-signal", event => {
+    if (!armed) return;
+    const detail = event?.detail || {};
+    const text = String(detail.text || "").trim();
+    if (!text) return;
+    routeV3InterruptCandidate({
+      ...detail,
+      text,
+      source: detail.source || "v3-native"
+    });
+  });
+}
 
 function dispatchDuplexSpeechStart(detail) {
   if (typeof window === "undefined") return;
