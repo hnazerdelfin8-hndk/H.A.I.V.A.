@@ -58,11 +58,36 @@ const BOOT_STYLE = `
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;
 }
 .haiva-boot-card::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(120deg,rgba(255,255,255,.08),transparent 30%,transparent 70%,rgba(70,255,150,.06));pointer-events:none}
-.haiva-boot-hex{position:relative;width:min(76vw,390px);aspect-ratio:1;display:grid;place-items:center;filter:drop-shadow(0 0 30px rgba(40,255,130,.28))}
+.haiva-boot-socket{
+  position:absolute;inset:8%;z-index:0;overflow:hidden;opacity:.70;
+  transform:scale(1.18);filter:drop-shadow(0 0 18px rgba(50,255,145,.18));
+  pointer-events:none;
+}
+.haiva-boot-socket .gel{position:absolute;width:72px;height:72px;animation:haivaGelFloat 5s ease-in-out infinite;}
+.haiva-boot-socket .center-gel{left:50%;top:50%;transform:translate(-50%,-50%) scale(1.18);z-index:3;}
+.haiva-boot-socket .c1{left:13%;top:20%}.haiva-boot-socket .c2{left:37%;top:11%}.haiva-boot-socket .c3{right:13%;top:20%}
+.haiva-boot-socket .c4{left:13%;bottom:20%}.haiva-boot-socket .c5{left:37%;bottom:11%}.haiva-boot-socket .c6{right:13%;bottom:20%}
+.haiva-boot-socket .r1{animation-delay:-1.1s}.haiva-boot-socket .c2{animation-delay:-2.0s}.haiva-boot-socket .c3{animation-delay:-3.0s}.haiva-boot-socket .c4{animation-delay:-1.8s}.haiva-boot-socket .c5{animation-delay:-2.8s}.haiva-boot-socket .c6{animation-delay:-4s}
+.haiva-boot-socket .hex-brick{
+  position:absolute;width:42px;height:24px;left:15px;top:24px;
+  clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+  background:linear-gradient(135deg,rgba(70,255,155,.78),rgba(4,125,64,.34));
+  border:1px solid rgba(180,255,215,.25);box-shadow:0 0 14px rgba(55,255,145,.32);
+  animation:haivaBrickPulse 2.7s ease-in-out infinite;
+}
+.haiva-boot-socket .h2{left:0;top:0;transform:rotate(60deg)}
+.haiva-boot-socket .h3{left:30px;top:0;transform:rotate(-60deg)}
+.haiva-boot-socket .h2,.haiva-boot-socket .h3{opacity:.72;animation-delay:-.8s}
+.haiva-boot-impulse{
+  position:absolute;left:-12%;top:50%;width:124%;height:2px;z-index:4;
+  background:linear-gradient(90deg,transparent,rgba(80,255,160,.12) 25%,rgba(165,255,205,.95) 50%,rgba(80,255,160,.12) 75%,transparent);
+  box-shadow:0 0 22px rgba(90,255,160,.65);filter:blur(.2px);animation:haivaImpulse 3s ease-in-out infinite;
+}
+.haiva-boot-hex{position:relative;width:min(76vw,390px);aspect-ratio:1;display:grid;place-items:center;filter:drop-shadow(0 0 30px rgba(40,255,130,.28));z-index:1}
 .haiva-boot-hex::before,.haiva-boot-hex::after{content:"";position:absolute;inset:0;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%)}
 .haiva-boot-hex::before{background:linear-gradient(135deg,rgba(80,255,155,.9),rgba(5,120,60,.7));animation:haivaHexGlow 2.6s ease-in-out infinite}
-.haiva-boot-hex::after{inset:3px;background:rgba(2,23,13,.72)}
-.haiva-boot-glass{position:relative;z-index:1;width:91%;height:91%;display:grid;place-items:center;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%);background:rgba(4,28,17,.50);border:1px solid rgba(160,255,195,.24);box-shadow:inset 0 0 60px rgba(50,255,140,.08)}
+.haiva-boot-hex::after{inset:3px;background:rgba(2,23,13,.66)}
+.haiva-boot-glass{position:relative;z-index:1;width:91%;height:91%;display:grid;place-items:center;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%);background:rgba(4,28,17,.38);border:1px solid rgba(160,255,195,.24);box-shadow:inset 0 0 60px rgba(50,255,140,.08)}
 .haiva-boot-progress-ring{position:relative;--progress:0%;width:64%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(rgba(110,255,170,1) var(--progress),rgba(100,180,130,.13) var(--progress));box-shadow:0 0 32px rgba(40,255,130,.22);animation:haivaSpinner 2.2s linear infinite}
 .haiva-boot-progress-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:#03150b;border:1px solid rgba(120,255,170,.20)}
 .haiva-boot-progress-core{position:relative;z-index:1;width:calc(100% - 12px);height:calc(100% - 12px);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,rgba(8,54,30,.96),rgba(2,15,9,.98) 70%)}
@@ -76,6 +101,9 @@ const BOOT_STYLE = `
 @keyframes haivaPulse{0%,100%{transform:translateX(-16%) rotate(-5deg) skewY(-4deg);opacity:.18}50%{transform:translateX(16%) rotate(-5deg) skewY(-4deg);opacity:.95}}
 @keyframes haivaSpinner{to{transform:rotate(360deg)}}
 @keyframes haivaHexGlow{0%,100%{filter:brightness(.82)}50%{filter:brightness(1.25)}}
+@keyframes haivaGelFloat{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-7px,0)}}
+@keyframes haivaBrickPulse{0%,100%{opacity:.28;filter:brightness(.75)}50%{opacity:1;filter:brightness(1.45)}}
+@keyframes haivaImpulse{0%,100%{transform:translateY(-70px) scaleX(.72);opacity:0}25%{opacity:.25}50%{transform:translateY(0) scaleX(1);opacity:1}75%{opacity:.25}100%{transform:translateY(70px) scaleX(.72)}}
 @media (max-height:620px){.haiva-boot-card{min-height:92vh}.haiva-boot-hex{width:min(58vh,330px)}.haiva-boot-loading{bottom:22px}}
 `;
 
@@ -95,6 +123,16 @@ function createLoadingOverlay() {
   overlay.setAttribute("aria-live", "polite");
   overlay.innerHTML = `
     <div class="haiva-boot-card">
+      <div class="haiva-boot-socket" aria-hidden="true">
+        <div class="gel center-gel"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c1 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c2 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c3 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c4 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c5 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="gel c6 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+        <div class="haiva-boot-impulse"></div>
+      </div>
       <div class="haiva-boot-hex"><div class="haiva-boot-glass">
         <div class="haiva-boot-progress-ring" id="haiva-boot-progress-ring"><div class="haiva-boot-progress-core"><div class="haiva-boot-percent" id="haiva-boot-percent">0%</div></div></div>
       </div></div>
@@ -119,6 +157,22 @@ function installVisualLayers(overlay) {
     wave.className = "haiva-boot-wave";
     wave.setAttribute("aria-hidden", "true");
     overlay.prepend(wave);
+  }
+  if (!overlay.querySelector(".haiva-boot-socket")) {
+    const card = overlay.querySelector(".haiva-boot-card");
+    const socket = document.createElement("div");
+    socket.className = "haiva-boot-socket";
+    socket.setAttribute("aria-hidden", "true");
+    socket.innerHTML = `
+      <div class="gel center-gel"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c1 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c2 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c3 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c4 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c5 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="gel c6 r1"><div class="hex-brick h1"></div><div class="hex-brick h2"></div><div class="hex-brick h3"></div></div>
+      <div class="haiva-boot-impulse"></div>`;
+    card?.prepend(socket);
   }
 }
 
@@ -164,7 +218,7 @@ const observer = new MutationObserver(() => {
   const state = document.body.dataset.haivaState || "unknown";
   if (state === "ready") finishReady();
 });
-observer.observe(document.body, { attributes: true, attributeFilter: ["data-haiva-state"] });
+observer.observe(document.body, { attributes: true, attributeFilter: ["data-haivaState"] });
 
 async function handoffToBoot() {
   bootCheckpoint("BOOT_LOADER_HANDOFF");
