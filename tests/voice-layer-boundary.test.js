@@ -49,17 +49,16 @@ test("voice boundary: V2 is lifecycle-only", () => {
   assert.doesNotMatch(v2, /SpeechRecognition|startVoiceCapture|startV3VoiceCapture|decideVoiceControl/);
 });
 
-test("voice boundary: V3 owns interruption state and routes native duplex signals through V4", () => {
+test("voice boundary: V3 owns interruption state and routes through V4", () => {
   assert.match(v3Logic, /beginMonitoring/);
   assert.match(v3Logic, /commitCapture/);
   assert.match(v3Logic, /ARMED/);
   assert.match(v3Logic, /does NOT open a second SpeechRecognizer/);
+  assert.match(v3Capture, /handoffToV3/);
+  assert.match(v3Capture, /releaseFromV3/);
   assert.match(v3Capture, /routeV3InterruptCandidate/);
   assert.match(v3Capture, /haiva:v3-interrupt-signal/);
-  assert.match(v3Capture, /mic-neutral/);
-  assert.doesNotMatch(v3Capture, /startV3VoiceCapture|stopV3VoiceCapture|handoffToV3|releaseFromV3/);
-  assert.doesNotMatch(v3Capture, /SpeechRecognition/);
-  assert.doesNotMatch(v3Capture, /startVoiceCapture|stopVoiceCapture|handoffToV1|setV1HandoffHandler/);
+  assert.doesNotMatch(v3Capture, /new SpeechRecognizer|SpeechRecognition/);
 });
 
 test("voice boundary: V4 carries capture and interrupt control without owning a recognizer", () => {
@@ -81,7 +80,7 @@ test("voice boundary: confirmed V3 interrupt returns through V4 for V3 stop and 
   assert.match(interaction, /this\.onBrainDecision/);
 });
 
-test("voice boundary: V1 and V3 share one exclusive capture barrier", () => {
+test("voice boundary: V1 and V3 use one exclusive physical capture route", () => {
   assert.match(handoff, /registerCaptureOwner/);
   assert.match(handoff, /acquireCapture/);
   assert.match(handoff, /releaseCapture/);
@@ -89,15 +88,16 @@ test("voice boundary: V1 and V3 share one exclusive capture barrier", () => {
   assert.match(androidBridge, /startV3VoiceCapture\(\)/);
   assert.match(androidBridge, /stopV3VoiceCapture\(\)/);
   assert.match(androidActivity, /speechRecognizer: SpeechRecognizer\?/);
-  assert.match(androidActivity, /v3SpeechRecognizer: SpeechRecognizer\?/);
+  assert.doesNotMatch(androidActivity, /v3SpeechRecognizer: SpeechRecognizer\?/);
+  assert.match(androidActivity, /NativeCaptureMode\.INTERRUPT/);
 });
 
-test("voice boundary: speaking loop arms V3 without acquiring a second microphone", () => {
+test("voice boundary: speaking loop routes the same native recognizer as V3", () => {
   assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\)/);
   assert.match(interaction, /v3Capture\.startCapture\(\)/);
-  assert.match(v3Capture, /does NOT start a second Android SpeechRecognizer/);
+  assert.match(v3Capture, /handoffToV3/);
   assert.match(interaction, /this\.interruption\.stopMonitoring\(speakingTurn\)/);
   assert.match(interaction, /v3Capture\.stopCapture\(\)/);
   assert.match(interaction, /this\.startListening\(\)/);
-  assert.doesNotMatch(interaction, /setV1HandoffHandler|resumeV1AfterV3/);
+  assert.doesNotMatch(interaction, /native-speech-start.*v3Capture/s);
 });
