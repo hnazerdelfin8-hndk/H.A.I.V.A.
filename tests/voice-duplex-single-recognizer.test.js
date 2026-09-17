@@ -24,7 +24,10 @@ test("V3 capture reaches Android only through the V4 route", () => {
 });
 
 test("speaking arms V3 before TTS and does not create a second capture path", () => {
-  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\);[\s\S]*v3Capture\.startCapture\(\);[\s\S]*await speak\(text\)/);
+  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\);[\s\S]*v3Capture\.startCapture\(speakingTurn\);[\s\S]*await speak\(text\)/);
+  assert.match(interaction, /haiva:v3-duplex-speech-start/);
+  assert.match(interaction, /requestVoiceOutputStop\("duplex-speech-start"\)/);
+  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
   assert.doesNotMatch(interaction, /native-speech-start[\s\S]*v3Capture\.startCapture/);
   assert.match(interaction, /requestV3Stop\("voice-interrupt"\)/);
   assert.match(interaction, /requestVoiceOutputStop\("voice-interrupt"\)/);
