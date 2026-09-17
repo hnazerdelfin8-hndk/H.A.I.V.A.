@@ -15,6 +15,20 @@ test("duplex controller exposes a native interrupt monitor contract", () => {
   assert.match(controller, /onInterruptDetected/);
 });
 
+test("duplex controller requires native ready before accepting interrupt events", () => {
+  assert.match(controller, /this\.ready = false/);
+  assert.match(controller, /if \(!this\.active \|\| !this\.ready\) return;/);
+  assert.match(controller, /this\.ready = true;/);
+  assert.match(controller, /isReady\(\)/);
+});
+
+test("duplex controller fences native startup errors", () => {
+  assert.match(controller, /MONITOR_ERROR/);
+  assert.match(controller, /this\.active = false;/);
+  assert.match(controller, /this\.ready = false;/);
+  assert.match(controller, /this\.turn = null;/);
+});
+
 test("V3 prefers duplex speech onset before full STT", () => {
   assert.match(v3Capture, /DuplexAudioController/);
   assert.match(v3Capture, /startInterruptMonitor/);
