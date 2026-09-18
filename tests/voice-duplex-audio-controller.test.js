@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 const controller = fs.readFileSync("core/voice/duplex-audio-controller.js", "utf8");
 const v3Capture = fs.readFileSync("core/voice/v3/capture-controller.js", "utf8");
-const interaction = fs.readFileSync("core/voice/interaction.js", "utf8");
+const interaction = fs.readFileSync("core/voice/interaction/index.js", "utf8");
 const bridge = fs.readFileSync("android/app/src/main/java/com/haiva/bridge/HaivaBridge.kt", "utf8");
 const nativeMonitor = fs.readFileSync("android/app/src/main/java/com/haiva/app/DuplexAudioMonitor.kt", "utf8");
 
