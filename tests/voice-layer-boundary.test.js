@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const app = readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
-const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
+const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
 const handoff = readFileSync(new URL("../core/voice/capture-handoff.js", import.meta.url), "utf8");
 const v1 = readFileSync(new URL("../core/voice/v1/capture-controller.js", import.meta.url), "utf8");
 const v2 = readFileSync(new URL("../core/voice/v2/lifecycle-coordinator.js", import.meta.url), "utf8");
