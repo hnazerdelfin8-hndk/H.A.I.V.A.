@@ -17,7 +17,7 @@ test("voice connector events have one Android producer and bounded recovery path
 
 test("Core App connects to Voice Interaction only", async () => {
   const app = await read("core/app.js");
-  const interaction = await read("core/voice/interaction/index.js");
+  const interaction = await read("core/voice/interaction.js");
 
   assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
   assert.match(app, /new VoiceInteraction\(/);
@@ -33,7 +33,7 @@ test("Core App connects to Voice Interaction only", async () => {
 
 test("V1 capture remains internal to Voice Interaction", async () => {
   const app = await read("core/app.js");
-  const v1 = await read("core/voice/voice-v1-capture-controller.js");
+  const v1 = await read("core/voice/v1-capture-controller.js");
 
   assert.doesNotMatch(app, /startCapture/);
   assert.doesNotMatch(app, /stopCapture/);
