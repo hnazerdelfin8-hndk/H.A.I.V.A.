@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
+const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../core/ui-bridge.js", import.meta.url), "utf8");
 const native = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 const gateway = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
