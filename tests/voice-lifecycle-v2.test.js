@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { VoiceLifecycleV2, VOICE_LIFECYCLE_STATES } from "../core/voice/v2/lifecycle-coordinator.js";
+import { VoiceLifecycleV2, VOICE_LIFECYCLE_STATES } from "../core/voice/voice-lifecycle-coordinator.js";
 
 test("V2 lifecycle: normal conversational voice path", () => {
   const lifecycle = new VoiceLifecycleV2();
