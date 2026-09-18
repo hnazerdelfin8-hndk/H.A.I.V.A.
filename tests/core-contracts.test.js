@@ -33,7 +33,7 @@ test("Core App connects to Voice Interaction only", async () => {
 
 test("V1 capture remains internal to Voice Interaction", async () => {
   const app = await read("core/app.js");
-  const v1 = await read("core/voice/v1/capture-controller.js");
+  const v1 = await read("core/voice/voice-v1-capture-controller.js");
 
   assert.doesNotMatch(app, /startCapture/);
   assert.doesNotMatch(app, /stopCapture/);
