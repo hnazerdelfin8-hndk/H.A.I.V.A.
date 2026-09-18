@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const app = readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
 const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
 const v2 = readFileSync(new URL("../core/voice/lifecycle-coordinator.js", import.meta.url), "utf8");
-const v3Logic = readFileSync(new URL("../core/voice/v3-interaction.js", import.meta.url), "utf8");
+const bargeIn = readFileSync(new URL("../core/voice/barge-in.js", import.meta.url), "utf8");
 const v4 = readFileSync(new URL("../core/voice/gateway.js", import.meta.url), "utf8");
 const duplex = readFileSync(new URL("../core/voice/duplex/controller.js", import.meta.url), "utf8");
 const brain = readFileSync(new URL("../core/brain/decision.js", import.meta.url), "utf8");
@@ -16,7 +16,7 @@ test("voice boundary: VoiceInteraction owns the voice domain", () => {
   assert.doesNotMatch(app, /createVoiceInteraction\s*\(/);
   assert.doesNotMatch(interaction, /v1Capture|v3Capture|handoffToV[13]/);
   assert.match(interaction, /VoiceLifecycleV2/);
-  assert.match(interaction, /createVoiceInteractionV3/);
+  assert.match(interaction, /createBargeInCoordinator/);
   assert.match(interaction, /new DuplexController/);
   assert.doesNotMatch(app, /v1Capture|v3Capture|VoiceLifecycleV2|SpeechRecognition/);
 });
@@ -24,8 +24,8 @@ test("voice boundary: VoiceInteraction owns the voice domain", () => {
 test("voice boundary: Brain remains semantic decision authority", () => {
   assert.match(brain, /decideVoiceControl/);
   assert.match(interaction, /onBrainDecision/);
-  assert.match(interaction, /handleV3InterruptCandidate/);
-  assert.doesNotMatch(v3Logic, /INTERRUPTION_PATTERNS|END_CONVERSATION_PATTERNS/);
+  assert.match(interaction, /handleBargeInCandidate/);
+  assert.doesNotMatch(bargeIn, /INTERRUPTION_PATTERNS|END_CONVERSATION_PATTERNS/);
 });
 
 test("voice boundary: V2 is lifecycle-only", () => {
@@ -37,11 +37,11 @@ test("voice boundary: V2 is lifecycle-only", () => {
   assert.doesNotMatch(v2, /SpeechRecognition|startVoiceCapture|startV3VoiceCapture|decideVoiceControl/);
 });
 
-test("voice boundary: V3 owns interruption state without a capture controller", () => {
-  assert.match(v3Logic, /beginMonitoring/);
-  assert.match(v3Logic, /commitCapture/);
-  assert.match(v3Logic, /ARMED/);
-  assert.match(v3Logic, /beginTurn/);
+test("voice boundary: Barge-in owns interruption state without a capture controller", () => {
+  assert.match(bargeIn, /beginMonitoring/);
+  assert.match(bargeIn, /commitCapture/);
+  assert.match(bargeIn, /ARMED/);
+  assert.match(bargeIn, /beginTurn/);
 });
 
 test("voice boundary: canonical duplex controller is the physical audio boundary", () => {
