@@ -25,25 +25,9 @@ test("V4 has capture routing plus interrupt gateway without microphone implement
   assert.doesNotMatch(v4, /startV3VoiceCapture/);
 });
 
-test("V1 remains the normal capture worker and routes through V4", () => {
-  assert.match(v1, /from \\"\\.\\.\\/v4\\/gateway\\.js\\"/);
-  assert.match(v1, /handoffToV1\\(/);
-  assert.doesNotMatch(v1, /handoffToV3\\(/);
-});
-
-test("V3 routes interruption candidates through V4 and never controls V1", () => {
-  assert.match(v3, /from \\"\\.\\.\\/v4\\/gateway\\.js\\"/);
-  assert.match(v3, /handoffToV3\\(/);
-  assert.match(v3, /routeV3InterruptCandidate\\(/);
-  assert.doesNotMatch(v3, /v1Capture/);
-  assert.doesNotMatch(v3, /handoffToV1\\(/);
-});
-
-test("VoiceInteraction owns the semantic decision and receives V3 through V4", () => {
+test("VoiceInteraction uses canonical Duplex and keeps V3 logical", () => {
+  assert.match(interaction, /new DuplexController/);
   assert.match(interaction, /createVoiceInteractionV3/);
-  assert.match(interaction, /registerVoiceInterruptHandler/);
   assert.match(interaction, /handleV3InterruptCandidate/);
-  assert.match(interaction, /this\.onBrainDecision/);
-  assert.match(interaction, /requestV3Stop/);
-  assert.match(interaction, /requestVoiceOutputStop/);
+  assert.doesNotMatch(interaction, /v1Capture|v3Capture|registerVoiceInterruptHandler|requestV3Stop/);
 });
