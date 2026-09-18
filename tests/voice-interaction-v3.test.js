@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { V3_STATES, createVoiceInteractionV3 } from "../core/voice/v3/interaction-v3.js";
+import { V3_STATES, createVoiceInteractionV3 } from "../core/voice/voice-v3-interaction.js";
 
 test("V3 coordinator arms the active speaking turn without owning a microphone", () => {
   const coordinator = createVoiceInteractionV3();
