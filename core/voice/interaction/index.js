@@ -13,10 +13,10 @@
 // During SPEAKING, V3 uses the native duplex monitor. Full STT starts only
 // after speech onset is detected and TTS has been stopped.
 
-import { v1Capture } from "../voice-v1-capture-controller.js";
-import { VoiceLifecycleV2 } from "../voice-lifecycle-coordinator.js";
-import { createVoiceInteractionV3 } from "../voice-v3-interaction.js";
-import { v3Capture } from "../voice-v3-capture-controller.js";
+import { v1Capture } from "../v1-capture-controller.js";
+import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
+import { createVoiceInteractionV3 } from "../v3-interaction.js";
+import { v3Capture } from "../v3-capture-controller.js";
 import {
   registerVoiceInterruptHandler,
   registerV3StopHandler,
@@ -24,7 +24,7 @@ import {
   requestV3Stop,
   requestVoiceOutputStop,
   handoffToV1
-} from "../voice-gateway.js";
+} from "../gateway.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../../ui-bridge.js";
 
 export const VOICE_INTERACTION_EVENTS = Object.freeze({
