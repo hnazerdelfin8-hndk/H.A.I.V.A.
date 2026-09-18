@@ -5,7 +5,7 @@ import { test } from "node:test";
 const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../core/ui-bridge.js", import.meta.url), "utf8");
 const native = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
-const gateway = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
+const gateway = readFileSync(new URL("../core/voice/voice-gateway.js", import.meta.url), "utf8");
 
 test("voice race fence: native callbacks carry session ids for JS-side validation", () => {
   assert.match(native, /nativeVoiceSessionGeneration/);
