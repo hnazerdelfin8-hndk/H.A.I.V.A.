@@ -19,7 +19,7 @@ test("voice boundary: VoiceInteraction owns the voice domain", () => {
   assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
   assert.match(app, /new VoiceInteraction\(/);
   assert.doesNotMatch(app, /createVoiceInteraction\s*\(/);
-  assert.match(interaction, /v1Capture/);
+  assert.doesNotMatch(interaction, /v1Capture|v3Capture/);
   assert.match(interaction, /v3Capture/);
   assert.match(interaction, /VoiceLifecycleV2/);
   assert.match(interaction, /createVoiceInteractionV3/);
@@ -72,7 +72,7 @@ test("voice boundary: duplex monitor detects onset before V3 starts full STT", (
   assert.doesNotMatch(duplex, /SpeechRecognition|startV3VoiceCapture/);
   assert.match(interaction, /haiva:v3-duplex-speech-start/);
   assert.match(interaction, /requestVoiceOutputStop\("duplex-speech-start"\)/);
-  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
+  assert.match(interaction, /this\\.duplex\\.start\(speakingTurn\)/);
 });
 
 test("voice boundary: V4 carries capture and interrupt control without owning a recognizer", () => {
@@ -88,7 +88,7 @@ test("voice boundary: V4 carries capture and interrupt control without owning a 
 });
 
 test("voice boundary: confirmed V3 interrupt returns through V4 for V3 stop and TTS stop", () => {
-  assert.match(interaction, /registerVoiceInterruptHandler/);
+  assert.doesNotMatch(interaction, /registerVoiceInterruptHandler/);
   assert.match(interaction, /requestV3Stop\("voice-interrupt"\)/);
   assert.match(interaction, /requestVoiceOutputStop\("voice-interrupt"\)/);
   assert.match(interaction, /this\.onBrainDecision/);
@@ -108,10 +108,10 @@ test("voice boundary: V1 and V3 use one exclusive physical capture route", () =>
 
 test("voice boundary: speaking loop uses duplex onset then the same native recognizer as V3", () => {
   assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\)/);
-  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
+  assert.match(interaction, /this\\.duplex\\.start\(speakingTurn\)/);
   assert.match(v3Capture, /handoffToV3/);
   assert.match(interaction, /this\.interruption\.stopMonitoring\(speakingTurn\)/);
-  assert.match(interaction, /v3Capture\.stopCapture\(\)/);
+  assert.doesNotMatch(interaction, /v3Capture\.stopCapture/);
   assert.match(interaction, /this\.startListening\(\)/);
   assert.doesNotMatch(interaction, /native-speech-start.*v3Capture/s);
 });
