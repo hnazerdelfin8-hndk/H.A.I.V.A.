@@ -13,11 +13,11 @@ test("duplex voice uses one native recognizer while migration remains fenced", (
   assert.match(android, /startNativeRecognitionWithMode/);
 });
 
-test("V3 is logical only and duplex owns the interaction audio boundary", () => {
+test("Barge-in is logical only and duplex owns the interaction audio boundary", () => {
   assert.doesNotMatch(interaction, /v1Capture|v3Capture|handoffToV[13]|requestV3Stop/);
   assert.match(interaction, /new DuplexController/);
   assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
-  assert.match(interaction, /createVoiceInteractionV3/);
+  assert.match(interaction, /createBargeInCoordinator/);
 });
 
 test("speaking keeps the canonical duplex capture path armed during TTS", () => {
