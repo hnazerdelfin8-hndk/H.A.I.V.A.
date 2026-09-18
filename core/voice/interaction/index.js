@@ -10,12 +10,12 @@
 // Brain = semantic decision authority.
 //
 // IMPORTANT: V1 and V3 never own the physical microphone at the same time.
-// During SPEAKING, V3 uses the native duplex monitor. Full STT starts only
+// During SPEAKING, Barge-in uses the native duplex monitor. Full STT starts only
 // after speech onset is detected and TTS has been stopped.
 
 import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
 import { createSpeechRecognition } from "../speech-to-text.js";
-import { createVoiceInteractionV3 } from "../v3-interaction.js";
+import { createBargeInCoordinator } from "../barge-in.js";
 import { DuplexController } from "../duplex/controller.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../../ui-bridge.js";
 
@@ -35,7 +35,7 @@ export class VoiceInteraction {
     this.onBrainDecision = typeof onBrainDecision === "function" ? onBrainDecision : null;
 
     this.lifecycle = new VoiceLifecycleV2({ onStateChange: (state, previousState) => this.reportState(state, previousState) });
-    this.interruption = createVoiceInteractionV3();
+    this.bargeIn = createBargeInCoordinator();
     this.duplex = new DuplexController({ onInterruptDetected: c => this.handleDuplexInterruptCandidate(c), onError: d => this.reportError("duplex", d?.message || "DUPLEX_ERROR") });
     this.nativeVoice = hasNativeVoiceBridge();
     this.active = false;
@@ -96,7 +96,7 @@ export class VoiceInteraction {
     if (typeof window === "undefined") return;
     window.addEventListener("haiva:v3-duplex-speech-start", event => {
       if (!this.active || !this.speaking || this.processing || this.duplexInterruptPending) return;
-      if (!this.interruption.isMonitoring(this.turn)) return;
+      if (!this.bargeIn.isMonitoring(this.turn)) return;
       const turn = event.detail?.turn;
       if (turn != null && Number(turn) !== Number(this.turn)) return;
 
@@ -112,16 +112,16 @@ export class VoiceInteraction {
     });
   }
 
-  handleV3InterruptCandidate(candidate) {
+  handleBargeInCandidate(candidate) {
     if (!this.active || !this.speaking || this.processing) return false;
-    if (!this.interruption.isMonitoring(this.turn)) return false;
+    if (!this.bargeIn.isMonitoring(this.turn)) return false;
 
-    const capture = this.interruption.commitCapture(this.turn, candidate?.text);
+    const capture = this.bargeIn.commitCapture(this.turn, candidate?.text);
     if (!capture) return false;
 
     const decision = this.onBrainDecision?.(capture.text, {
       phase: "SPEAKING",
-      source: candidate?.source || "v3",
+      source: candidate?.source || "barge-in",
       turn: capture.turn
     });
 
@@ -132,7 +132,7 @@ export class VoiceInteraction {
 
     this.duplexInterruptPending = false;
     this.speaking = false;
-    this.interruption.releaseCapture(this.turn);
+    this.bargeIn.releaseCapture(this.turn);
     
     this.lifecycle.returnToListening();
     if (this.active && !this.processing && !this.speaking) {
@@ -142,7 +142,7 @@ export class VoiceInteraction {
   }
 
   handleDuplexInterruptCandidate(candidate) {
-    return candidate?.text ? this.handleV3InterruptCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;
+    return candidate?.text ? this.handleBargeInCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;
   }
 
   bindNativeCaptureEvents() {
@@ -224,7 +224,7 @@ export class VoiceInteraction {
 
   handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
-    this.turn = this.interruption.beginTurn();
+    this.turn = this.bargeIn.beginTurn();
     this.duplexInterruptPending = false;
     this.speaking = false;
     this.processing = false;
@@ -233,7 +233,7 @@ export class VoiceInteraction {
     this.captureSessionId = null;
 
     
-    this.interruption.stopMonitoring(interruptedTurn);
+    this.bargeIn.stopMonitoring(interruptedTurn);
     this.duplex.stopPlayback(interruptedTurn);
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
@@ -246,8 +246,8 @@ export class VoiceInteraction {
 
     if (decision.instruction) {
       queueMicrotask(() => {
-        if (!this.active || !this.interruption.isCurrent(this.turn)) return;
-        this.reportInput(decision.instruction, "v3-interruption");
+        if (!this.active || !this.bargeIn.isCurrent(this.turn)) return;
+        this.reportInput(decision.instruction, "barge-in");
       });
     } else if (this.active) {
       queueMicrotask(() => {
@@ -272,7 +272,7 @@ export class VoiceInteraction {
       return false;
     }
     this.active = true;
-    this.turn = this.interruption.beginTurn();
+    this.turn = this.bargeIn.beginTurn();
     this.pendingResult = false;
     this.duplexInterruptPending = false;
     this.captureSessionId = null;
@@ -295,7 +295,7 @@ export class VoiceInteraction {
     }
     this.stopListening();
     
-    this.interruption.stopMonitoring(this.turn);
+    this.bargeIn.stopMonitoring(this.turn);
     this.duplex.stop(this.turn);
     this.lifecycle.endSession();
     stopSpeaking();
@@ -343,7 +343,7 @@ export class VoiceInteraction {
     this.duplexInterruptPending = false;
     const speakingTurn = this.turn;
     this.lifecycle.beginSpeaking();
-    this.interruption.beginMonitoring(speakingTurn);
+    this.bargeIn.beginMonitoring(speakingTurn);
     if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function" && !this.duplex.isActive()) this.duplex.start(speakingTurn);
     
 
@@ -355,7 +355,7 @@ export class VoiceInteraction {
       // post-interrupt STT result. Keep V3/VoiceInteraction alive for it.
       if (this.duplexInterruptPending) return false;
       this.speaking = false;
-        this.interruption.stopMonitoring(speakingTurn);
+        this.bargeIn.stopMonitoring(speakingTurn);
       
       this.lifecycle.returnToListening();
       if (this.active && !this.duplex.isActive()) this.startListening();
