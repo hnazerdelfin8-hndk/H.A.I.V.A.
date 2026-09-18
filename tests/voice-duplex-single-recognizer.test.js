@@ -15,20 +15,17 @@ test("duplex voice uses one native recognizer with V1/V3 logical routing", () =>
   assert.match(android, /startNativeRecognitionWithMode/);
 });
 
-test("V3 capture reaches Android only through the V4 route", () => {
+test("V3 is logical only and duplex owns native audio", () => {
+  assert.doesNotMatch(interaction, /v1Capture|v3Capture|handoffToV[13]|requestV3Stop/);
+  assert.match(interaction, /new DuplexController/);
+  assert.match(interaction, /this\\.duplex\\.start\\(speakingTurn\\)/);
   assert.match(v3Capture, /handoffToV3/);
-  assert.match(v3Capture, /releaseFromV3/);
-  assert.match(v3Capture, /HaivaBridge\?\.startV3VoiceCapture/);
   assert.doesNotMatch(v3Capture, /SpeechRecognizer|SpeechRecognition/);
-  assert.match(v4, /handoffToV3/);
 });
 
-test("speaking arms V3 before TTS and does not create a second capture path", () => {
-  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\);[\s\S]*v3Capture\.startCapture\(speakingTurn\);[\s\S]*await speak\(text\)/);
-  assert.match(interaction, /haiva:v3-duplex-speech-start/);
-  assert.match(interaction, /requestVoiceOutputStop\("duplex-speech-start"\)/);
-  assert.match(interaction, /v3Capture\.startRecognitionAfterDuplex\(\)/);
-  assert.doesNotMatch(interaction, /native-speech-start[\s\S]*v3Capture\.startCapture/);
-  assert.match(interaction, /requestV3Stop\("voice-interrupt"\)/);
-  assert.match(interaction, /requestVoiceOutputStop\("voice-interrupt"\)/);
+test("speaking keeps the canonical duplex capture path armed during TTS", () => {
+  assert.match(interaction, /this\\.lifecycle\\.beginSpeaking\\(\\);[\\s\\S]*this\\.interruption\\.beginMonitoring\\(speakingTurn\\)/);
+  assert.match(interaction, /this\\.duplex\\.start\\(speakingTurn\\)/);
+  assert.match(interaction, /await speak\\(text\\)/);
+  assert.doesNotMatch(interaction, /v3Capture\\.startCapture|requestVoiceOutputStop\\("duplex-speech-start"\\)/);
 });
