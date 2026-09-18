@@ -13,7 +13,6 @@
 // During SPEAKING, V3 uses the native duplex monitor. Full STT starts only
 // after speech onset is detected and TTS has been stopped.
 
-import { v1Capture } from "../v1-capture-controller.js";
 import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
 import { createVoiceInteractionV3 } from "../v3-interaction.js";
 import { DuplexController } from "../duplex/controller.js";
@@ -46,7 +45,6 @@ export class VoiceInteraction {
     this.duplexInterruptPending = false;
     this.turn = 0;
     this.captureSessionId = null;
-    this.v3CaptureSessionId = null;
     this.nativeCaptureRestartPending = false;
     this.nativeCaptureRestartTimer = null;
     this.initialized = false;
@@ -55,7 +53,6 @@ export class VoiceInteraction {
   initialize() {
     if (this.initialized) return;
     this.initialized = true;
-    this.bindV1Events();
     this.bindNativeCaptureEvents();
     this.bindV3CaptureEvents();
     this.bindDuplexEvents();
@@ -92,35 +89,6 @@ export class VoiceInteraction {
       return true;
     }
     return this.captureSessionId !== null && sessionId === this.captureSessionId;
-  }
-
-  acceptNativeV3CaptureEvent(event, { establish = false } = {}) {
-    if (!this.nativeVoice) return true;
-    const sessionId = event.detail?.sessionId;
-    if (sessionId == null) return false;
-    if (establish) {
-      if (this.v3CaptureSessionId !== null && sessionId !== this.v3CaptureSessionId) return false;
-      this.v3CaptureSessionId = sessionId;
-      return true;
-    }
-    return this.v3CaptureSessionId !== null && sessionId === this.v3CaptureSessionId;
-  }
-
-  bindV1Events() {
-    if (typeof window === "undefined") return;
-    window.addEventListener("haiva:v1-capture-result", event => {
-      if (!this.active || this.processing || this.pendingResult || this.speaking) return;
-      const text = event.detail?.text;
-      if (!text || !this.acceptResult()) return;
-      this.listening = false;
-      this.captureSessionId = null;
-      this.reportInput(text, event.detail?.source || "v1");
-    });
-    window.addEventListener("haiva:v1-capture-error", () => {
-      if (!this.active || this.processing || this.speaking) return;
-      this.listening = false;
-      this.restartListeningAfterNativeTurn();
-    });
   }
 
   bindDuplexEvents() {
@@ -164,7 +132,6 @@ export class VoiceInteraction {
     this.duplexInterruptPending = false;
     this.speaking = false;
     this.interruption.releaseCapture(this.turn);
-    this.v3CaptureSessionId = null;
     
     this.lifecycle.returnToListening();
     if (this.active && !this.processing && !this.speaking) {
@@ -173,7 +140,7 @@ export class VoiceInteraction {
     return true;
   }
 
-  handleDuplexInterruptCandidate(candidate) {\n    return candidate?.text ? this.handleV3InterruptCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;\n  }\n\n  bindV3CaptureEvents() {}\n\n  bindNativeCaptureEvents() {
+  handleDuplexInterruptCandidate(candidate) {\n    return candidate?.text ? this.handleV3InterruptCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;\n  }\n\n\n\n  bindNativeCaptureEvents() {
     if (typeof window === "undefined") return;
     window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event, { establish: true })) return;
@@ -231,16 +198,6 @@ export class VoiceInteraction {
     return true;
   }
 
-  restartV3CaptureAfterTurn() {
-    if (!this.active || !this.speaking || this.processing || !this.interruption.isMonitoring(this.turn)) return false;
-    queueMicrotask(() => {
-      if (!this.active || !this.speaking || this.processing || !this.interruption.isMonitoring(this.turn)) return;
-      this.v3CaptureSessionId = null;
-      
-    });
-    return true;
-  }
-
   handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
     this.turn = this.interruption.beginTurn();
@@ -250,7 +207,6 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.listening = false;
     this.captureSessionId = null;
-    this.v3CaptureSessionId = null;
 
     
     this.interruption.stopMonitoring(interruptedTurn);
@@ -296,7 +252,6 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.duplexInterruptPending = false;
     this.captureSessionId = null;
-    this.v3CaptureSessionId = null;
     this.lifecycle.startSession();
     this.startListening();
     return true;
@@ -309,7 +264,6 @@ export class VoiceInteraction {
     this.pendingResult = false;
     this.duplexInterruptPending = false;
     this.captureSessionId = null;
-    this.v3CaptureSessionId = null;
     this.nativeCaptureRestartPending = false;
     if (this.nativeCaptureRestartTimer) {
       clearTimeout(this.nativeCaptureRestartTimer);
@@ -318,6 +272,7 @@ export class VoiceInteraction {
     this.stopListening();
     
     this.interruption.stopMonitoring(this.turn);
+    this.duplex.stop(this.turn);
     this.lifecycle.endSession();
     stopSpeaking();
   }
@@ -329,14 +284,23 @@ export class VoiceInteraction {
       this.listening = true;
       this.lifecycle.activateListening();
     }
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function") this.duplex.start(this.turn); else v1Capture.startCapture();
+    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function") {
+      if (!this.duplex.isActive()) this.duplex.start(this.turn);
+    } else if (!this.nativeVoice) {
+      // Browser fallback only: native Android never reaches this path.
+      this.listening = true;
+      this.lifecycle.activateListening();
+      const recognition = this._browserRecognition;
+      if (recognition) { try { recognition.start(); } catch (_) {} }
+    }
     return true;
   }
 
   stopListening() {
     this.listening = false;
     this.captureSessionId = null;
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.stopDuplexAudio === "function") this.duplex.stop(this.turn); else v1Capture.stopCapture();
+    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.stopDuplexAudio === "function") this.duplex.stop(this.turn);
+    else { try { this._browserRecognition?.stop?.(); } catch (_) {} }
   }
 
   beginProcessing() {
@@ -344,7 +308,6 @@ export class VoiceInteraction {
     this.processing = true;
     this.stopListening();
     
-    this.v3CaptureSessionId = null;
     this.duplexInterruptPending = false;
     this.lifecycle.beginThinking();
   }
@@ -355,10 +318,9 @@ export class VoiceInteraction {
     this.speaking = true;
     this.duplexInterruptPending = false;
     const speakingTurn = this.turn;
-    this.stopListening();
     this.lifecycle.beginSpeaking();
     this.interruption.beginMonitoring(speakingTurn);
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function") this.duplex.start(speakingTurn);
+    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function" && !this.duplex.isActive()) this.duplex.start(speakingTurn);
     
 
     try {
@@ -369,11 +331,10 @@ export class VoiceInteraction {
       // post-interrupt STT result. Keep V3/VoiceInteraction alive for it.
       if (this.duplexInterruptPending) return false;
       this.speaking = false;
-      this.v3CaptureSessionId = null;
-      this.interruption.stopMonitoring(speakingTurn);
+        this.interruption.stopMonitoring(speakingTurn);
       
       this.lifecycle.returnToListening();
-      if (this.active) this.startListening();
+      if (this.active && !this.duplex.isActive()) this.startListening();
     }
     return this.turn === speakingTurn;
   }
