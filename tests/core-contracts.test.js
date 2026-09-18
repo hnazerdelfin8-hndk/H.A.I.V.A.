@@ -23,7 +23,7 @@ test("Core App connects to Voice Interaction only", async () => {
   assert.match(app, /new VoiceInteraction\(/);
   assert.doesNotMatch(app, /createVoiceInteraction\s*\(/);
   assert.doesNotMatch(app, /createSpeechRecognition/);
-  assert.doesNotMatch(app, /v1Capture/);
+  assert.doesNotMatch(app, /v1Capture|v3Capture/);
   assert.doesNotMatch(app, /VoiceLifecycleV2/);
   assert.doesNotMatch(app, /haiva:native-voice-/);
   assert.doesNotMatch(interaction, /v1Capture|v3Capture/);
@@ -31,16 +31,11 @@ test("Core App connects to Voice Interaction only", async () => {
   assert.match(interaction, /createVoiceInteractionV3/);
 });
 
-test("V1 capture remains internal to Voice Interaction", async () => {
-  const app = await read("core/app.js");
-  const v1 = await read("core/voice/v1-capture-controller.js");
-
-  assert.doesNotMatch(app, /startCapture/);
-  assert.doesNotMatch(app, /stopCapture/);
-  assert.match(v1, /startVoiceCapture/);
-  assert.match(v1, /stopVoiceCapture/);
-  assert.doesNotMatch(v1, /haiva:v3-capture-request/);
-  assert.doesNotMatch(v1, /haiva:v3-capture-stop/);
+test("Voice Interaction uses canonical Duplex ownership", async () => {
+  const interaction = await read("core/voice/interaction.js");
+  assert.match(interaction, /new DuplexController/);
+  assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);
+  assert.doesNotMatch(interaction, /handoffToV[13]|startVoiceCapture|startV3VoiceCapture/);
 });
 
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
