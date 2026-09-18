@@ -8,7 +8,7 @@ import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
 import { setUIState, setVoiceButtonActive, hasNativeVoiceBridge } from "./ui-bridge.js";
 import { bootCheckpoint } from "./boot-diagnostics.js";
-import { VoiceInteraction } from "./voice/interaction/index.js";
+import { VoiceInteraction } from "./voice/interaction.js";
 
 bootCheckpoint("JS_ENTRY_STARTED", "core/app.js module evaluated");
 
