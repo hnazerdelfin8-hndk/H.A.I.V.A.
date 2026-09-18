@@ -14,6 +14,7 @@
 // after speech onset is detected and TTS has been stopped.
 
 import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
+import { createSpeechRecognition } from "../speech-to-text.js";
 import { createVoiceInteractionV3 } from "../v3-interaction.js";
 import { DuplexController } from "../duplex/controller.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../../ui-bridge.js";
@@ -48,13 +49,13 @@ export class VoiceInteraction {
     this.nativeCaptureRestartPending = false;
     this.nativeCaptureRestartTimer = null;
     this.initialized = false;
+    this._browserRecognition = null;
   }
 
   initialize() {
     if (this.initialized) return;
     this.initialized = true;
     this.bindNativeCaptureEvents();
-    this.bindV3CaptureEvents();
     this.bindDuplexEvents();
   }
 
@@ -140,7 +141,30 @@ export class VoiceInteraction {
     return true;
   }
 
-  handleDuplexInterruptCandidate(candidate) {\n    return candidate?.text ? this.handleV3InterruptCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;\n  }\n\n\n\n  bindNativeCaptureEvents() {
+  handleDuplexInterruptCandidate(candidate) {
+    return candidate?.text ? this.handleV3InterruptCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;
+  }
+
+  bindNativeCaptureEvents() {
+    if (!this.nativeVoice && !this._browserRecognition) {
+      const recognition = createSpeechRecognition({ continuous: false, interimResults: true });
+      if (recognition) {
+        this._browserRecognition = recognition;
+        recognition.onresult = event => {
+          const result = event.results?.[event.results.length - 1]?.[0]?.transcript || "";
+          if (result && this.acceptResult()) {
+            this.listening = false;
+            this.reportInput(result, "browser");
+          }
+        };
+        recognition.onerror = () => {
+          this.listening = false;
+          this.pendingResult = false;
+          this.lifecycle.returnToListening();
+          this.restartListeningAfterNativeTurn();
+        };
+      }
+    }
     if (typeof window === "undefined") return;
     window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event, { establish: true })) return;
