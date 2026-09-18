@@ -16,9 +16,9 @@ test("V4 is an interrupt/output gateway without capture-worker routing", () => {
   assert.doesNotMatch(v4, /SpeechRecognizer|SpeechRecognition|startVoiceCapture|startV3VoiceCapture/);
 });
 
-test("VoiceInteraction uses canonical Duplex and keeps V3 logical", () => {
+test("VoiceInteraction uses canonical Duplex and keeps Barge-in logical", () => {
   assert.match(interaction, /new DuplexController/);
-  assert.match(interaction, /createVoiceInteractionV3/);
-  assert.match(interaction, /handleV3InterruptCandidate/);
+  assert.match(interaction, /createBargeInCoordinator/);
+  assert.match(interaction, /handleBargeInCandidate/);
   assert.doesNotMatch(interaction, /v1Capture|v3Capture|registerVoiceInterruptHandler|requestV3Stop/);
 });
