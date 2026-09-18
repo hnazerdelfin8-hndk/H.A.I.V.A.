@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
+const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
 const v3Capture = readFileSync(new URL("../core/voice/v3/capture-controller.js", import.meta.url), "utf8");
 const v4 = readFileSync(new URL("../core/voice/v4/gateway.js", import.meta.url), "utf8");
 const android = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
