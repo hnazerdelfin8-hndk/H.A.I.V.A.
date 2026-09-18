@@ -28,7 +28,7 @@ test("Core App connects to Voice Interaction only", async () => {
   assert.doesNotMatch(app, /haiva:native-voice-/);
   assert.doesNotMatch(interaction, /v1Capture|v3Capture/);
   assert.match(interaction, /VoiceLifecycleV2/);
-  assert.match(interaction, /createVoiceInteractionV3/);
+  assert.match(interaction, /createBargeInCoordinator/);
 });
 
 test("Voice Interaction uses canonical Duplex ownership", async () => {
