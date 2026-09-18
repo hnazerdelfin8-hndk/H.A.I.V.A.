@@ -55,8 +55,8 @@ test("voice race fence: native stale TTS completion is explicitly suppressed aft
   assert.match(bridge, /window\.removeEventListener\("haiva:native-speech-done", finish\)/);
 });
 
-test("voice race fence: V3 remains internal to Voice Interaction", () => {
+test("voice race fence: Barge-in remains internal to Voice Interaction", () => {
   const app = readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
-  assert.match(interaction, /createVoiceInteractionV3/);
-  assert.doesNotMatch(app, /createVoiceInteractionV3|v1Capture/);
+  assert.match(interaction, /createBargeInCoordinator/);
+  assert.doesNotMatch(app, /createBargeInCoordinator|v1Capture/);
 });
