@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const v4 = readFileSync(new URL("../core/voice/voice-gateway.js", import.meta.url), "utf8");
-const v1 = readFileSync(new URL("../core/voice/voice-v1-capture-controller.js", import.meta.url), "utf8");
-const v3 = readFileSync(new URL("../core/voice/voice-v3-capture-controller.js", import.meta.url), "utf8");
-const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
+const v4 = readFileSync(new URL("../core/voice/gateway.js", import.meta.url), "utf8");
+const v1 = readFileSync(new URL("../core/voice/v1-capture-controller.js", import.meta.url), "utf8");
+const v3 = readFileSync(new URL("../core/voice/v3-capture-controller.js", import.meta.url), "utf8");
+const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
 
 test("V4 has capture routing plus interrupt gateway without microphone implementation", () => {
   assert.match(v4, /handoffToV1/);
