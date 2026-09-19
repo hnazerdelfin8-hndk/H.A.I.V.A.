@@ -33,17 +33,17 @@ jobs:
       - name: Run core contract tests
         run: node --test tests/core-contracts.test.js
 
-      - name: Run isolated V3 voice interaction tests
-        run: node --test tests/voice-interaction-v3.test.js
+      - name: Run canonical barge-in tests
+        run: node --test tests/barge-in.test.js
 
-      - name: Run V1 V2 V3 voice boundary tests
+      - name: Run voice layer boundary tests
         run: node --test tests/voice-layer-boundary.test.js
 
       - name: Run single-recognizer duplex routing tests
         run: node --test tests/voice-duplex-single-recognizer.test.js
 
-      - name: Run native duplex audio barge-in tests
-        run: node --test tests/voice-duplex-audio-controller.test.js
+      - name: Run canonical duplex audio tests
+        run: node --test tests/duplex-audio.test.js
 
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
