@@ -437,12 +437,6 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId}}))", null) }
     }
 
-    private fun dispatchV3VoiceEvent(name: String, sessionId: Long? = activeNativeV3VoiceSessionId, reason: String? = null) {
-        if (destroyed || sessionId == null) return
-        val reasonJson = reason?.let { ",reason:${org.json.JSONObject.quote(it)}" } ?: ""
-        runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name',{detail:{sessionId:$sessionId$reasonJson}}))", null) }
-    }
-
     private fun dispatchJsEvent(name: String) {
         if (destroyed) return
         webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('$name'))", null)
