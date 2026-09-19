@@ -21,7 +21,7 @@ test("Barge-in is logical only and duplex owns the interaction audio boundary", 
 });
 
 test("speaking keeps the canonical duplex capture path armed during TTS", () => {
-  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.interruption\.beginMonitoring\(speakingTurn\)/);
+  assert.match(interaction, /this\.lifecycle\.beginSpeaking\(\);[\s\S]*this\.bargeIn\.beginMonitoring\(speakingTurn\)/);
   assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
   assert.match(interaction, /await speak\(text\)/);
   assert.doesNotMatch(interaction, /requestVoiceOutputStop\("duplex-speech-start"\)/);
