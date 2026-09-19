@@ -35,7 +35,7 @@ test("Voice Interaction uses canonical Duplex ownership", async () => {
   const interaction = await read("core/voice/interaction.js");
   assert.match(interaction, /new DuplexController/);
   assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
-  assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);\n  assert.match(interaction, /startVoiceCapture/);\n  assert.doesNotMatch(interaction, /handoffToV[13]|startV3VoiceCapture/);
+  assert.match(interaction, /this\\.duplex\\.start\\(speakingTurn\\)/);\n  assert.match(interaction, /startVoiceCapture/);\n  assert.doesNotMatch(interaction, /handoffToV[13]|startV3VoiceCapture/);
 });
 
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
