@@ -16,6 +16,8 @@
 import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
 import { createSpeechRecognition } from "../speech-to-text.js";
 import { createBargeInCoordinator } from "../barge-in.js";
+import { VoiceSessionManager } from "../session-manager.js";
+import { VoiceTurnFence } from "../turn-fence.js";
 import { DuplexController } from "../duplex/controller.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../../ui-bridge.js";
 
@@ -35,6 +37,9 @@ export class VoiceInteraction {
     this.onBrainDecision = typeof onBrainDecision === "function" ? onBrainDecision : null;
 
     this.lifecycle = new VoiceLifecycleV2({ onStateChange: (state, previousState) => this.reportState(state, previousState) });
+    this.sessionManager = new VoiceSessionManager();
+    this.turnFence = new VoiceTurnFence();
+    this.sessionId = null;
     this.bargeIn = createBargeInCoordinator();
     this.duplex = new DuplexController({ onInterruptDetected: c => this.handleDuplexInterruptCandidate(c), onError: d => this.reportError("duplex", d?.message || "DUPLEX_ERROR") });
     this.nativeVoice = hasNativeVoiceBridge();
@@ -240,7 +245,9 @@ export class VoiceInteraction {
 
   handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
-    this.turn = this.bargeIn.beginTurn();
+    this.turn = this.turnFence.begin();
+    this.bargeIn.beginTurn();
+    this.sessionId = this.sessionManager.start();
     this.duplexInterruptPending = false;
     this.speaking = false;
     this.processing = false;
@@ -249,8 +256,11 @@ export class VoiceInteraction {
     this.captureSessionId = null;
 
     
+    this.turnFence.invalidate();
     this.bargeIn.stopMonitoring(interruptedTurn);
     this.duplex.stopPlayback(interruptedTurn);
+    this.turn = this.turnFence.begin();
+    this.bargeIn.beginTurn();
     this.lifecycle.interruptToThinking();
     this.reportOutcome({
       type: "VOICE_INTERRUPT",
@@ -299,6 +309,8 @@ export class VoiceInteraction {
 
   deactivate() {
     this.active = false;
+    this.turnFence.invalidate();
+    this.sessionManager.end();
     this.processing = false;
     this.speaking = false;
     this.pendingResult = false;
@@ -360,6 +372,7 @@ export class VoiceInteraction {
     this.speaking = true;
     this.duplexInterruptPending = false;
     const speakingTurn = this.turn;
+    if (!this.turnFence.accept(speakingTurn) || !this.sessionManager.isActive(this.sessionId)) return false;
     this.lifecycle.beginSpeaking();
     this.bargeIn.beginMonitoring(speakingTurn);
     if (this.nativeVoice && typeof window !== "undefined" && !this.duplex.isActive()) this.duplex.start(speakingTurn);
@@ -368,7 +381,7 @@ export class VoiceInteraction {
     try {
       await speak(text);
     } finally {
-      if (this.turn !== speakingTurn) return false;
+      if (!this.turnFence.accept(speakingTurn) || this.turn !== speakingTurn || !this.sessionManager.isActive(this.sessionId)) return false;
       // A duplex speech onset has stopped TTS but is still waiting for the
       // post-interrupt STT result. Keep barge-in/VoiceInteraction alive for it.
       if (this.duplexInterruptPending) return false;
