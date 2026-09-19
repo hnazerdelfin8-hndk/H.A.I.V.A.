@@ -9,8 +9,8 @@ test("duplex voice uses one native recognizer while migration remains fenced", (
   assert.equal((android.match(/SpeechRecognizer\.createSpeechRecognizer\(this\)/g) || []).length, 1);
   assert.doesNotMatch(android, /v3SpeechRecognizer/);
   assert.match(android, /NativeCaptureMode\.NORMAL/);
-  assert.match(android, /NativeCaptureMode\.INTERRUPT/);
-  assert.match(android, /startNativeRecognitionWithMode/);
+  assert.doesNotMatch(android, /NativeCaptureMode\.INTERRUPT/);
+  assert.doesNotMatch(android, /startNativeRecognitionWithMode/);
 });
 
 test("Barge-in is logical only and duplex owns the interaction audio boundary", () => {
