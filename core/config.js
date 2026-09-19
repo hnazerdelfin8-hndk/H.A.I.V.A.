@@ -56,7 +56,7 @@ export const CONFIG = {
     textToSpeech: true,
     memory: true,
     commandRouter: true,
-    voiceInteractionV3: true,
+    voiceBargeIn: true,
     voiceInterrupt: true
   }
 };
