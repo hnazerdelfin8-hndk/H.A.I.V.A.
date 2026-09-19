@@ -31,7 +31,7 @@ test("voice race fence: interruption invalidates the old capture turn before han
   assert.match(interruptionBody, /this\.captureSessionId = null/);
   assert.doesNotMatch(interruptionBody, /requestV3Stop|requestVoiceOutputStop/);
   assert.match(interruptionBody, /queueMicrotask\(\(\) =>/);
-  assert.match(interruptionBody, /this\.bargeIn\.isCurrent(this\.turn)/);
+  assert.match(interruptionBody, /this\.bargeIn\.isCurrent\(this\.turn\)/);
   assert.match(interruptionBody, /previousTurn: interruptedTurn/);
   assert.match(interruptionBody, /sourceInput: capture\.text/);
 });
