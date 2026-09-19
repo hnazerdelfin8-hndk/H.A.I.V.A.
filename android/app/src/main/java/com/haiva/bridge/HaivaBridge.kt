@@ -11,15 +11,22 @@ interface HaivaBridge {
     fun stopV3VoiceCapture()
 
     @JavascriptInterface
-    fun startDuplexInterruptMonitor(turn: Long) {
+    fun startDuplexAudio(turn: Long) {
         val activity = this as? Activity ?: return
         DuplexAudioMonitor.start(activity, turn)
     }
 
     @JavascriptInterface
-    fun stopDuplexInterruptMonitor() {
+    fun stopDuplexAudio() {
         DuplexAudioMonitor.stop()
     }
+
+    // Compatibility aliases; canonical JS path uses startDuplexAudio/stopDuplexAudio.
+    @JavascriptInterface
+    fun startDuplexInterruptMonitor(turn: Long) = startDuplexAudio(turn)
+
+    @JavascriptInterface
+    fun stopDuplexInterruptMonitor() = stopDuplexAudio()
 
     fun speak(text: String)
     fun stopSpeaking()
