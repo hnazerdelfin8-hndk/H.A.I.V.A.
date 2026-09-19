@@ -245,9 +245,6 @@ export class VoiceInteraction {
 
   handleInterruption(capture, decision) {
     const interruptedTurn = this.turn;
-    this.turn = this.turnFence.begin();
-    this.bargeIn.beginTurn();
-    this.sessionId = this.sessionManager.start();
     this.duplexInterruptPending = false;
     this.speaking = false;
     this.processing = false;
@@ -298,7 +295,9 @@ export class VoiceInteraction {
       return false;
     }
     this.active = true;
-    this.turn = this.bargeIn.beginTurn();
+    this.sessionId = this.sessionManager.start();
+    this.turn = this.turnFence.begin();
+    this.bargeIn.beginTurn();
     this.pendingResult = false;
     this.duplexInterruptPending = false;
     this.captureSessionId = null;
