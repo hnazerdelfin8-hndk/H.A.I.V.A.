@@ -286,6 +286,21 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     }
 
     @JavascriptInterface
+    override fun startDuplexAudio(turn: Long) {
+        runOnUiThread {
+            if (destroyed) return@runOnUiThread
+            // Release any recognizer capture before the AEC/VAD AudioRecord starts.
+            stopNativeRecognition()
+            DuplexAudioMonitor.start(this, turn)
+        }
+    }
+
+    @JavascriptInterface
+    override fun stopDuplexAudio() {
+        runOnUiThread { DuplexAudioMonitor.stop() }
+    }
+
+    @JavascriptInterface
     override fun stopVoiceCapture() {
         runOnUiThread {
             pendingNativeVoiceStart = false
