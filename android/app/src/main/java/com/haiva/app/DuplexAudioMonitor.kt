@@ -21,7 +21,7 @@ import kotlin.math.sqrt
  *
  * It does not perform transcription. It listens for human speech onset using
  * AudioRecord and platform preprocessing (AEC/NS/AGC when available), then
- * notifies the WebView so V3 can stop TTS and start the normal V3 STT turn.
+ * notifies the WebView so the duplex controller can stop TTS and hand the mic to the normal ASR turn.
  */
 object DuplexAudioMonitor {
     private const val SAMPLE_RATE = 16000
@@ -73,7 +73,7 @@ object DuplexAudioMonitor {
                 AudioFormat.ENCODING_PCM_16BIT
             )
             if (minBuffer <= 0) {
-                dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to "invalid_buffer"))
+                dispatch(activity, "haiva:duplex-error", mapOf("reason" to "invalid_buffer"))
                 return
             }
 
@@ -94,7 +94,7 @@ object DuplexAudioMonitor {
                 .build()
 
             if (localRecorder.state != AudioRecord.STATE_INITIALIZED) {
-                dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to "audio_record_uninitialized"))
+                dispatch(activity, "haiva:duplex-error", mapOf("reason" to "audio_record_uninitialized"))
                 return
             }
 
@@ -117,7 +117,7 @@ object DuplexAudioMonitor {
             }
 
             localRecorder.startRecording()
-            dispatch(activity, "haiva:duplex-monitor-ready", mapOf("turn" to turn))
+            dispatch(activity, "haiva:duplex-ready", mapOf("turn" to turn))
 
             val samples = ShortArray(FRAME_SAMPLES)
             var noiseDb = -55.0
@@ -145,7 +145,7 @@ object DuplexAudioMonitor {
                         running.set(false)
                         dispatch(
                             activity,
-                            "haiva:duplex-interrupt-detected",
+                            "haiva:duplex-barge-in",
                             mapOf("turn" to turn, "source" to "native-duplex-vad")
                         )
                         break
@@ -155,9 +155,9 @@ object DuplexAudioMonitor {
                 }
             }
         } catch (_: SecurityException) {
-            dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to "microphone_permission"))
+            dispatch(activity, "haiva:duplex-error", mapOf("reason" to "microphone_permission"))
         } catch (error: Exception) {
-            dispatch(activity, "haiva:duplex-monitor-error", mapOf("reason" to (error.message ?: "audio_monitor_error")))
+            dispatch(activity, "haiva:duplex-error", mapOf("reason" to (error.message ?: "audio_monitor_error")))
         } finally {
             cleanupRecorder(localRecorder)
         }
