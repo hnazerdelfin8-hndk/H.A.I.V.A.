@@ -2,10 +2,10 @@
 // H.A.I.V.A. VOICE INTERACTION
 // =========================================
 // Single executor/coordinator for the voice domain.
-// V1 = normal input capture worker.
+// Native ASR = normal input capture worker.
 // V2 = lifecycle authority.
-// V3 = interruption capture/decision boundary.
-// V4 = physical capture routing + interrupt gateway.
+// Barge-in = interruption capture/decision boundary.
+// Duplex = physical audio boundary.
 // DuplexAudioController = native speech-onset monitor while TTS is active.
 // Brain = semantic decision authority.
 //
@@ -178,13 +178,13 @@ export class VoiceInteraction {
     window.addEventListener("haiva:native-voice-ready", event => {
       if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event, { establish: true })) return;
       this.nativeCaptureRestartPending = false;
-      this.lifecycle.activateListening();
+      if (!this.duplexInterruptPending) this.lifecycle.activateListening();
       this.listening = true;
     });
     window.addEventListener("haiva:native-voice-begin", event => {
       if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event)) return;
       this.nativeCaptureRestartPending = false;
-      this.lifecycle.activateListening();
+      if (!this.duplexInterruptPending) this.lifecycle.activateListening();
       this.listening = true;
     });
     window.addEventListener("haiva:native-voice-segment-end", event => {
