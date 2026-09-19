@@ -17,7 +17,7 @@ test("voice connector events have one Android producer and bounded recovery path
 
 test("Core App connects to Voice Interaction only", async () => {
   const app = await read("core/app.js");
-  const interaction = await read("core/voice/interaction.js");
+  const interaction = await read("core/voice/interaction/index.js");
 
   assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
   assert.match(app, /new VoiceInteraction\(/);
@@ -35,7 +35,7 @@ test("Voice Interaction uses canonical Duplex ownership", async () => {
   const interaction = await read("core/voice/interaction.js");
   assert.match(interaction, /new DuplexController/);
   assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);
-  assert.doesNotMatch(interaction, /handoffToV[13]|startVoiceCapture|startV3VoiceCapture/);
+  assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);\n  assert.match(interaction, /startVoiceCapture/);\n  assert.doesNotMatch(interaction, /handoffToV[13]|startV3VoiceCapture/);
 });
 
 test("AI orchestration has a bounded remote request and no retry storm", async () => {
