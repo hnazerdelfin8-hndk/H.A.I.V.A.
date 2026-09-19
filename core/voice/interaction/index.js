@@ -9,7 +9,7 @@
 // DuplexAudioController = native speech-onset monitor while TTS is active.
 // Brain = semantic decision authority.
 //
-// IMPORTANT: V1 and V3 never own the physical microphone at the same time.
+// IMPORTANT: only one native capture request is active at a time.
 // During SPEAKING, Barge-in uses the native duplex monitor. Full STT starts only
 // after speech onset is detected and TTS has been stopped.
 
@@ -93,23 +93,8 @@ export class VoiceInteraction {
   }
 
   bindDuplexEvents() {
-    if (typeof window === "undefined") return;
-    window.addEventListener("haiva:duplex-barge-in", event => {
-      if (!this.active || !this.speaking || this.processing || this.duplexInterruptPending) return;
-      if (!this.bargeIn.isMonitoring(this.turn)) return;
-      const turn = event.detail?.turn;
-      if (turn != null && Number(turn) !== Number(this.turn)) return;
-
-      // Fence the current TTS completion before stopping output. The pending
-      // flag prevents beginSpeaking()'s finally block from releasing V3 before
-      // the post-duplex STT session has produced the user's utterance.
-      this.duplexInterruptPending = true;
-      this.duplex.stopPlayback(this.turn);
-      queueMicrotask(() => {
-        if (!this.active || !this.speaking || !this.duplexInterruptPending) return;
-        try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
-      });
-    });
+    // DuplexController is the single listener for canonical duplex events.
+    // VoiceInteraction receives the fenced callback through its constructor.
   }
 
   handleBargeInCandidate(candidate) {
