@@ -35,7 +35,7 @@ jobs:
 
       - name: Run canonical barge-in tests
         run: node --test tests/barge-in.test.js
-
+\n      - name: Run canonical voice event contract tests\n        run: node --test tests/voice-events-contract.test.js\n
       - name: Run voice layer boundary tests
         run: node --test tests/voice-layer-boundary.test.js
 
