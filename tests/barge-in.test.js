@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BARGE_IN_STATES, createBargeInCoordinator } from "../core/voice/v3-interaction.js";
+import { BARGE_IN_STATES, createBargeInCoordinator } from "../core/voice/barge-in.js";
 
 test("Barge-in coordinator arms the active speaking turn without owning a microphone", () => {
   const coordinator = createBargeInCoordinator();
