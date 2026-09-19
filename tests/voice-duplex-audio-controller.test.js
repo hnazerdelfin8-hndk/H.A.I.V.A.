@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 test("canonical duplex audio boundary uses AudioRecord with AEC, VAD, and ASR handoff", () => {
   const monitor = readFileSync("android/app/src/main/java/com/haiva/app/DuplexAudioMonitor.kt", "utf8");
   const bridge = readFileSync("android/app/src/main/java/com/haiva/bridge/HaivaBridge.kt", "utf8");
-  const interaction = readFileSync("core/voice/interaction.js", "utf8");
+  const interaction = readFileSync("core/voice/interaction/index.js", "utf8");
   assert.match(monitor, /AudioRecord\\.Builder/);
   assert.match(monitor, /AcousticEchoCanceler/);
   assert.match(monitor, /NoiseSuppressor/);
