@@ -26,7 +26,8 @@ test("voice race fence: interruption invalidates the old capture turn before han
   assert.ok(interruptionIndex >= 0);
   const interruptionBody = interaction.slice(interruptionIndex, interaction.indexOf("\n  acceptResult()", interruptionIndex));
   assert.match(interruptionBody, /const interruptedTurn = this\.turn/);
-  assert.match(interruptionBody, /this\.turn = this\.bargeIn\.beginTurn\(\)/);
+  assert.match(interruptionBody, /this\.turnFence\.invalidate\(\)/);
+  assert.match(interruptionBody, /this\.turn = this\.turnFence\.begin\(\)/);
   assert.match(interruptionBody, /this\.speaking = false/);
   assert.match(interruptionBody, /this\.captureSessionId = null/);
   assert.doesNotMatch(interruptionBody, /requestV3Stop|requestVoiceOutputStop/);
@@ -40,7 +41,8 @@ test("voice race fence: interrupted TTS cannot finish the replacement turn", () 
   const speakingIndex = interaction.indexOf("async beginSpeaking(text)");
   const speakingBody = interaction.slice(speakingIndex);
   assert.match(speakingBody, /const speakingTurn = this\.turn/);
-  assert.match(speakingBody, /if \(this\.turn !== speakingTurn\)/);
+  assert.match(speakingBody, /this\.turnFence\.accept\(speakingTurn\)/);
+  assert.match(speakingBody, /this\.turn !== speakingTurn/);
 
   assert.match(bridge, /let speechGeneration = 0/);
   assert.match(bridge, /const interruptedGeneration = \+\+speechGeneration/);
