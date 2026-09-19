@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
+const interaction = readFileSync(new URL("../core/voice/interaction/index.js", import.meta.url), "utf8");
 const android = readFileSync(new URL("../android/app/src/main/java/com/haiva/app/MainActivity.kt", import.meta.url), "utf8");
 
 test("duplex voice uses one native recognizer while migration remains fenced", () => {
