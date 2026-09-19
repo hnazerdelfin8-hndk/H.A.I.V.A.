@@ -34,7 +34,7 @@ test("Core App connects to Voice Interaction only", async () => {
 test("Voice Interaction uses canonical Duplex ownership", async () => {
   const interaction = await read("core/voice/interaction.js");
   assert.match(interaction, /new DuplexController/);
-  assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);
+  assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
   assert.match(interaction, /this\.duplex\.start\(this\.turn\)/);\n  assert.match(interaction, /startVoiceCapture/);\n  assert.doesNotMatch(interaction, /handoffToV[13]|startV3VoiceCapture/);
 });
 
