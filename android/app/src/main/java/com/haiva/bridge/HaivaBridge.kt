@@ -7,8 +7,6 @@ import com.haiva.app.DuplexAudioMonitor
 interface HaivaBridge {
     fun startVoiceCapture()
     fun stopVoiceCapture()
-    fun startV3VoiceCapture()
-    fun stopV3VoiceCapture()
 
     @JavascriptInterface
     fun startDuplexAudio(turn: Long) {
