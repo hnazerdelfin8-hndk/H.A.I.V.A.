@@ -94,7 +94,7 @@ export class VoiceInteraction {
 
   bindDuplexEvents() {
     if (typeof window === "undefined") return;
-    window.addEventListener("haiva:v3-duplex-speech-start", event => {
+    window.addEventListener("haiva:duplex-barge-in", event => {
       if (!this.active || !this.speaking || this.processing || this.duplexInterruptPending) return;
       if (!this.bargeIn.isMonitoring(this.turn)) return;
       const turn = event.detail?.turn;
@@ -107,7 +107,7 @@ export class VoiceInteraction {
       this.duplex.stopPlayback(this.turn);
       queueMicrotask(() => {
         if (!this.active || !this.speaking || !this.duplexInterruptPending) return;
-        this.startListening();
+        try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
       });
     });
   }
@@ -142,7 +142,16 @@ export class VoiceInteraction {
   }
 
   handleDuplexInterruptCandidate(candidate) {
-    return candidate?.text ? this.handleBargeInCandidate({ ...candidate, source: candidate.source || "native-duplex" }) : false;
+    if (!this.active || !this.speaking || this.processing) return false;
+    if (!this.bargeIn.isMonitoring(this.turn)) return false;
+    if (candidate?.turn != null && Number(candidate.turn) !== Number(this.turn)) return false;
+    this.duplexInterruptPending = true;
+    this.duplex.stopPlayback(this.turn);
+    this.listening = false;
+    this.captureSessionId = null;
+    this.pendingResult = false;
+    try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
+    return true;
   }
 
   bindNativeCaptureEvents() {
@@ -189,9 +198,31 @@ export class VoiceInteraction {
     });
     window.addEventListener("haiva:native-voice-result", event => {
       if (!this.acceptNativeCaptureEvent(event)) return;
-      if (!this.active || this.processing || this.pendingResult || this.speaking) return;
+      if (!this.active || this.processing || this.pendingResult) return;
       const text = event.detail?.text;
-      if (!text || !this.acceptResult()) return;
+      if (!text) return;
+      if (this.duplexInterruptPending && this.speaking) {
+        this.pendingResult = true;
+        this.duplexInterruptPending = false;
+        this.listening = false;
+        this.captureSessionId = null;
+        const capture = this.bargeIn.commitCapture(this.turn, text);
+        if (!capture) return;
+        const decision = this.onBrainDecision?.(capture.text, {
+          phase: "SPEAKING", source: "barge-in-asr", turn: capture.turn
+        });
+        if (decision?.action === "interrupt") this.handleInterruption(capture, decision);
+        else {
+          this.pendingResult = false;
+          this.speaking = false;
+          this.bargeIn.releaseCapture(this.turn);
+          this.lifecycle.returnToListening();
+          this.startListening();
+        }
+        return;
+      }
+      if (this.speaking) return;
+      if (!this.acceptResult()) return;
       this.listening = false;
       this.captureSessionId = null;
       this.reportInput(text, "native");
@@ -308,10 +339,9 @@ export class VoiceInteraction {
       this.listening = true;
       this.lifecycle.activateListening();
     }
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function") {
-      if (!this.duplex.isActive()) this.duplex.start(this.turn);
-    } else if (!this.nativeVoice) {
-      // Browser fallback only: native Android never reaches this path.
+    if (this.nativeVoice && typeof window !== "undefined") {
+      try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
+    } else {
       this.listening = true;
       this.lifecycle.activateListening();
       const recognition = this._browserRecognition;
@@ -323,8 +353,11 @@ export class VoiceInteraction {
   stopListening() {
     this.listening = false;
     this.captureSessionId = null;
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.stopDuplexAudio === "function") this.duplex.stop(this.turn);
-    else { try { this._browserRecognition?.stop?.(); } catch (_) {} }
+    if (this.nativeVoice && typeof window !== "undefined") {
+      try { window.HaivaBridge?.stopVoiceCapture?.(); } catch (_) {}
+    } else {
+      try { this._browserRecognition?.stop?.(); } catch (_) {}
+    }
   }
 
   beginProcessing() {
@@ -344,7 +377,7 @@ export class VoiceInteraction {
     const speakingTurn = this.turn;
     this.lifecycle.beginSpeaking();
     this.bargeIn.beginMonitoring(speakingTurn);
-    if (this.nativeVoice && typeof window !== "undefined" && typeof window.HaivaBridge?.startDuplexAudio === "function" && !this.duplex.isActive()) this.duplex.start(speakingTurn);
+    if (this.nativeVoice && typeof window !== "undefined" && !this.duplex.isActive()) this.duplex.start(speakingTurn);
     
 
     try {
@@ -352,13 +385,13 @@ export class VoiceInteraction {
     } finally {
       if (this.turn !== speakingTurn) return false;
       // A duplex speech onset has stopped TTS but is still waiting for the
-      // post-interrupt STT result. Keep V3/VoiceInteraction alive for it.
+      // post-interrupt STT result. Keep barge-in/VoiceInteraction alive for it.
       if (this.duplexInterruptPending) return false;
       this.speaking = false;
         this.bargeIn.stopMonitoring(speakingTurn);
       
       this.lifecycle.returnToListening();
-      if (this.active && !this.duplex.isActive()) this.startListening();
+      if (this.active) this.startListening();
     }
     return this.turn === speakingTurn;
   }
