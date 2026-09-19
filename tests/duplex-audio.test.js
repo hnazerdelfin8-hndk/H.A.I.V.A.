@@ -6,7 +6,7 @@ test("canonical duplex audio boundary uses AudioRecord with AEC, VAD, and ASR ha
   const monitor = readFileSync("android/app/src/main/java/com/haiva/app/DuplexAudioMonitor.kt", "utf8");
   const bridge = readFileSync("android/app/src/main/java/com/haiva/bridge/HaivaBridge.kt", "utf8");
   const interaction = readFileSync("core/voice/interaction/index.js", "utf8");
-  assert.match(monitor, /AudioRecord\\.Builder/);
+  assert.match(monitor, /AudioRecord\.Builder/);
   assert.match(monitor, /AcousticEchoCanceler/);
   assert.match(monitor, /NoiseSuppressor/);
   assert.match(monitor, /AutomaticGainControl/);
