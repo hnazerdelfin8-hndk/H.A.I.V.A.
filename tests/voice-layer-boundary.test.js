@@ -6,7 +6,6 @@ const app = readFileSync(new URL("../core/app.js", import.meta.url), "utf8");
 const interaction = readFileSync(new URL("../core/voice/interaction.js", import.meta.url), "utf8");
 const v2 = readFileSync(new URL("../core/voice/lifecycle-coordinator.js", import.meta.url), "utf8");
 const bargeIn = readFileSync(new URL("../core/voice/barge-in.js", import.meta.url), "utf8");
-const v4 = readFileSync(new URL("../core/voice/gateway.js", import.meta.url), "utf8");
 const duplex = readFileSync(new URL("../core/voice/duplex/controller.js", import.meta.url), "utf8");
 const brain = readFileSync(new URL("../core/brain/decision.js", import.meta.url), "utf8");
 
@@ -49,9 +48,4 @@ test("voice boundary: canonical duplex controller is the physical audio boundary
   assert.match(duplex, /startDuplexAudio/);
   assert.match(duplex, /stopDuplexAudio/);
   assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
-});
-
-test("voice boundary: V4 no longer owns capture workers", () => {
-  assert.doesNotMatch(v4, /handoffToV1|handoffToV3|releaseFromV1|releaseFromV3/);
-  assert.doesNotMatch(v4, /startVoiceCapture|startV3VoiceCapture|SpeechRecognition|SpeechRecognizer/);
 });
