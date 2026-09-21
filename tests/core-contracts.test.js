@@ -18,6 +18,7 @@ test("voice connector events have one Android producer and bounded recovery path
 test("Core App connects to Voice Interaction only", async () => {
   const app = await read("core/app.js");
   const interaction = await read("core/voice/interaction/index.js");
+  const captureAdapter = await read("core/voice/capture/factory.js");
 
   assert.match(app, /import \{ VoiceInteraction \} from "\.\/voice\/interaction\.js"/);
   assert.match(app, /new VoiceInteraction\(/);
@@ -35,7 +36,8 @@ test("Voice Interaction uses canonical Duplex ownership", async () => {
   const interaction = await read("core/voice/interaction/index.js");
   assert.match(interaction, /new DuplexController/);
   assert.match(interaction, /this\.duplex\.start\(speakingTurn\)/);
-  assert.match(interaction, /startVoiceCapture/);
+  assert.match(captureAdapter, /NativeCaptureAdapter/);
+  assert.match(interaction, /this\.capture\.start\(\)/);
   assert.doesNotMatch(interaction, /handoffToV[13]|startV3VoiceCapture/);
 });
 
