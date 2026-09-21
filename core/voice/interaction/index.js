@@ -14,7 +14,7 @@
 // after speech onset is detected and TTS has been stopped.
 
 import { VoiceLifecycleV2 } from "../lifecycle-coordinator.js";
-import { createSpeechRecognition } from "../speech-to-text.js";
+import { createCaptureAdapter } from "../capture/factory.js";
 import { createBargeInCoordinator } from "../barge-in.js";
 import { VoiceSessionManager } from "../session-manager.js";
 import { VoiceTurnFence } from "../turn-fence.js";
@@ -54,13 +54,17 @@ export class VoiceInteraction {
     this.nativeCaptureRestartPending = false;
     this.nativeCaptureRestartTimer = null;
     this.initialized = false;
-    this._browserRecognition = null;
+    this.capture = createCaptureAdapter({
+      native: this.nativeVoice,
+      onEvent: event => this.handleCaptureEvent(event),
+      recognitionConfig: { continuous: false, interimResults: true }
+    });
   }
 
   initialize() {
     if (this.initialized) return;
     this.initialized = true;
-    this.bindNativeCaptureEvents();
+    this.capture.initialize();
     this.bindDuplexEvents();
   }
 
@@ -140,56 +144,18 @@ export class VoiceInteraction {
     this.listening = false;
     this.captureSessionId = null;
     this.pendingResult = false;
-    try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
+    this.capture.start();
     return true;
   }
 
-  bindNativeCaptureEvents() {
-    if (!this.nativeVoice && !this._browserRecognition) {
-      const recognition = createSpeechRecognition({ continuous: false, interimResults: true });
-      if (recognition) {
-        this._browserRecognition = recognition;
-        recognition.onresult = event => {
-          const result = event.results?.[event.results.length - 1]?.[0]?.transcript || "";
-          if (result && this.acceptResult()) {
-            this.listening = false;
-            this.reportInput(result, "browser");
-          }
-        };
-        recognition.onerror = () => {
-          this.listening = false;
-          this.pendingResult = false;
-          this.lifecycle.returnToListening();
-          this.restartListeningAfterNativeTurn();
-        };
-      }
-    }
-    if (typeof window === "undefined") return;
-    window.addEventListener("haiva:native-voice-ready", event => {
-      if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event, { establish: true })) return;
-      this.nativeCaptureRestartPending = false;
-      if (!this.duplexInterruptPending) this.lifecycle.activateListening();
-      this.listening = true;
-    });
-    window.addEventListener("haiva:native-voice-begin", event => {
-      if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event)) return;
-      this.nativeCaptureRestartPending = false;
-      if (!this.duplexInterruptPending) this.lifecycle.activateListening();
-      this.listening = true;
-    });
-    window.addEventListener("haiva:native-voice-segment-end", event => {
-      if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event)) return;
-      this.listening = true;
-    });
-    window.addEventListener("haiva:native-voice-partial", event => {
-      if (!this.active || this.processing || !this.acceptNativeCaptureEvent(event)) return;
-      const text = normalizeSpeech(event.detail?.text || "");
-      if (text) this.onTranscript?.(text);
-    });
-    window.addEventListener("haiva:native-voice-result", event => {
-      if (!this.acceptNativeCaptureEvent(event)) return;
+  handleCaptureEvent(event) {
+    const type = event?.type;
+    const detail = event?.detail || {};
+
+    if (type === "result") {
+      if (this.nativeVoice && !this.acceptNativeCaptureEvent({ detail })) return;
       if (!this.active || this.processing || this.pendingResult) return;
-      const text = event.detail?.text;
+      const text = detail.text || event.text;
       if (!text) return;
       if (this.duplexInterruptPending && this.speaking) {
         this.pendingResult = true;
@@ -198,9 +164,7 @@ export class VoiceInteraction {
         this.captureSessionId = null;
         const capture = this.bargeIn.commitCapture(this.turn, text);
         if (!capture) return;
-        const decision = this.onBrainDecision?.(capture.text, {
-          phase: "SPEAKING", source: "barge-in-asr", turn: capture.turn
-        });
+        const decision = this.onBrainDecision?.(capture.text, { phase: "SPEAKING", source: "barge-in-asr", turn: capture.turn });
         if (decision?.action === "interrupt") this.handleInterruption(capture, decision);
         else {
           this.pendingResult = false;
@@ -215,18 +179,42 @@ export class VoiceInteraction {
       if (!this.acceptResult()) return;
       this.listening = false;
       this.captureSessionId = null;
-      this.reportInput(text, "native");
-    });
-    for (const eventName of ["complete", "timeout", "error"]) {
-      window.addEventListener(`haiva:native-voice-${eventName}`, event => {
-        if (!this.acceptNativeCaptureEvent(event)) return;
-        if (!this.active || this.processing || this.speaking) return;
-        this.captureSessionId = null;
-        this.listening = false;
-        this.pendingResult = false;
-        this.lifecycle.returnToListening();
-        this.restartListeningAfterNativeTurn();
-      });
+      this.reportInput(text, this.nativeVoice ? "native" : "browser");
+      return;
+    }
+
+    if (type === "ready" || type === "begin") {
+      if (!this.active || this.processing) return;
+      if (this.nativeVoice && !this.acceptNativeCaptureEvent({ detail }, { establish: type === "ready" })) return;
+      this.nativeCaptureRestartPending = false;
+      if (!this.duplexInterruptPending) this.lifecycle.activateListening();
+      this.listening = true;
+      return;
+    }
+
+    if (type === "segment-end") {
+      if (!this.active || this.processing) return;
+      if (this.nativeVoice && !this.acceptNativeCaptureEvent({ detail })) return;
+      this.listening = true;
+      return;
+    }
+
+    if (type === "partial") {
+      if (!this.active || this.processing) return;
+      if (this.nativeVoice && !this.acceptNativeCaptureEvent({ detail })) return;
+      const text = normalizeSpeech(detail.text || "");
+      if (text) this.onTranscript?.(text);
+      return;
+    }
+
+    if (type === "complete" || type === "timeout" || type === "error") {
+      if (this.nativeVoice && !this.acceptNativeCaptureEvent({ detail })) return;
+      if (!this.active || this.processing || this.speaking) return;
+      this.captureSessionId = null;
+      this.listening = false;
+      this.pendingResult = false;
+      this.lifecycle.returnToListening();
+      this.restartListeningAfterNativeTurn();
     }
   }
 
@@ -331,17 +319,11 @@ export class VoiceInteraction {
   startListening() {
     if (!this.active || this.listening || this.processing || this.nativeCaptureRestartPending || this.speaking) return false;
     this.captureSessionId = null;
-    if (!this.nativeVoice) {
-      this.listening = true;
-      this.lifecycle.activateListening();
-    }
-    if (this.nativeVoice && typeof window !== "undefined") {
-      try { window.HaivaBridge?.startVoiceCapture?.(); } catch (_) {}
-    } else {
-      this.listening = true;
-      this.lifecycle.activateListening();
-      const recognition = this._browserRecognition;
-      if (recognition) { try { recognition.start(); } catch (_) {} }
+    this.listening = true;
+    this.lifecycle.activateListening();
+    if (!this.capture.start()) {
+      this.listening = false;
+      return false;
     }
     return true;
   }
@@ -349,11 +331,7 @@ export class VoiceInteraction {
   stopListening() {
     this.listening = false;
     this.captureSessionId = null;
-    if (this.nativeVoice && typeof window !== "undefined") {
-      try { window.HaivaBridge?.stopVoiceCapture?.(); } catch (_) {}
-    } else {
-      try { this._browserRecognition?.stop?.(); } catch (_) {}
-    }
+    this.capture.stop();
   }
 
   beginProcessing() {
