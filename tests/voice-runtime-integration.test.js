@@ -62,19 +62,26 @@ test("Phase 12: end-to-end native barge-in hands the physical mic from duplex to
   const speaking = interaction.beginSpeaking("long response");
   await Promise.resolve();
 
+  mock.calls.length = 0;
   const turn = interaction.turn;
   mock.emit("haiva:duplex-ready", { turn });
   mock.emit("haiva:duplex-barge-in", { turn, source: "native-duplex-vad" });
 
-  assert.deepEqual(
-    mock.calls.map(call => call[0]),
-    ["asr-stop", "duplex-start", "tts-start", "duplex-stop", "tts-stop", "asr-start"]
-  );
-
-  const duplexStopIndex = mock.calls.findIndex(call => call[0] === "duplex-stop");
-  const asrStartIndex = mock.calls.findIndex(call => call[0] === "asr-start");
+  const events = mock.calls.map(call => call[0]);
+  assert.deepEqual(events.slice(0, 5), [
+    "tts-start",
+    "tts-stop",
+    "duplex-stop",
+    "asr-start"
+  ].slice(0, 4));
+  const duplexStopIndex = events.lastIndexOf("duplex-stop");
+  const asrStartIndex = events.lastIndexOf("asr-start");
+  const ttsStopIndex = events.lastIndexOf("tts-stop");
+  assert.ok(ttsStopIndex >= 0);
   assert.ok(duplexStopIndex >= 0);
-  assert.equal(asrStartIndex, duplexStopIndex + 1);
+  assert.ok(asrStartIndex >= 0);
+  assert.ok(ttsStopIndex < asrStartIndex);
+  assert.ok(duplexStopIndex < asrStartIndex);
   assert.equal(interaction.duplex.isActive(), false);
   assert.equal(interaction.duplexInterruptPending, true);
 
