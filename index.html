@@ -23,17 +23,78 @@
     .haiva-boot-error{position:absolute;left:24px;right:24px;bottom:22px;padding:12px;border-radius:12px;background:rgba(255,60,60,.1);border:1px solid rgba(255,90,90,.35);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
     #haiva-boot-retry{position:absolute;bottom:20px;right:24px;padding:9px 16px;border:0;border-radius:10px;cursor:pointer;font-weight:800}
     @media (max-height:620px){.haiva-boot-card{min-height:92vh}.haiva-boot-hex{width:min(58vh,330px)}.haiva-boot-loading{bottom:22px}}
-  </style>
+  
+/* H.A.I.V.A. Core UI/UX */
+:root{--haiva-green:#00ff8c;--haiva-bg:#030504}
+html,body{background:radial-gradient(ellipse at center,#06120c 0%,#030504 72%);color:#eafff4}
+body{overflow:hidden}
+.app{position:relative;width:100%;max-width:none;height:100vh;min-height:100vh;margin:0;padding:0 16px;display:flex;flex-direction:column;align-items:center;gap:0;background:transparent}
+.header,.status{display:none!important}
+.haiva-topbar{position:relative;z-index:20;width:min(100%,640px);height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 4px}
+.haiva-brand{font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.32em;color:rgba(0,255,140,.82);text-shadow:0 0 12px rgba(0,255,140,.4)}
+.haiva-dot{font-size:7px;margin-left:7px;vertical-align:middle}
+.haiva-settings-btn{width:40px;height:40px;border-radius:50%;border:1px solid rgba(0,255,140,.25);background:rgba(0,255,140,.045);color:rgba(0,255,140,.8);font-size:18px}
+.haiva-core{position:relative;flex:1;width:100%;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.haiva-orb{position:relative;width:min(88vw,500px);height:min(88vw,500px);max-height:62vh;aspect-ratio:1;border-radius:50%;overflow:visible}
+#haiva-core-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.haiva-orb-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.haiva-orb-mark{width:48px;height:48px;border:1px solid rgba(0,255,140,.25);border-radius:50%;display:grid;place-items:center;color:rgba(220,255,240,.8);font:500 20px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-shadow:0 0 18px rgba(0,255,140,.65);background:rgba(0,20,12,.22);backdrop-filter:blur(4px)}
+.haiva-orb-state{margin-top:12px;color:rgba(0,255,140,.52);font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.32em}
+.haiva-feedback{position:absolute;bottom:10%;max-width:86%;text-align:center;color:rgba(210,255,235,.48);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.haiva-voice-trigger{position:absolute;bottom:2%;width:48px;height:48px;border-radius:50%;border:1px solid rgba(0,255,140,.3);background:rgba(0,255,140,.06);color:var(--haiva-green);font-size:22px;box-shadow:0 0 18px rgba(0,255,140,.08)}
+.haiva-voice-trigger.active{background:rgba(0,255,140,.18);box-shadow:0 0 24px rgba(0,255,140,.35);border-color:rgba(0,255,140,.8)}
+.haiva-conversation{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important}
+.haiva-chatbar{position:relative;z-index:20;width:min(100%,560px);margin:0 auto 18px;display:flex;align-items:center;gap:8px;padding:7px 7px 7px 17px;border:1px solid rgba(0,255,140,.2);border-radius:30px;background:rgba(6,18,12,.72);box-shadow:0 8px 35px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.haiva-chatbar #chat-input{padding:10px 0;border:0;background:transparent;color:#eafff4;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.haiva-chatbar #chat-input::placeholder{color:rgba(0,255,140,.32)}
+.iconBtn{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,255,140,.25);background:rgba(0,255,140,.045);color:var(--haiva-green);display:grid;place-items:center;font-size:15px}
+.iconBtn:hover,.iconBtn:focus-visible{background:rgba(0,255,140,.12);box-shadow:0 0 14px rgba(0,255,140,.2)}
+.haiva-settings-panel{position:absolute;z-index:30;right:16px;top:62px;width:min(290px,calc(100% - 32px));padding:14px;border:1px solid rgba(0,255,140,.18);border-radius:18px;background:rgba(3,12,8,.88);box-shadow:0 18px 55px rgba(0,0,0,.5);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:none}
+.haiva-settings-panel.open{display:block}
+.haiva-settings-panel .setting-row{color:rgba(220,255,240,.72);border-color:rgba(0,255,140,.08)}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-height:650px){.haiva-orb{width:min(72vw,390px);max-height:55vh}.haiva-feedback{bottom:6%}.haiva-voice-trigger{bottom:0}}
+</style>
 </head>
 <body data-haiva-state="loading">
   <div id="haiva-boot-screen" role="status" aria-live="polite"><div class="haiva-boot-card"><div class="haiva-boot-hex"><div class="haiva-boot-glass"><div class="haiva-boot-progress-ring" id="haiva-boot-progress-ring"><div class="haiva-boot-progress-core"><div class="haiva-boot-percent" id="haiva-boot-percent">0%</div></div></div></div></div><div class="haiva-boot-loading">LOADING<span class="haiva-boot-dots">...</span></div><div class="haiva-boot-error" id="haiva-boot-error" hidden></div><button id="haiva-boot-retry" type="button" hidden>RETRY</button></div></div>
   <main class="app">
-    <header class="header"><h1>H.A.I.V.A.</h1><p class="subtitle">Hnazer Artificial Intelligence Voice Assistant</p></header>
-    <section class="status"><div class="status-label">STATUS</div><div id="haiva-status">LOADING</div></section>
-    <section class="voice" aria-label="Voice control"><div id="orb"><div class="orb-ring"></div><div class="core"></div><div class="orb-label">H.A.I.V.A.</div></div><div id="heard">Loading H.A.I.V.A. core…</div><button id="activate-voice" type="button" aria-label="Activate H.A.I.V.A." aria-pressed="false" disabled>🎙️</button></section>
-    <section class="conversation" id="conversation" aria-label="Conversation"><div class="conversation-head"><span class="conversation-title">CONVERSATION</span><span class="online">● LOADING</span></div><div class="bubble-block"><div class="label">YOU</div><div class="bubble" id="transcript">—</div></div><div class="bubble-block"><div class="label">H.A.I.V.A.</div><div class="bubble" id="reply">Loading H.A.I.V.A. core…</div></div></section>
-    <form class="chat-form" id="chat-form"><input id="chat-input" type="text" autocomplete="off" placeholder="Type a message" aria-label="Message" disabled><button id="send-message" type="submit" aria-label="Send" disabled>➤</button></form>
-    <section class="settings"><button id="settings-toggle" type="button" aria-expanded="false">⚙ Settings</button><div id="settings-panel" aria-label="Settings"><div class="setting-row"><span>Voice mode</span><span class="setting-value" id="voice-setting">Tap + Wake Word</span></div><div class="setting-row"><span>Wake word</span><span class="setting-value">Yo, H.A.I.V.A.</span></div><div class="setting-row"><span>Microphone</span><span class="setting-value" id="mic-setting">Checking…</span></div></div></section>
+    <header class="haiva-topbar">
+      <div class="haiva-brand">H.A.I.V.A.<span class="haiva-dot">●</span></div>
+      <button id="settings-toggle" class="haiva-settings-btn" type="button" aria-expanded="false" aria-label="Open settings">⚙</button>
+    </header>
+
+    <section class="haiva-core" aria-label="H.A.I.V.A. core">
+      <div id="orb" class="haiva-orb">
+        <canvas id="haiva-core-canvas" aria-hidden="true"></canvas>
+        <div class="haiva-orb-center">
+          <div class="haiva-orb-mark">H</div>
+          <div id="haiva-orb-state" class="haiva-orb-state">BOOTING</div>
+        </div>
+      </div>
+      <div id="haiva-status" class="sr-only">BOOTING</div>
+      <div id="heard" class="haiva-feedback">Initializing H.A.I.V.A. core…</div>
+      <button id="activate-voice" class="haiva-voice-trigger" type="button" aria-label="Activate H.A.I.V.A." aria-pressed="false" disabled>
+        <span aria-hidden="true">⌕</span>
+      </button>
+    </section>
+
+    <section class="conversation haiva-conversation" id="conversation" aria-label="Conversation">
+      <div class="bubble-block"><div class="label">YOU</div><div class="bubble" id="transcript">—</div></div>
+      <div class="bubble-block"><div class="label">H.A.I.V.A.</div><div class="bubble" id="reply">Core initializing…</div></div>
+    </section>
+
+    <form class="chat-form haiva-chatbar" id="chat-form">
+      <input id="chat-input" type="text" autocomplete="off" placeholder="Message H.A.I.V.A…" aria-label="Message" disabled>
+      <button id="activate-voice-chat" class="iconBtn" type="button" aria-label="Voice input" disabled>🎙</button>
+      <button id="send-message" class="iconBtn" type="submit" aria-label="Send" disabled>➤</button>
+    </form>
+
+    <section class="settings haiva-settings-panel" id="settings-panel" aria-label="Settings">
+      <div class="setting-row"><span>Voice mode</span><span class="setting-value" id="voice-setting">Duplex</span></div>
+      <div class="setting-row"><span>Wake word</span><span class="setting-value">Yo, H.A.I.V.A.</span></div>
+      <div class="setting-row"><span>Microphone</span><span class="setting-value" id="mic-setting">Checking…</span></div>
+    </section>
   </main>
   <script src="./core/boot-loader.js"></script>
 </body>
