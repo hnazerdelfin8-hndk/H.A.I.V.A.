@@ -53,7 +53,10 @@ jobs:
 
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
-\n      - name: Run cancellable speech operation tests\n        run: node --test tests/speech-operation.test.js\n
+
+      - name: Run cancellable speech operation tests
+        run: node --test tests/speech-operation.test.js
+
       - name: Run voice stale-event race fencing tests
         run: node --test tests/voice-race-fencing.test.js
 
