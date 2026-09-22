@@ -149,6 +149,11 @@ object DuplexAudioMonitor {
                     speechFrames++
                     if (speechFrames >= REQUIRED_SPEECH_FRAMES) {
                         running.set(false)
+                        // Release the physical mic before notifying JS. The JS barge-in
+                        // handler immediately starts ASR; dispatching first creates a
+                        // race where ASR sees DUPLEX_VAD still owning the mic.
+                        cleanupRecorder(localRecorder)
+                        localRecorder = null
                         dispatch(
                             activity,
                             "haiva:duplex-barge-in",
