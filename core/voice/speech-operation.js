@@ -16,8 +16,8 @@
    }
  
    start(text, turn = null) {
-     const generation = ++this.generation;
      this.cancel();
+     const generation = ++this.generation;
  
      if (!this.speakFn) return Promise.resolve({ generation, turn, cancelled: false });
  
