@@ -44,31 +44,13 @@ if (mic) {
   mic.setAttribute("aria-label", "Start or pause H.A.I.V.A. voice mode");
 }
 
-// Voice control wiring is deliberately delegated because core/app.js creates
-// window.HAIVA after this module is evaluated. Delegation also survives UI
-// re-renders that replace the microphone button node.
+// UI emits an intent event; VoiceInteraction remains the only voice authority.
 document.addEventListener("click", event => {
   const button = event.target?.closest?.("#activate-voice");
   if (!button || button.disabled) return;
-
-  const invoke = () => {
-    const app = window.HAIVA;
-    if (!app) {
-      console.warn("[HAIVA] Voice control clicked before core instance was ready.");
-      return;
-    }
-    try {
-      if (app.voiceActivated) app.deactivateVoice();
-      else void app.activateVoice();
-    } catch (error) {
-      console.error("[HAIVA] Voice control failed:", error);
-      try { app.setState("READY"); } catch (_) {}
-    }
-  };
-
-  // Let the browser finish the native click dispatch before invoking the
-  // asynchronous voice activation/permission flow.
-  queueMicrotask(invoke);
+  window.dispatchEvent(new CustomEvent("haiva:voice-toggle", {
+    detail: { source: "ui", control: "microphone" }
+  }));
 });
 
 console.log("[HAIVA] UI polish layer loaded.");
