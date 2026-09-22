@@ -41,7 +41,12 @@ object DuplexAudioMonitor {
     fun start(activity: Activity, turn: Long): Boolean {
         if (activity.isFinishing || activity.isDestroyed) return false
         if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return false
-        if (!running.compareAndSet(false, true)) return true
+        if (running.get()) return true
+        if (!MicOwnership.tryAcquire(MicOwnership.Owner.DUPLEX_VAD)) return false
+        if (!running.compareAndSet(false, true)) {
+            MicOwnership.release(MicOwnership.Owner.DUPLEX_VAD)
+            return true
+        }
 
         worker = Thread({ monitorLoop(activity, turn) }, "haiva-duplex-vad").apply {
             isDaemon = true
@@ -62,6 +67,7 @@ object DuplexAudioMonitor {
         ns = null
         agc = null
         worker = null
+        MicOwnership.release(MicOwnership.Owner.DUPLEX_VAD)
     }
 
     private fun monitorLoop(activity: Activity, turn: Long) {
@@ -173,6 +179,7 @@ object DuplexAudioMonitor {
         aec = null
         ns = null
         agc = null
+        MicOwnership.release(MicOwnership.Owner.DUPLEX_VAD)
         running.set(false)
         worker = null
     }
