@@ -71,6 +71,7 @@ test("SpeechOperation ignores cancellation for a stale turn", async () => {
 
   const pending = operation.start("answer", 9);
   assert.equal(operation.cancel(8), false);
+  await Promise.resolve();
   resolveSpeech();
   const result = await pending;
   assert.equal(result.cancelled, false);
