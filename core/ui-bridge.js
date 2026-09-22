@@ -11,6 +11,7 @@ const dispatchVoiceEvent = (name, detail = {}) => {
 
 let speechGeneration = 0;
 let activeNativeSpeechFinish = null;
+let activeSpeechResolve = null;
 let ignoredNativeCompletion = false;
 let ignoredNativeCompletionTimer = null;
 
@@ -36,6 +37,12 @@ export function hasNativeVoiceBridge() {
 
 export function stopSpeaking() {
   const interruptedGeneration = ++speechGeneration;
+
+  if (activeSpeechResolve) {
+    const resolve = activeSpeechResolve;
+    activeSpeechResolve = null;
+    resolve({ interrupted: true, generation: interruptedGeneration });
+  }
 
   if (activeNativeSpeechFinish) {
     window.removeEventListener("haiva:native-speech-done", activeNativeSpeechFinish);
@@ -85,6 +92,14 @@ export function speak(text) {
   if (hasNativeVoiceBridge() && typeof window.HaivaBridge.speak === "function") {
     return new Promise(resolve => {
       let settled = false;
+      activeSpeechResolve = value => {
+        if (settled) return;
+        settled = true;
+        if (activeSpeechResolve === activeSpeechResolve) activeSpeechResolve = null;
+        if (activeNativeSpeechFinish === finish) activeNativeSpeechFinish = null;
+        window.removeEventListener("haiva:native-speech-done", finish);
+        resolve(value);
+      };
       const finish = event => {
         if (settled || generation !== speechGeneration) return;
         if (ignoredNativeCompletion) {
@@ -121,6 +136,10 @@ export function speak(text) {
     return Promise.resolve();
   }
   return new Promise(resolve => {
+    activeSpeechResolve = value => {
+      if (generation !== speechGeneration) { resolve(value); return; }
+      resolve(value);
+    };
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(value);
     utterance.lang = CONFIG.voice.speechLanguage;
@@ -129,6 +148,7 @@ export function speak(text) {
     utterance.volume = CONFIG.voice.speechVolume;
     const finish = () => {
       if (generation !== speechGeneration) return;
+      activeSpeechResolve = null;
       dispatchVoiceEvent("haiva:speech-done", { interrupted: false, generation });
       resolve();
     };
