@@ -10,7 +10,7 @@ test("voice connector events have one Android producer and bounded recovery path
   const android = await read("android/app/src/main/java/com/haiva/app/MainActivity.kt");
 
   assert.doesNotMatch(app, /haiva:native-voice-timeout/);
-  assert.match(app, /setState\("VOICE UNAVAILABLE"\)/);
+  assert.match(app, /setState\("READY"\)/);
   assert.match(controls, /haiva:native-voice-unavailable/);
   assert.match(android, /dispatchVoiceUnavailable/);
 });
