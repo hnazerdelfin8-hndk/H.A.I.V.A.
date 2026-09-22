@@ -19,6 +19,7 @@ import { createBargeInCoordinator } from "../barge-in.js";
 import { VoiceSessionManager } from "../session-manager.js";
 import { VoiceTurnFence } from "../turn-fence.js";
 import { DuplexController } from "../duplex/controller.js";
+import { SpeechOperation } from "../speech-operation.js";
 import { normalizeSpeech, removeWakeWord, hasNativeVoiceBridge, speak, stopSpeaking } from "../../ui-bridge.js";
 
 export const VOICE_INTERACTION_EVENTS = Object.freeze({
@@ -42,6 +43,7 @@ export class VoiceInteraction {
     this.sessionId = null;
     this.bargeIn = createBargeInCoordinator();
     this.duplex = new DuplexController({ onInterruptDetected: c => this.handleDuplexInterruptCandidate(c), onError: d => this.reportError("duplex", d?.message || "DUPLEX_ERROR") });
+    this.speech = new SpeechOperation({ speakFn: text => speak(text), cancelFn: () => stopSpeaking() });
     this.nativeVoice = hasNativeVoiceBridge();
     this.active = false;
     this.listening = false;
@@ -142,7 +144,7 @@ export class VoiceInteraction {
     this.duplexInterruptPending = true;
     const interruptTurn = this.turn;
     if (!this.bargeIn.beginCapture(interruptTurn)) return false;
-    this.duplex.stopPlayback(interruptTurn);
+    this.speech.cancel(interruptTurn);
     this.duplex.stop(interruptTurn);
     this.listening = false;
     this.captureSessionId = null;
@@ -250,6 +252,7 @@ export class VoiceInteraction {
     
     this.turnFence.invalidate();
     this.bargeIn.stopMonitoring(interruptedTurn);
+    this.speech.cancel(interruptedTurn);
     this.duplex.stopPlayback(interruptedTurn);
     this.turn = this.turnFence.begin();
     this.bargeIn.beginTurn();
@@ -320,7 +323,7 @@ export class VoiceInteraction {
     this.bargeIn.stopMonitoring(this.turn);
     this.duplex.stop(this.turn);
     this.lifecycle.endSession();
-    stopSpeaking();
+    this.speech.cancel();
   }
 
   startListening() {
@@ -363,7 +366,7 @@ export class VoiceInteraction {
     
 
     try {
-      await speak(text);
+      await this.speech.start(text, speakingTurn);
     } finally {
       if (!this.turnFence.accept(speakingTurn) || this.turn !== speakingTurn || !this.sessionManager.isActive(this.sessionId)) return false;
       // A duplex speech onset has stopped TTS but is still waiting for the
