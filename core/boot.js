@@ -43,9 +43,9 @@ function failBoot(reason, stage = "BOOT_FAILED") {
   fatalBoot = true;
   const message = reason?.message || String(reason || "Unknown boot failure");
   bootCheckpoint(stage, message);
-  progress(0, `Startup failed: ${message}`, 0);
+  progress(0, "H.A.I.V.A. startup failed. Check diagnostics.", 0);
   console.error("[HAIVA-BOOT] Boot failure:", reason);
-  setBootUI("ERROR", message, "● CORE ERROR");
+  setBootUI("BOOTING", "H.A.I.V.A. is recovering startup…", "● CORE STARTING");
   syncControls();
 }
 
@@ -74,7 +74,7 @@ window.addEventListener("haiva:boot-failure", event => {
   if (timeout) clearTimeout(timeout);
   progress(0, `Startup failed: ${message}`, 0);
   console.error("[HAIVA-BOOT] Fatal checkpoint:", stage, message);
-  setBootUI("ERROR", message, "● CORE ERROR");
+  setBootUI("BOOTING", "H.A.I.V.A. is recovering startup…", "● CORE STARTING");
   syncControls();
 }, true);
 window.addEventListener("error", event => {
