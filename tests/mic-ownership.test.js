@@ -28,3 +28,12 @@ test("duplex monitor cannot acquire the microphone while ASR owns it", () => {
 test("activity teardown releases both native microphone paths", () => {
   assert.match(main, /MicOwnership\.release\(MicOwnership\.Owner\.ASR\)[\s\S]*DuplexAudioMonitor\.stop\(\)/);
 });
+
+
+test("duplex releases physical mic before dispatching barge-in", () => {
+  const cleanupIndex = duplex.indexOf("cleanupRecorder(localRecorder)");
+  const bargeInIndex = duplex.indexOf('"haiva:duplex-barge-in"');
+  assert.ok(cleanupIndex >= 0);
+  assert.ok(bargeInIndex >= 0);
+  assert.ok(cleanupIndex < bargeInIndex);
+});
