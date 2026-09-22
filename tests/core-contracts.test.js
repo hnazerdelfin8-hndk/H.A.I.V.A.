@@ -54,3 +54,17 @@ test("orchestrator executes through the configured chat gateway", async () => {
   assert.match(source, /CONFIG\.api\.chatEndpoint/);
   assert.match(source, /fetch\(CONFIG\.api\.chatEndpoint/);
 });
+
+test("UI exposes lifecycle states only; internal failures recover to standby", async () => {
+  const app = await read("core/app.js");
+  const bridge = await read("core/ui-bridge.js");
+  const orb = await read("core/haiva-orb.js");
+  const polish = await read("ui/polish.js");
+
+  assert.doesNotMatch(app, /setState\("(?:ERROR|VOICE ERROR|VOICE UNAVAILABLE|MICROPHONE DENIED)"\)/);
+  assert.doesNotMatch(app, /state === "(?:ERROR|VOICE ERROR|VOICE UNAVAILABLE|MICROPHONE DENIED)"/);
+  assert.doesNotMatch(orb, /"ERROR"|"VOICE ERROR"|"VOICE UNAVAILABLE"|"MICROPHONE DENIED"/);
+  assert.match(bridge, /normalized === "ready" \? "STANDBY"/);
+  assert.doesNotMatch(polish, /setState\("VOICE ERROR"\)/);
+  assert.doesNotMatch(polish, /data-haiva-state="error"/);
+});
