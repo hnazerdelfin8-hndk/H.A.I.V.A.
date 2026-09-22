@@ -48,6 +48,9 @@ jobs:
       - name: Run canonical duplex audio tests
         run: node --test tests/duplex-audio.test.js
 
+      - name: Run DuplexController authority tests
+        run: node --test tests/duplex-controller.test.js
+
       - name: Run V2 lifecycle coordinator tests
         run: node --test tests/voice-lifecycle-v2.test.js
 
