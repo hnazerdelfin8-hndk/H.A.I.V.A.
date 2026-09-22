@@ -30,6 +30,7 @@ test("Barge-in releases a non-interruption candidate without changing the turn",
   assert.equal(coordinator.beginCapture(turn), true);
   assert.ok(coordinator.commitCapture(turn, "the wait time is three seconds"));
   assert.equal(coordinator.releaseCapture(turn), true);
+  assert.equal(coordinator.beginCapture(turn), true);
   assert.deepEqual(coordinator.commitCapture(turn, "another capture"), {
     turn,
     text: "another capture",
