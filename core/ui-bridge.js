@@ -15,11 +15,22 @@ let activeSpeechResolve = null;
 let ignoredNativeCompletion = false;
 let ignoredNativeCompletionTimer = null;
 
+const UI_STATES = new Set(["booting", "ready", "listening", "thinking", "speaking"]);
+
 export function setUIState(state) {
-  const normalized = String(state).toLowerCase();
+  const raw = String(state || "").toUpperCase();
+  const normalized = raw === "BOOTING"
+    ? "booting"
+    : raw === "LISTENING"
+      ? "listening"
+      : raw === "THINKING"
+        ? "thinking"
+        : raw === "SPEAKING"
+          ? "speaking"
+          : "ready";
   document.body.dataset.haivaState = normalized;
   const status = document.getElementById("haiva-status");
-  if (status) status.textContent = state;
+  if (status) status.textContent = normalized === "ready" ? "STANDBY" : normalized.toUpperCase();
 }
 
 export function setVoiceButtonActive(active) {
