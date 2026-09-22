@@ -14,7 +14,6 @@ style.textContent = `
   body[data-haiva-state="listening"] .wave i { animation-duration:.48s; }
   body[data-haiva-state="thinking"] .wave i { animation-duration:.9s; opacity:.65; }
   body[data-haiva-state="speaking"] .wave i { animation-duration:.35s; }
-  body[data-haiva-state="error"] .wave { opacity:.9; }
   .mic { min-width:66px; min-height:66px; -webkit-tap-highlight-color:transparent; }
   .mic:focus-visible, .icon-btn:focus-visible, .nav button:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
   .bubble { overflow-wrap:anywhere; }
@@ -63,7 +62,7 @@ document.addEventListener("click", event => {
       else void app.activateVoice();
     } catch (error) {
       console.error("[HAIVA] Voice control failed:", error);
-      try { app.setState("VOICE ERROR"); } catch (_) {}
+      try { app.setState("READY"); } catch (_) {}
     }
   };
 
