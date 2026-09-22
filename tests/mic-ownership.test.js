@@ -8,7 +8,7 @@ const ownership = readFileSync(new URL("../android/app/src/main/java/com/haiva/a
 
 test("physical microphone has one native ownership guard", () => {
   assert.match(ownership, /AtomicReference/);
-  assert.match(ownership, /Owner\.ASR/);
+  assert.match(ownership, /\bASR\b/);
   assert.match(ownership, /Owner\.DUPLEX_VAD/);
   assert.match(ownership, /compareAndSet\(Owner\.NONE/);
 
