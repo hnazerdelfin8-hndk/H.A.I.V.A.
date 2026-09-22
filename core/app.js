@@ -3,6 +3,7 @@
 // =========================================
 
 import "../ui/polish.js";
+import "./haiva-orb.js";
 import { initializeHAIVA } from "./initializer.js";
 import { CONFIG } from "./config.js";
 import { HAIVAAssistant } from "./assistant.js";
@@ -213,6 +214,7 @@ class HAIVA {
   setState(state) {
     this.state = state;
     setUIState(state);
+    window.HAIVAOrb?.setState(state);
     const heard = document.getElementById("heard");
     if (!heard) return;
     if (state === "BOOTING") heard.textContent = "Initializing H.A.I.V.A. core…";
