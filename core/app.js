@@ -53,6 +53,7 @@ class HAIVA {
     });
 
     this.setupChat();
+    this.setupVoiceEvents();
     this.setupSettings();
     this.setupReminderNotifications();
     this.setState("BOOTING");
@@ -97,6 +98,13 @@ class HAIVA {
     } catch (error) {
       console.warn("[HAIVA] AI backend health check unavailable:", error?.message || error);
     }
+  }
+
+  setupVoiceEvents() {
+    window.addEventListener("haiva:voice-toggle", () => {
+      if (this.voiceActivated) this.deactivateVoice();
+      else void this.activateVoice();
+    });
   }
 
   setupSettings() {
