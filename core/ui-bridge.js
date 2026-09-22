@@ -95,7 +95,7 @@ export function speak(text) {
       activeSpeechResolve = value => {
         if (settled) return;
         settled = true;
-        if (activeSpeechResolve === activeSpeechResolve) activeSpeechResolve = null;
+        activeSpeechResolve = null;
         if (activeNativeSpeechFinish === finish) activeNativeSpeechFinish = null;
         window.removeEventListener("haiva:native-speech-done", finish);
         resolve(value);
