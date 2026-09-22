@@ -41,8 +41,7 @@ body{overflow:hidden}
 .haiva-orb-mark{width:48px;height:48px;border:1px solid rgba(0,255,140,.25);border-radius:50%;display:grid;place-items:center;color:rgba(220,255,240,.8);font:500 20px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-shadow:0 0 18px rgba(0,255,140,.65);background:rgba(0,20,12,.22);backdrop-filter:blur(4px)}
 .haiva-orb-state{margin-top:12px;color:rgba(0,255,140,.52);font:600 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.32em}
 .haiva-feedback{position:absolute;bottom:10%;max-width:86%;text-align:center;color:rgba(210,255,235,.48);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-.haiva-voice-trigger{position:absolute;bottom:2%;width:48px;height:48px;border-radius:50%;border:1px solid rgba(0,255,140,.3);background:rgba(0,255,140,.06);color:var(--haiva-green);font-size:22px;box-shadow:0 0 18px rgba(0,255,140,.08)}
-.haiva-voice-trigger.active{background:rgba(0,255,140,.18);box-shadow:0 0 24px rgba(0,255,140,.35);border-color:rgba(0,255,140,.8)}
+.haiva-mic-btn{font-size:15px!important}.haiva-mic-btn.active{background:rgba(0,255,140,.18);box-shadow:0 0 18px rgba(0,255,140,.32);border-color:rgba(0,255,140,.8)}
 .haiva-conversation{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important}
 .haiva-chatbar{position:relative;z-index:20;width:min(100%,560px);margin:0 auto 18px;display:flex;align-items:center;gap:8px;padding:7px 7px 7px 17px;border:1px solid rgba(0,255,140,.2);border-radius:30px;background:rgba(6,18,12,.72);box-shadow:0 8px 35px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .haiva-chatbar #chat-input{padding:10px 0;border:0;background:transparent;color:#eafff4;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -74,9 +73,6 @@ body{overflow:hidden}
       </div>
       <div id="haiva-status" class="sr-only">BOOTING</div>
       <div id="heard" class="haiva-feedback">Initializing H.A.I.V.A. core…</div>
-      <button id="activate-voice" class="haiva-voice-trigger" type="button" aria-label="Activate H.A.I.V.A." aria-pressed="false" disabled>
-        <span aria-hidden="true">⌕</span>
-      </button>
     </section>
 
     <section class="conversation haiva-conversation" id="conversation" aria-label="Conversation">
@@ -86,7 +82,7 @@ body{overflow:hidden}
 
     <form class="chat-form haiva-chatbar" id="chat-form">
       <input id="chat-input" type="text" autocomplete="off" placeholder="Message H.A.I.V.A…" aria-label="Message" disabled>
-      <button id="activate-voice-chat" class="iconBtn" type="button" aria-label="Voice input" disabled>🎙</button>
+      <button id="activate-voice" class="iconBtn haiva-mic-btn" type="button" aria-label="Activate H.A.I.V.A." aria-pressed="false" disabled>🎙</button>
       <button id="send-message" class="iconBtn" type="submit" aria-label="Send" disabled>➤</button>
     </form>
 
