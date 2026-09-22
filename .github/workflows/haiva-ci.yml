@@ -60,6 +60,9 @@ jobs:
       - name: Run voice stale-event race fencing tests
         run: node --test tests/voice-race-fencing.test.js
 
+      - name: Run Phase 12 runtime voice integration tests
+        run: node --test tests/voice-runtime-integration.test.js
+
       - name: Run boot architecture contract tests
         run: node --test tests/boot-contracts.test.js
 
