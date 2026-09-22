@@ -132,7 +132,8 @@ object DuplexAudioMonitor {
             var speechFrames = 0
 
             while (running.get()) {
-                val read = localRecorder.read(samples, 0, samples.size)
+                val recorder = localRecorder ?: break
+                val read = recorder.read(samples, 0, samples.size)
                 if (read <= 0) continue
 
                 val db = rmsDb(samples, read)
