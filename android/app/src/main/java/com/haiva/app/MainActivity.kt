@@ -193,6 +193,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onError(error: Int) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
+            MicOwnership.release(MicOwnership.Owner.ASR)
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> dispatchVoiceCaptureComplete("no_speech")
@@ -207,6 +208,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         override fun onResults(results: Bundle?) {
             cancelNativeVoiceWatchdog()
             nativeVoiceRequestActive = false
+            MicOwnership.release(MicOwnership.Owner.ASR)
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
             if (text.isNotEmpty()) dispatchVoiceResult(text) else dispatchVoiceCaptureComplete("empty_result")
         }
@@ -216,6 +218,11 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         if (destroyed || fallbackVoiceActive) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             dispatchVoiceUnavailable("microphone_permission_required")
+            return
+        }
+        DuplexAudioMonitor.stop()
+        if (!MicOwnership.tryAcquire(MicOwnership.Owner.ASR)) {
+            dispatchVoiceUnavailable("microphone_busy")
             return
         }
         fallbackVoiceActive = true
@@ -241,6 +248,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != voiceFallbackRequestCode) return
         fallbackVoiceActive = false
+        MicOwnership.release(MicOwnership.Owner.ASR)
         if (resultCode != RESULT_OK) {
             dispatchVoiceCaptureComplete("fallback_cancelled")
             return
@@ -317,6 +325,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         cancelNativeVoiceWatchdog()
         try { speechRecognizer?.stopListening() } catch (_: Exception) {}
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
+        MicOwnership.release(MicOwnership.Owner.ASR)
     }
 
     private fun startNativeRecognition() {
@@ -330,6 +339,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         pendingNativeCaptureStart?.let { nativeVoiceWatchdog.removeCallbacks(it) }
         pendingNativeCaptureStart = Runnable {
             if (destroyed) return@Runnable
+            // ASR may only acquire the microphone after duplex VAD has released it.
+            DuplexAudioMonitor.stop()
             nativeCaptureMode = NativeCaptureMode.NORMAL
             if (speechRecognizer == null) {
                 if (SpeechRecognizer.isRecognitionAvailable(this)) createSpeechRecognizer()
@@ -340,6 +351,10 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             }
             val recognizer = speechRecognizer ?: run {
                 dispatchVoiceUnavailable("speech_recognizer_initialization_failed")
+                return@Runnable
+            }
+            if (!MicOwnership.tryAcquire(MicOwnership.Owner.ASR)) {
+                dispatchVoiceUnavailable("microphone_busy")
                 return@Runnable
             }
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -360,6 +375,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             } catch (_: Exception) {
                 nativeVoiceRequestActive = false
                 activeNativeVoiceSessionId = null
+                MicOwnership.release(MicOwnership.Owner.ASR)
                 startSystemVoiceFallback()
             }
         }
@@ -373,6 +389,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
             nativeVoiceRequestActive = false
             activeNativeVoiceSessionId = null
             try { speechRecognizer?.cancel() } catch (_: Exception) {}
+            MicOwnership.release(MicOwnership.Owner.ASR)
             dispatchVoiceEvent("haiva:native-voice-timeout", sessionId)
         }, nativeVoiceWatchdogMs)
     }
@@ -442,6 +459,7 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
     private fun dispatchVoiceUnavailable(reason: String) {
         nativeVoiceRequestActive = false
         activeNativeVoiceSessionId = null
+        MicOwnership.release(MicOwnership.Owner.ASR)
         cancelNativeVoiceWatchdog()
         val quoted = org.json.JSONObject.quote(reason)
         runOnUiThread { if (!destroyed) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('haiva:native-voice-unavailable',{detail:{reason:$quoted}}))", null) }
@@ -476,6 +494,8 @@ class MainActivity : Activity(), HaivaBridge, TextToSpeech.OnInitListener {
         try { speechRecognizer?.cancel() } catch (_: Exception) {}
         try { speechRecognizer?.destroy() } catch (_: Exception) {}
         speechRecognizer = null
+        MicOwnership.release(MicOwnership.Owner.ASR)
+        DuplexAudioMonitor.stop()
         try { textToSpeech.stop(); textToSpeech.shutdown() } catch (_: Exception) {}
         webView.destroy()
         super.onDestroy()
