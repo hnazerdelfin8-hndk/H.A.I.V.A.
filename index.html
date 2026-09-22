@@ -8,22 +8,6 @@
   <style>
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,sans-serif;background:#f5f5f5;color:#222}body{min-height:100vh}.app{width:min(100%,640px);min-height:100vh;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:14px}.header,.status,.voice,.conversation,.settings{background:#fff;border:1px solid #ddd;border-radius:10px}.header{padding:18px}h1{margin:0;font-size:24px}.subtitle{margin:5px 0 0;color:#666;font-size:12px}.status{padding:12px 14px}.status-label{color:#777;font-size:11px;font-weight:bold}#haiva-status{margin-top:4px;font-size:14px}.voice{padding:20px;text-align:center}#orb{width:130px;height:130px;margin:0 auto 12px;border-radius:50%;border:2px solid #bbb;display:flex;align-items:center;justify-content:center;background:#fafafa}.core{width:48px;height:48px;border-radius:50%;background:#ddd}.orb-label,.orb-ring{display:none}#heard{min-height:24px;color:#555;font-size:13px}#activate-voice{width:64px;height:64px;border-radius:50%;border:1px solid #aaa;background:#fff;cursor:pointer;font-size:24px}#activate-voice:active,#send-message:active{transform:scale(.96)}.conversation{padding:16px;min-height:180px;max-height:38vh;overflow:auto}.conversation-head{display:flex;justify-content:space-between;margin-bottom:14px}.conversation-title{font-size:12px;font-weight:bold}.online{font-size:11px;color:#555}.bubble-block{margin-bottom:14px}.label{color:#777;font-size:10px;font-weight:bold;margin-bottom:5px}.bubble{padding:10px;border:1px solid #e0e0e0;border-radius:7px;min-height:38px;white-space:pre-wrap;word-break:break-word;font-size:13px}.chat-form{display:flex;gap:8px}#chat-input{flex:1;min-width:0;padding:13px;border:1px solid #bbb;border-radius:8px;background:#fff;color:#222;outline:none}#send-message{width:54px;border:1px solid #999;border-radius:8px;background:#fff;cursor:pointer;font-size:18px}.settings{padding:12px}#settings-toggle{width:100%;padding:9px;border:1px solid #ccc;border-radius:7px;background:#fafafa;cursor:pointer}#settings-panel{display:none;margin-top:10px}#settings-panel.open{display:block}.setting-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:12px}.setting-value{color:#666}button:disabled,input:disabled{opacity:.55;cursor:not-allowed}
 
-    #haiva-boot-screen{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;overflow:hidden;padding:24px;background:radial-gradient(circle at 50% 42%,rgba(20,70,150,.22),transparent 34%),radial-gradient(circle at 20% 85%,rgba(75,40,190,.16),transparent 28%),#030712;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    #haiva-boot-screen:before,#haiva-boot-screen:after{content:"";position:absolute;width:34vw;height:34vw;max-width:420px;max-height:420px;border:1px solid rgba(70,150,255,.09);transform:rotate(30deg);pointer-events:none}
-    #haiva-boot-screen:before{top:-18vw;left:-12vw}#haiva-boot-screen:after{bottom:-18vw;right:-12vw}
-    .haiva-boot-card{position:relative;width:min(520px,92vw);min-height:540px;display:grid;place-items:center;padding:28px;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(30,65,120,.06));border:1px solid rgba(130,190,255,.08);border-radius:32px;box-shadow:0 30px 100px rgba(0,0,0,.45);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-    .haiva-boot-hex{position:relative;width:min(78vw,390px);aspect-ratio:1;display:grid;place-items:center;clip-path:polygon(25% 6.7%,75% 6.7%,100% 50%,75% 93.3%,25% 93.3%,0 50%);background:linear-gradient(135deg,rgba(100,190,255,.85),rgba(95,55,255,.72),rgba(30,180,255,.75));filter:drop-shadow(0 0 24px rgba(40,140,255,.28))}
-    .haiva-boot-hex:before{content:"";position:absolute;inset:2px;clip-path:inherit;background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(20,35,75,.38) 45%,rgba(60,30,130,.22))}
-    .haiva-boot-glass{position:relative;width:92%;height:92%;display:grid;place-items:center;clip-path:inherit;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(8,20,45,.68));border:1px solid rgba(180,220,255,.25);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 0 50px rgba(50,140,255,.08)}
-    .haiva-boot-progress-ring{position:relative;--progress:0%;width:64%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#16c8ff var(--progress),rgba(95,120,180,.16) var(--progress));box-shadow:0 0 30px rgba(15,180,255,.24),inset 0 0 20px rgba(255,255,255,.05)}
-    .haiva-boot-progress-ring:before{content:"";position:absolute;inset:7px;border-radius:50%;background:#071326;border:1px solid rgba(120,190,255,.15)}
-    .haiva-boot-progress-core{position:relative;width:calc(100% - 12px);height:calc(100% - 12px);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,rgba(16,42,78,.96),rgba(3,10,24,.98) 70%);z-index:1}
-    .haiva-boot-percent{font-size:clamp(34px,8vw,54px);font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(55,200,255,.65)}
-    .haiva-boot-loading{position:absolute;bottom:56px;font-size:12px;font-weight:700;letter-spacing:.48em;padding-left:.48em;opacity:.9;text-shadow:0 0 12px rgba(80,180,255,.55)}.haiva-boot-dots{letter-spacing:.15em;opacity:.7}
-    .haiva-boot-error{position:absolute;left:24px;right:24px;bottom:22px;padding:12px;border-radius:12px;background:rgba(255,60,60,.1);border:1px solid rgba(255,90,90,.35);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-    #haiva-boot-retry{position:absolute;bottom:20px;right:24px;padding:9px 16px;border:0;border-radius:10px;cursor:pointer;font-weight:800}
-    @media (max-height:620px){.haiva-boot-card{min-height:92vh}.haiva-boot-hex{width:min(58vh,330px)}.haiva-boot-loading{bottom:22px}}
-  
 /* H.A.I.V.A. Core UI/UX */
 :root{--haiva-green:#00ff8c;--haiva-bg:#030504}
 html,body{background:radial-gradient(ellipse at center,#06120c 0%,#030504 72%);color:#eafff4}
@@ -56,7 +40,6 @@ body{overflow:hidden}
 </style>
 </head>
 <body data-haiva-state="loading">
-  <div id="haiva-boot-screen" role="status" aria-live="polite"><div class="haiva-boot-card"><div class="haiva-boot-hex"><div class="haiva-boot-glass"><div class="haiva-boot-progress-ring" id="haiva-boot-progress-ring"><div class="haiva-boot-progress-core"><div class="haiva-boot-percent" id="haiva-boot-percent">0%</div></div></div></div></div><div class="haiva-boot-loading">LOADING<span class="haiva-boot-dots">...</span></div><div class="haiva-boot-error" id="haiva-boot-error" hidden></div><button id="haiva-boot-retry" type="button" hidden>RETRY</button></div></div>
   <main class="app">
     <header class="haiva-topbar">
       <div class="haiva-brand">H.A.I.V.A.<span class="haiva-dot">●</span></div>
@@ -92,6 +75,6 @@ body{overflow:hidden}
       <div class="setting-row"><span>Microphone</span><span class="setting-value" id="mic-setting">Checking…</span></div>
     </section>
   </main>
-  <script src="./core/boot-loader.js"></script>
+  <script type="module" src="./core/boot.js"></script>
 </body>
 </html>
