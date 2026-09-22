@@ -2,7 +2,7 @@
 // Voice ownership remains in VoiceInteraction/DuplexController.
 // This module exposes a small UI contract for lifecycle state + amplitude.
 
-const STATES = new Set(["BOOTING","READY","LISTENING","THINKING","SPEAKING","ERROR","VOICE ERROR","VOICE UNAVAILABLE","MICROPHONE DENIED"]);
+const STATES = new Set(["BOOTING","READY","LISTENING","THINKING","SPEAKING"]);
 
 const canvas = document.getElementById("haiva-core-canvas");
 const stateLabel = document.getElementById("haiva-orb-state");
@@ -61,11 +61,7 @@ function stateProfile() {
     case "LISTENING": return { amp: 0.72, speed: 1.35, pulse: 1.2, label: "LISTENING" };
     case "THINKING": return { amp: 0.52, speed: 1.9, pulse: 1.05, label: "THINKING" };
     case "SPEAKING": return { amp: 0.9, speed: 2.25, pulse: 1.35, label: "SPEAKING" };
-    case "ERROR":
-    case "VOICE ERROR":
-    case "VOICE UNAVAILABLE":
-    case "MICROPHONE DENIED": return { amp: 0.22, speed: 0.55, pulse: 0.55, label: "ERROR" };
-    case "READY": return { amp: 0.16, speed: 0.72, pulse: 0.75, label: "READY" };
+    case "READY": return { amp: 0.16, speed: 0.72, pulse: 0.75, label: "STANDBY" };
     default: return { amp: 0.1, speed: 0.5, pulse: 0.65, label: "BOOTING" };
   }
 }
