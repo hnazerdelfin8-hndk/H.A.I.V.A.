@@ -33,6 +33,18 @@ jobs:
       - name: Run core contract tests
         run: node --test tests/core-contracts.test.js
 
+      - name: Run brain voice decision tests
+        run: node --test tests/brain-voice-decision.test.js
+
+      - name: Run capture adapter tests
+        run: node --test tests/capture-adapter.test.js
+
+      - name: Run physical mic ownership tests
+        run: node --test tests/mic-ownership.test.js
+
+      - name: Run voice session turn fence tests
+        run: node --test tests/voice-session-turn-fence.test.js
+
       - name: Run canonical barge-in tests
         run: node --test tests/barge-in.test.js
 
