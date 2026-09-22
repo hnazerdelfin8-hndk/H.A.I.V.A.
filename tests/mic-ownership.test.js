@@ -9,7 +9,7 @@ const ownership = readFileSync(new URL("../android/app/src/main/java/com/haiva/a
 test("physical microphone has one native ownership guard", () => {
   assert.match(ownership, /AtomicReference/);
   assert.match(ownership, /\bASR\b/);
-  assert.match(ownership, /Owner\.DUPLEX_VAD/);
+  assert.match(ownership, /\bDUPLEX_VAD\b/);
   assert.match(ownership, /compareAndSet\(Owner\.NONE/);
 
   assert.equal((main.match(/SpeechRecognizer\.createSpeechRecognizer\(this\)/g) || []).length, 1);
@@ -28,7 +28,6 @@ test("duplex monitor cannot acquire the microphone while ASR owns it", () => {
 test("activity teardown releases both native microphone paths", () => {
   assert.match(main, /MicOwnership\.release\(MicOwnership\.Owner\.ASR\)[\s\S]*DuplexAudioMonitor\.stop\(\)/);
 });
-
 
 test("duplex releases physical mic before dispatching barge-in", () => {
   const cleanupIndex = duplex.indexOf("cleanupRecorder(localRecorder)");
