@@ -140,11 +140,18 @@ export class VoiceInteraction {
     if (!this.bargeIn.isMonitoring(this.turn)) return false;
     if (candidate?.turn != null && Number(candidate.turn) !== Number(this.turn)) return false;
     this.duplexInterruptPending = true;
-    this.duplex.stopPlayback(this.turn);
+    const interruptTurn = this.turn;
+    if (!this.bargeIn.beginCapture(interruptTurn)) return false;
+    this.duplex.stopPlayback(interruptTurn);
+    this.duplex.stop(interruptTurn);
     this.listening = false;
     this.captureSessionId = null;
     this.pendingResult = false;
-    this.capture.start();
+    if (!this.capture.start()) {
+      this.bargeIn.releaseCapture(interruptTurn);
+      this.duplexInterruptPending = false;
+      return false;
+    }
     return true;
   }
 
