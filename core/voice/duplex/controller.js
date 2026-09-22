@@ -8,8 +8,9 @@ function getBridge() {
  * Canonical JS duplex boundary.
  *
  * ONE native audio authority:
- *   DuplexController -> native DuplexAudioController -> AudioRecord
+ *   DuplexController -> native DuplexAudioMonitor -> AudioRecord
  *
+ * The controller is the only JS owner of duplex start/stop and duplex events.
  * V1/V2/V3/V4 are consumers of events, not microphone owners.
  */
 export class DuplexController {
@@ -19,6 +20,8 @@ export class DuplexController {
     this.active = false;
     this.ready = false;
     this.bound = false;
+    this.disposed = false;
+    this.handlers = null;
     this.onInterruptDetected = typeof onInterruptDetected === "function" ? onInterruptDetected : null;
     this.onReady = typeof onReady === "function" ? onReady : null;
     this.onError = typeof onError === "function" ? onError : null;
@@ -27,33 +30,54 @@ export class DuplexController {
   }
 
   bind() {
-    if (this.bound || typeof window === "undefined") return;
-    this.bound = true;
+    if (this.bound || this.disposed || typeof window === "undefined") return;
 
-    window.addEventListener(DUPLEX_EVENTS.READY, event => {
+    const readyHandler = event => {
       if (!this.active || !this.acceptTurn(event)) return;
       this.ready = true;
       this.state = DUPLEX_STATES.CAPTURING;
-      this.onReady?.(event.detail || {});
-      this.onEvent?.(event.detail || {});
-    });
+      const detail = event.detail || {};
+      this.onReady?.(detail);
+      this.onEvent?.(detail);
+    };
 
-    window.addEventListener(DUPLEX_EVENTS.BARGE_IN, event => {
+    const bargeInHandler = event => {
       if (!this.active || !this.acceptTurn(event)) return;
       this.state = DUPLEX_STATES.BARGE_IN;
       const detail = event.detail || {};
       this.onInterruptDetected?.({ ...detail, source: detail.source || "native-duplex" });
       this.onEvent?.(detail);
-    });
+    };
 
-    window.addEventListener(DUPLEX_EVENTS.ERROR, event => {
+    const errorHandler = event => {
       if (!this.active || !this.acceptTurn(event)) return;
       this.active = false;
       this.ready = false;
       this.state = DUPLEX_STATES.ERROR;
-      this.onError?.(event.detail || {});
-      this.onEvent?.(event.detail || {});
-    });
+      const detail = event.detail || {};
+      this.onError?.(detail);
+      this.onEvent?.(detail);
+    };
+
+    window.addEventListener(DUPLEX_EVENTS.READY, readyHandler);
+    window.addEventListener(DUPLEX_EVENTS.BARGE_IN, bargeInHandler);
+    window.addEventListener(DUPLEX_EVENTS.ERROR, errorHandler);
+
+    this.handlers = {
+      [DUPLEX_EVENTS.READY]: readyHandler,
+      [DUPLEX_EVENTS.BARGE_IN]: bargeInHandler,
+      [DUPLEX_EVENTS.ERROR]: errorHandler
+    };
+    this.bound = true;
+  }
+
+  unbind() {
+    if (!this.bound || typeof window === "undefined") return;
+    for (const [eventName, handler] of Object.entries(this.handlers || {})) {
+      window.removeEventListener(eventName, handler);
+    }
+    this.handlers = null;
+    this.bound = false;
   }
 
   acceptTurn(event) {
@@ -63,37 +87,31 @@ export class DuplexController {
 
   start(turn) {
     const bridge = getBridge();
+    const nextTurn = Number(turn);
+    if (this.disposed || !Number.isFinite(nextTurn)) return false;
     if (!bridge || typeof bridge.startDuplexAudio !== "function") return false;
-    this.turn = Number(turn);
-    this.active = true;
-    this.ready = false;
-    this.state = DUPLEX_STATES.CAPTURING;
-    try {
-      return bridge.startDuplexAudio(this.turn) !== false;
-    } catch (error) {
-      this.active = false;
-      this.state = DUPLEX_STATES.ERROR;
-      this.onError?.({ source: "duplex-controller", message: error?.message || String(error) });
-      return false;
-    }
-  }
 
-  // Temporary compatibility path. It is intentionally routed through the
-  // same controller so the legacy monitor cannot become a second authority.
-  startInterruptMonitor(turn) {
-    const bridge = getBridge();
-    if (!bridge) return false;
-    if (typeof bridge.startDuplexAudio === "function") return this.start(turn);
-    if (typeof bridge.startDuplexInterruptMonitor !== "function") return false;
-    this.turn = Number(turn);
+    if (this.active && this.turn === nextTurn) return true;
+    if (this.active) this.stop(this.turn);
+
+    this.turn = nextTurn;
     this.active = true;
     this.ready = false;
     this.state = DUPLEX_STATES.CAPTURING;
+
     try {
-      bridge.startDuplexInterruptMonitor(this.turn);
+      const result = bridge.startDuplexAudio(this.turn);
+      if (result === false) {
+        this.active = false;
+        this.ready = false;
+        this.state = DUPLEX_STATES.ERROR;
+        this.onError?.({ source: "duplex-controller", message: "DUPLEX_START_REJECTED" });
+        return false;
+      }
       return true;
     } catch (error) {
       this.active = false;
+      this.ready = false;
       this.state = DUPLEX_STATES.ERROR;
       this.onError?.({ source: "duplex-controller", message: error?.message || String(error) });
       return false;
@@ -102,34 +120,45 @@ export class DuplexController {
 
   setPlaying(turn = this.turn) {
     if (turn != null) this.turn = Number(turn);
+    if (!this.active) return false;
     this.state = DUPLEX_STATES.PLAYING;
+    return true;
   }
 
   stopPlayback(turn = this.turn) {
+    if (turn != null && this.turn != null && Number(turn) !== Number(this.turn)) return false;
     try { getBridge()?.stopSpeaking?.(); } catch (_) {}
-    if (turn != null) this.turn = Number(turn);
+    return true;
   }
 
   stop(turn = this.turn) {
-    const bridge = getBridge();
-    try {
-      if (typeof bridge?.stopDuplexAudio === "function") bridge.stopDuplexAudio();
-      else bridge?.stopDuplexInterruptMonitor?.();
-    } catch (_) {}
+    if (turn != null && this.turn != null && Number(turn) !== Number(this.turn)) return false;
+    if (this.disposed) return false;
+
+    try { getBridge()?.stopDuplexAudio?.(); } catch (_) {}
     this.active = false;
     this.ready = false;
     this.state = DUPLEX_STATES.IDLE;
     this.turn = null;
-  }
-
-  stopInterruptMonitor() {
-    if (!this.active) return false;
-    this.stop();
     return true;
   }
 
   isActive() { return this.active; }
   isReady() { return this.active && this.ready; }
   getTurn() { return this.turn; }
-  release() { this.stop(); }
+
+  release() {
+    return this.stop();
+  }
+
+  destroy() {
+    if (this.disposed) return;
+    this.stop();
+    this.unbind();
+    this.disposed = true;
+    this.onInterruptDetected = null;
+    this.onReady = null;
+    this.onError = null;
+    this.onEvent = null;
+  }
 }
