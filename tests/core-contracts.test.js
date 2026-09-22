@@ -68,3 +68,18 @@ test("UI exposes lifecycle states only; internal failures recover to standby", a
   assert.doesNotMatch(polish, /setState\("VOICE ERROR"\)/);
   assert.doesNotMatch(polish, /data-haiva-state="error"/);
 });
+
+test("voice UI control is event-driven and does not own VoiceInteraction", async () => {
+  const app = await read("core/app.js");
+  const polish = await read("ui/polish.js");
+  assert.match(app, /setupVoiceEvents\(\)/);
+  assert.match(app, /addEventListener\("haiva:voice-toggle"/);
+  assert.match(polish, /dispatchEvent\(new CustomEvent\("haiva:voice-toggle"/);
+  assert.doesNotMatch(polish, /window\.HAIVA.*activateVoice|window\.HAIVA.*deactivateVoice/);
+});
+
+test("obsolete visual boot loader is removed", async () => {
+  const index = await read("index.html");
+  assert.doesNotMatch(index, /haiva-boot-screen|boot-loader\.js/);
+  assert.match(index, /<script type="module" src="\.\/core\/boot\.js"><\/script>/);
+});
