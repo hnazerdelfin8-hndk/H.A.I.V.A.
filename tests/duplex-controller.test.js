@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test, afterEach } from "node:test";
+import { readFileSync } from "node:fs";
 import { DuplexController } from "../core/voice/duplex/controller.js";
 import { DUPLEX_EVENTS, DUPLEX_STATES } from "../core/voice/duplex/events.js";
 
@@ -91,11 +92,10 @@ test("Phase 7: destroy unbinds the controller and releases duplex", () => {
 });
 
 test("Phase 7: legacy duplex bridge aliases are retired", () => {
-  const controller = await import("../core/voice/duplex/controller.js");
-  const source = (await import("node:fs")).readFileSync(
+  const source = readFileSync(
     new URL("../android/app/src/main/java/com/haiva/bridge/HaivaBridge.kt", import.meta.url),
     "utf8"
   );
-  assert.doesNotMatch(controller.DuplexController.toString(), /startInterruptMonitor/);
+  assert.doesNotMatch(DuplexController.toString(), /startInterruptMonitor/);
   assert.doesNotMatch(source, /startDuplexInterruptMonitor|stopDuplexInterruptMonitor/);
 });
