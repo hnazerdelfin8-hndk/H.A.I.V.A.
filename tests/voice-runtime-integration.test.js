@@ -68,12 +68,13 @@ test("Phase 12: end-to-end native barge-in hands the physical mic from duplex to
   mock.emit("haiva:duplex-barge-in", { turn, source: "native-duplex-vad" });
 
   const events = mock.calls.map(call => call[0]);
-  assert.deepEqual(events.slice(0, 5), [
-    "tts-start",
+  // Initial TTS activation is intentionally cleared above; the handoff
+  // contract begins at cancellation and must release duplex before ASR.
+  assert.deepEqual(events.slice(0, 3), [
     "tts-stop",
     "duplex-stop",
     "asr-start"
-  ].slice(0, 4));
+  ]);
   const duplexStopIndex = events.lastIndexOf("duplex-stop");
   const asrStartIndex = events.lastIndexOf("asr-start");
   const ttsStopIndex = events.lastIndexOf("tts-stop");
