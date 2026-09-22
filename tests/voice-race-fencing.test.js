@@ -18,7 +18,7 @@ test("voice race fence: native callbacks carry session ids for JS-side validatio
 
 test("voice race fence: stale native results cannot cross an invalidated capture", () => {
   assert.match(interaction, /this\.captureSessionId = null;/);
-  assert.match(interaction, /if \(!this\.acceptNativeCaptureEvent\(event\)\) return;/);
+  assert.match(interaction, /this\.acceptNativeCaptureEvent\(\{ detail \}\)/);
   assert.match(interaction, /this\.captureSessionId = null;\n      this\.reportInput\(text, "native"\)/);
 });
 
