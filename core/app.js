@@ -47,8 +47,8 @@ class HAIVA {
         this.lastTranscript = text;
         this.showTranscript(text);
       },
-      onOutcome: detail => {
-        if (detail?.type === "VOICE_ERROR") this.setState("VOICE ERROR");
+      onOutcome: () => {
+        // Voice failures are internal recovery conditions; never expose ERROR as a UI state.
       }
     });
 
@@ -156,7 +156,7 @@ class HAIVA {
       console.error("Text command failed:", error);
       this.showResponse(CONFIG.assistant.fallbackResponse);
       if (speakResponse) this.voiceInteraction.finishCommand(true);
-      this.setState("ERROR");
+      this.setState("READY");
     } finally {
       if (!speakResponse) this.isProcessing = false;
       this.isListening = this.voiceInteraction.listening;
@@ -164,7 +164,7 @@ class HAIVA {
       this.voiceActivated = this.voiceInteraction.active;
       this.pendingVoiceResult = this.voiceInteraction.pendingResult;
       this.voiceTurn = this.voiceInteraction.turn;
-      if (this.state === "ERROR") this.setState("READY");
+      if (!speakResponse && this.state !== "READY") this.setState("READY");
       setVoiceButtonActive(this.voiceActivated);
     }
   }
@@ -174,7 +174,7 @@ class HAIVA {
     if (!activated) {
       this.voiceActivated = false;
       setVoiceButtonActive(false);
-      this.setState("VOICE UNAVAILABLE");
+      this.setState("READY");
       return false;
     }
     this.voiceActivated = true;
@@ -222,10 +222,7 @@ class HAIVA {
     else if (state === "THINKING") heard.textContent = "Analyzing your request…";
     else if (state === "SPEAKING") heard.textContent = "H.A.I.V.A. is responding…";
     else if (state === "READY") heard.textContent = "Ready. Tap the microphone or continue the conversation.";
-    else if (state === "MICROPHONE DENIED") heard.textContent = "Microphone access is required for voice mode.";
-    else if (state === "VOICE UNAVAILABLE") heard.textContent = "Voice recognition is not available in this browser.";
-    else if (state === "VOICE ERROR") heard.textContent = "Voice input needs attention. Tap the microphone to try again.";
-    else if (state === "ERROR") heard.textContent = "H.A.I.V.A. recovered. Ready for another message.";
+
   }
 
   showTranscript(text) {
