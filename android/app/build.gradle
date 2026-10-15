@@ -55,7 +55,6 @@ tasks.register('syncHaivaWebAssets') {
     doLast {
         if (!haivaIndex.isFile()) throw new GradleException("H.A.I.V.A. asset transport failed: missing ${haivaIndex}")
         if (!haivaCore.isDirectory()) throw new GradleException("H.A.I.V.A. asset transport failed: missing ${haivaCore}")
-        if (!new File(haivaCore, 'boot-loader.js').isFile()) throw new GradleException("H.A.I.V.A. asset transport failed: missing core/boot-loader.js")
         if (!new File(haivaCore, 'boot.js').isFile()) throw new GradleException("H.A.I.V.A. asset transport failed: missing core/boot.js")
         def assetRoot = file('src/main/assets/haiva')
         delete assetRoot
@@ -64,7 +63,7 @@ tasks.register('syncHaivaWebAssets') {
         copy { from haivaCore; into new File(assetRoot, 'core') }
         if (haivaUi.isDirectory()) copy { from haivaUi; into new File(assetRoot, 'ui') }
         if (haivaSkills.isDirectory()) copy { from haivaSkills; into new File(assetRoot, 'skills') }
-        def requiredAssets = [new File(assetRoot, 'index.html'), new File(assetRoot, 'core/boot-loader.js'), new File(assetRoot, 'core/boot.js')]
+        def requiredAssets = [new File(assetRoot, 'index.html'), new File(assetRoot, 'core/boot.js')]
         def missing = requiredAssets.findAll { !it.isFile() }
         if (!missing.isEmpty()) throw new GradleException("H.A.I.V.A. asset transport verification failed. Missing APK assets: ${missing.join(', ')}")
         logger.lifecycle("HAIVA_ASSET_TRANSPORT_OK: ${assetRoot} contains index.html + core boot chain")
