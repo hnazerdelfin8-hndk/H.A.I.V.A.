@@ -4,13 +4,14 @@ import { readFile } from "node:fs/promises";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("boot loader hands off immediately and does not own a second timeout", async () => {
-  const source = await read("core/boot-loader.js");
-  assert.match(source, /core\/boot\.js\s+remains\s+the\s*\/\/\s*single\s+startup\s+authority/);
-  assert.match(source, /void handoffToBoot\(\);/);
+test("boot boundary owns one timeout and loads the app without a second loader", async () => {
+  const source = await read("core/boot.js");
+  assert.match(source, /const BOOT_TIMEOUT_MS = 10000/);
+  assert.match(source, /import\("\.\/app\.js"\)/);
+  assert.match(source, /let fatalBoot = false/);
+  assert.match(source, /haiva:boot-failure/);
   assert.doesNotMatch(source, /BOOT_TIMEOUT_MS\s*=\s*15000/);
   assert.doesNotMatch(source, /bootTimer\s*=\s*setTimeout/);
-  assert.doesNotMatch(source, /document\.addEventListener\(\s*["']DOMContentLoaded["'][\s\S]*handoffToBoot/);
 });
 
 test("initializer never converts a core failure into READY", async () => {
